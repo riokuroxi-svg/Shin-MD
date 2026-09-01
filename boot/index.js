@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
-//  boot/index.js — Punto de arranque: monta engine + socket + web
+//  boot/index.js — Punto de arranque estilo Ginko-MD
 //  Uso: node index.js [--qr | --code]
 // ═══════════════════════════════════════════════════════════════════
 
@@ -7,7 +7,7 @@ import "dotenv/config";
 import chalk from "chalk";
 import cfonts from "cfonts";
 import moment from "moment-timezone";
-import readline from "readline";
+import readlineSync from "readline-sync";
 import fs from "fs";
 import path from "path";
 import { createEngine } from "#engine";
@@ -19,42 +19,14 @@ import { createRouter } from "#router";
 import { useSQLiteAuthState } from "#auth";
 import log from "#logger";
 
-async function ask(query) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise(r => { rl.question(query, a => { rl.close(); r(a.trim()); }); });
-}
-
-async function showMenu() {
-  console.log("");
-  console.log(chalk.yellow("  ╔═══════════════════════════════╗"));
-  console.log(chalk.yellow("  ║") + chalk.cyan("     📲  CONEXIÓN  📲        ") + chalk.yellow("║"));
-  console.log(chalk.yellow("  ╚═══════════════════════════════╝"));
-  console.log("");
-  console.log(chalk.white("     [1]") + chalk.cyan(" QR Code"));
-  console.log(chalk.white("     [2]") + chalk.cyan(" Pairing Code"));
-  console.log("");
-
-  let opt = "";
-  while (opt !== "1" && opt !== "2") {
-    opt = await ask(chalk.yellow("     ❯ Opción: "));
-    if (opt !== "1" && opt !== "2") console.log(chalk.red("     ✗ 1 o 2 solamente"));
-  }
-
-  if (opt === "1") {
-    console.log(chalk.green("\n     ✓ QR seleccionado\n"));
-    return { method: "qr", phone: "" };
-  }
-
-  console.log("");
-  console.log(chalk.cyan("     📱 Ingresa tu número (con código de país)"));
-  console.log(chalk.gray("     Ej: 521234567890"));
-  let phone = "";
-  while (!/^\d{7,15}$/.test(phone)) {
-    phone = (await ask(chalk.yellow("     ❯ Número: "))).replace(/\D/g, "");
-    if (!/^\d{7,15}$/.test(phone)) console.log(chalk.red("     ✗ Inválido"));
-  }
-  console.log(chalk.green(`\n     ✓ Generando código para +${phone}...\n`));
-  return { method: "code", phone };
+// ─── Helpers ────────────────────────────────────────────────────
+function normalizePhone(input) {
+  let s = String(input).replace(/\D/g, '');
+  if (!s) return '';
+  if (s.startsWith('0')) s = s.replace(/^0+/, '');
+  if (s.startsWith('52') && !s.startsWith('521') && s.length >= 12) s = '521' + s.slice(2);
+  if (s.startsWith('54') && !s.startsWith('549') && s.length >= 11) s = '549' + s.slice(2);
+  return s;
 }
 
 function parseArgs(argv) {
@@ -63,11 +35,9 @@ function parseArgs(argv) {
     if (argv[i] === "--qr") r.qr = true;
     if (argv[i] === "--code") r.code = true;
     if (argv[i] === "--code" && argv[i+1] && /^\+?\d{7,15}$/.test(argv[i+1])) {
-      r.phone = argv[++i].replace(/\D/g, "");
+      r.phone = normalizePhone(argv[++i]);
     }
   }
-  if (!r.qr && !r.code && process.env.PAIRING_METHOD === "code") r.code = true;
-  if (!r.phone && process.env.PAIRING_NUMBER) r.phone = process.env.PAIRING_NUMBER.replace(/\D/g, "");
   return r;
 }
 
@@ -99,29 +69,63 @@ function logCommand(ctx, cmdName, ms) {
   console.log(chalk.gray("  ╰───────────────────────────────────────"));
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  printBanner();
+// ==================================================================
+//  INICIO — SINCRONO hasta el menú, como Ginko-MD
+// ==================================================================
 
-  const sessionDir = "./Sessions/Owner";
-  let sessionExists = false;
-  try {
-    const authDb = path.join(sessionDir, "auth.db");
-    if (fs.existsSync(authDb)) {
-      const { state } = await useSQLiteAuthState(sessionDir);
-      sessionExists = state.creds?.registered === true;
+printBanner();
+
+const args = parseArgs(process.argv.slice(2));
+const methodCodeByEnv = (process.env.PAIRING_METHOD || "").trim().toLowerCase() === "code" && process.env.PAIRING_NUMBER;
+const envNumber = (process.env.PAIRING_NUMBER || "").trim();
+const sessionDir = "./Sessions/Owner";
+const hasSessionFile = fs.existsSync(path.join(sessionDir, "auth.db"));
+
+let opcion, phoneNumber = "";
+
+if (hasSessionFile) {
+  opcion = "0";
+  console.log(chalk.gray("[ ✿ ] Sesión existente detectada, cargando..."));
+} else if (methodCodeByEnv) {
+  opcion = "2";
+  phoneNumber = normalizePhone(envNumber);
+  console.log(chalk.gray(`[ ✿ ] Vinculación por código (número desde .env: ${phoneNumber || '?'} )`));
+} else if (args.qr) {
+  opcion = "1";
+} else if (args.code) {
+  opcion = "2";
+  phoneNumber = args.phone || normalizePhone(readlineSync.question(chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp.\n" + chalk.bold.yellowBright("Ejemplo: +57301******\n") + chalk.bold.magentaBright("---> "))));
+} else {
+  const isInteractive = process.stdin.isTTY !== false;
+  if (!isInteractive) {
+    log.warn("No hay consola interactiva. Usa --qr, --code o configura .env");
+    opcion = "1";
+  } else {
+    console.log(chalk.yellow("\n  ╔═══════════════════════════════╗"));
+    console.log(chalk.yellow("  ║") + chalk.cyan("     📲  CONEXIÓN  📲        ") + chalk.yellow("║"));
+    console.log(chalk.yellow("  ╚═══════════════════════════════╝\n"));
+    console.log(chalk.white("     [1]") + chalk.cyan(" QR Code"));
+    console.log(chalk.white("     [2]") + chalk.cyan(" Pairing Code\n"));
+
+    opcion = readlineSync.question(chalk.yellow("     ❯ Opción: "));
+    while (!/^[1-2]$/.test(opcion)) {
+      console.log(chalk.bold.redBright("     ✗ Solo 1 o 2"));
+      opcion = readlineSync.question(chalk.yellow("     ❯ Opción: "));
     }
-  } catch {}
 
-  let method = "qr", phone = "";
-  if (args.qr) { method = "qr"; }
-  else if (args.code) { method = "code"; phone = args.phone; }
-  else if (!sessionExists) {
-    const m = await showMenu();
-    method = m.method;
-    phone = m.phone;
+    if (opcion === "2") {
+      console.log(chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp."));
+      console.log(chalk.bold.yellowBright("Ejemplo: 521234567890\n"));
+      phoneNumber = normalizePhone(readlineSync.question(chalk.magenta("---> ")));
+    }
   }
+}
 
+// ==================================================================
+//  ASÍNCRONO — a partir de aquí todo async
+// ==================================================================
+
+async function main() {
   let db;
   try { db = getDatabase(); }
   catch (err) { log.fatal("DB: " + err.message); process.exit(1); }
@@ -146,7 +150,9 @@ async function main() {
   await router.init();
 
   const sockModule = connectSocket(engine, {
-    sessionDir, pairingMethod: method, pairingNumber: phone,
+    sessionDir,
+    pairingMethod: opcion === "2" ? "code" : "qr",
+    pairingNumber: phoneNumber,
     onMessage: (s, m) => router.handle(s, m),
     onReady: s => log.success("Bot listo ✓"),
     watchdog,
@@ -159,8 +165,7 @@ async function main() {
 
 let down = false;
 async function shutdown(engine, db) {
-  if (down) return;
-  down = true;
+  if (down) return; down = true;
   log.warn("Apagando...");
   try { await engine.shutdown(); } catch {}
   try { db.close(); } catch {}
