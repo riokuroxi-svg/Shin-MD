@@ -13,6 +13,7 @@ import qrcode from "qrcode-terminal";
 import pino from "pino";
 import fs from "fs";
 import path from "path";
+import chalk from "chalk";
 import log from "#logger";
 
 export { getCachedMeta, setCachedMeta, deleteCachedMeta };
@@ -151,8 +152,16 @@ export function connectSocket(engine, opts) {
       const { qr, connection, lastDisconnect, isNewLogin } = upd;
 
       if (qr != null && !state.creds.registered) {
-        log.info("Scan QR code to link");
+        console.log("");
+        console.log(chalk.green("╔═══════════════════════════════════════════════╗"));
+        console.log(chalk.green("║") + chalk.white("         📱 ESCANEA EL CÓDIGO QR            ") + chalk.green("║"));
+        console.log(chalk.green("╚═══════════════════════════════════════════════╝"));
+        console.log("");
         qrcode.generate(qr, { small: true });
+        console.log("");
+        console.log(chalk.gray("   🔗 Enlaza tu dispositivo WhatsApp con el código QR"));
+        console.log(chalk.gray("   ⏳ Esperando confirmación..."));
+        console.log("");
       }
 
       if (connection === "open") {
@@ -207,7 +216,19 @@ export function connectSocket(engine, opts) {
             const phone = pairingNumber.replace(/\D/g, "");
             const pair = await s.requestPairingCode(phone);
             const code = pair ? (pair.match(/.{1,4}/g) || [pair]).join("-") : pair;
-            log.info("Pairing code: " + code);
+            console.log("");
+            console.log(chalk.green("╔═══════════════════════════════════════════════╗"));
+            console.log(chalk.green("║") + chalk.white("        📲 CÓDIGO DE VINCULACIÓN           ") + chalk.green("║"));
+            console.log(chalk.green("╚═══════════════════════════════════════════════╝"));
+            console.log("");
+            console.log(chalk.cyan("    ┌─────────────────────────────────────┐"));
+            console.log(chalk.cyan("    │") + chalk.bold.yellow("       ") + code + chalk.bold.yellow("        ") + chalk.cyan("│"));
+            console.log(chalk.cyan("    └─────────────────────────────────────┘"));
+            console.log("");
+            console.log(chalk.gray("   📱 Ve a WhatsApp > Dispositivos vinculados"));
+            console.log(chalk.gray("   🔗 Toca \"Vincular un dispositivo\""));
+            console.log(chalk.gray("   ⏳ Esperando confirmación..."));
+            console.log("");
           }
         } catch (e) { log.error("Pairing: " + (e.message || e)); }
       }, 3000);

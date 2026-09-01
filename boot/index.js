@@ -7,13 +7,80 @@ import "dotenv/config";
 import chalk from "chalk";
 import cfonts from "cfonts";
 import moment from "moment-timezone";
+import readline from "readline";
+import fs from "fs";
+import path from "path";
 import { createEngine } from "#engine";
 import { connectSocket } from "#socket";
 import { createWatchdog } from "#watchdog";
 import { createWebServer } from "#server";
 import { getDatabase } from "#db";
 import { createRouter } from "#router";
+import { useSQLiteAuthState } from "#auth";
 import log from "#logger";
+
+/**
+ * Pregunta al usuario en la terminal (Promise wrapper)
+ */
+function askQuestion(query) {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise(resolve => {
+    rl.question(query, ans => {
+      rl.close();
+      resolve(ans.trim());
+    });
+  });
+}
+
+/**
+ * Muestra menú interactivo estilo Ginko-MD para elegir método de conexión
+ * Devuelve { pairingMethod, pairingNumber }
+ */
+async function interactiveAuthMenu() {
+  console.log("");
+  console.log(chalk.yellow("╔═══════════════════════════════════════════════╗"));
+  console.log(chalk.yellow("║") + chalk.cyan("     Selecciona método de conexión 📲        ") + chalk.yellow("║"));
+  console.log(chalk.yellow("╚═══════════════════════════════════════════════╝"));
+  console.log("");
+  console.log(chalk.white("  [") + chalk.green("1") + chalk.white("]") + chalk.gray(" QR Code"));
+  console.log(chalk.white("  [") + chalk.green("2") + chalk.white("]") + chalk.gray(" Pairing Code"));
+  console.log("");
+
+  let choice = "";
+  while (choice !== "1" && choice !== "2") {
+    choice = await askQuestion(chalk.cyan("  ➜ Opción: "));
+    if (choice !== "1" && choice !== "2") {
+      console.log(chalk.red("  ✗ Opción inválida. Elige 1 o 2."));
+    }
+  }
+
+  if (choice === "1") {
+    console.log(chalk.green("\n  ✓ QR Code seleccionado. Escanea el código cuando aparezca.\n"));
+    return { pairingMethod: "qr", pairingNumber: "" };
+  }
+
+  // Opción 2: Pairing Code
+  console.log("");
+  console.log(chalk.yellow("  ─────────────────────────────────────"));
+  console.log(chalk.cyan("  📱 Ingresa tu número de teléfono:"));
+  console.log(chalk.gray("     Ejemplo: 521234567890 (con código de país, sin +)"));
+  console.log(chalk.yellow("  ─────────────────────────────────────"));
+
+  let phone = "";
+  while (!/^\d{7,15}$/.test(phone)) {
+    phone = await askQuestion(chalk.cyan("  ➜ Número: "));
+    phone = phone.replace(/\D/g, "");
+    if (!/^\d{7,15}$/.test(phone)) {
+      console.log(chalk.red("  ✗ Número inválido. Debe tener entre 7 y 15 dígitos."));
+    }
+  }
+
+  console.log(chalk.green(`\n  ✓ Generando código de pares para +${phone}...\n`));
+  return { pairingMethod: "code", pairingNumber: phone };
+}
 
 function parseArgs(argv) {
   const args = { qr: false, code: false, pairingNumber: "" };
@@ -86,6 +153,35 @@ async function main() {
   log.info("║      Anti-ban native · AGPL-3.0       ║");
   log.info("╚═══════════════════════════════════════╝");
 
+  // ─── Verificar si ya hay sesión guardada ───
+  const sessionDir = "./Sessions/Owner";
+  let sessionExists = false;
+  try {
+    const authDbPath = path.join(sessionDir, "auth.db");
+    if (fs.existsSync(authDbPath)) {
+      const { state } = await useSQLiteAuthState(sessionDir);
+      sessionExists = state.creds?.registered === true;
+    }
+  } catch {
+    // Si falla, asumimos que no hay sesión
+  }
+
+  // ─── Menú interactivo si NO hay sesión ───
+  let pairingMethod = "qr";
+  let pairingNumber = "";
+
+  if (args.qr) {
+    pairingMethod = "qr";
+  } else if (args.code) {
+    pairingMethod = "code";
+    pairingNumber = args.pairingNumber || process.env.PAIRING_NUMBER || "";
+  } else if (!sessionExists) {
+    // No hay sesión ni flags → mostrar menú interactivo estilo Ginko-MD
+    const choice = await interactiveAuthMenu();
+    pairingMethod = choice.pairingMethod;
+    pairingNumber = choice.pairingNumber;
+  }
+
   let db;
   try {
     db = getDatabase();
@@ -122,9 +218,9 @@ async function main() {
   await router.init();
 
   const sockModule = connectSocket(engine, {
-    sessionDir: "./Sessions/Owner",
-    pairingMethod: args.code ? "code" : "qr",
-    pairingNumber: args.pairingNumber,
+    sessionDir,
+    pairingMethod,
+    pairingNumber,
     onMessage: (sock, msg) => router.handle(sock, msg),
     onReady: sock => log.success("Bot listo ✓"),
     watchdog,
