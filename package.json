@@ -34,7 +34,6 @@
     "#fastsaver": "./src/services/fastsaver.js",
     "#economy": "./src/services/economy.js",
     "#games/engine": "./src/games/engine.js",
-    "#serialize": "./src/serialize.js",
     "#main": "./src/services/ginko-stubs.js",
     "#events": "./cmds/events.js",
     "#core/exif": "./src/services/ginko-stubs.js",
@@ -60,6 +59,7 @@
   "dependencies": {
     "@img/sharp-wasm32": "^0.35.4",
     "@vitalets/google-translate-api": "^9.2.1",
+    "aptoide-scraper": "^1.0.1",
     "baileys": "npm:@whiskeysockets/baileys@6.7.24",
     "cfonts": "^3.3.1",
     "chalk": "4.1.2",
@@ -67,6 +67,8 @@
     "dotenv": "16.4.7",
     "express": "4.22.2",
     "gradient-string": "^3.0.0",
+    "grapheme-splitter": "^1.0.4",
+    "human-readable": "^0.2.1",
     "jimp": "^1.6.1",
     "moment": "^2.30.1",
     "moment-timezone": "^0.5.43",
@@ -77,6 +79,7 @@
     "qrcode-terminal": "0.12.0",
     "readline-sync": "^1.4.10",
     "sharp": "^0.35.4",
+    "syntax-error": "^1.4.0",
     "ws": "^8.21.3",
     "ytdl-core": "^4.11.5",
     "ytsr": "^3.8.4"

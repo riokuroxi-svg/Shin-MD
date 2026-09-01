@@ -1,7 +1,7 @@
 import axios from 'axios';
 import path from 'path';
 import { lookup } from 'mime-types';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 
 export default {
   command: ['mediafire', 'mf'],
