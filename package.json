@@ -13,6 +13,8 @@
   "imports": {
     "#engine": "./src/core/engine.js",
     "#socket": "./src/core/socket.js",
+    "#metaCache": "./src/core/metaCache.js",
+    "#serialize": "./src/serialize.js",
     "#auth": "./src/core/auth.js",
     "#queue": "./src/network/queue.js",
     "#throttler": "./src/network/throttler.js",
@@ -22,10 +24,14 @@
     "#db": "./src/storage/database.js",
     "#migrations": "./src/storage/migrations.js",
     "#cache": "./src/storage/cache.js",
-    "#server": "./src/web/server.js"
+    "#server": "./src/web/server.js",
+    "#commands": "./src/commands/loader.js",
+    "#router": "./src/commands/router.js",
+    "#cooldown": "./src/commands/middleware/cooldown.js",
+    "#permissions": "./src/commands/middleware/permissions.js"
   },
   "engines": {
-    "node": ">=22.5.0",
+    "node": ">=24.0.0",
     "npm": ">=10.0.0"
   },
   "dependencies": {

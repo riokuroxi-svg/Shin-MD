@@ -8,25 +8,14 @@ import makeWASocket, {
   fetchLatestBaileysVersion, jidDecode, DisconnectReason,
 } from "baileys";
 import { useSQLiteAuthState } from "./auth.js";
+import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "./metaCache.js";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
 import fs from "fs";
 import path from "path";
 import log from "#logger";
 
-const groupMetaCache = new Map();
-const META_TTL = 300000;
-setInterval(() => {
-  const n = Date.now();
-  for (const [k, v] of groupMetaCache) if (n - v.ts > META_TTL) groupMetaCache.delete(k);
-}, 600000);
-
-export function getCachedMeta(j) {
-  const c = groupMetaCache.get(j);
-  return c && Date.now() - c.ts <= META_TTL ? c.metadata : null;
-}
-export function setCachedMeta(j, m) { groupMetaCache.set(j, { metadata: m, ts: Date.now() }); }
-export function deleteCachedMeta(j) { groupMetaCache.delete(j); }
+export { getCachedMeta, setCachedMeta, deleteCachedMeta };
 
 export function connectSocket(engine, opts) {
   opts = opts || {};

@@ -9,6 +9,7 @@ import { connectSocket } from "#socket";
 import { createWatchdog } from "#watchdog";
 import { createWebServer } from "#server";
 import { getDatabase } from "#db";
+import { createRouter } from "#router";
 import log from "#logger";
 
 function parseArgs(argv) {
@@ -58,47 +59,29 @@ async function main() {
   // Owner desde .env (semilla) o detectado al conectar
   const ownerFromEnv = process.env.OWNER_NUMBER
     ? process.env.OWNER_NUMBER.replace(/\D/g, "") + "@s.whatsapp.net" : "";
-  if (ownerFromEnv) db.settings.set("owner_jid", ownerFromEnv);
+  if (ownerFromEnv) {
+    db.settings.set("owner_jid", ownerFromEnv);
+    engine.setOwnerJid(ownerFromEnv);
+  }
 
   engine.on("connected", user => {
     const u = user && user.id ? user.id.split(":")[0] : "?";
-    db.settings.set("owner_jid", u + "@s.whatsapp.net");
+    const ownerJid = u + "@s.whatsapp.net";
+    db.settings.set("owner_jid", ownerJid);
+    engine.setOwnerJid(ownerJid);
+    log.gray("Owner: " + ownerJid);
   });
 
-  // --- Comandos: handler mínimo de mensajes ---
-  function handleMessage(sock, msg) {
-    return (async () => {
-      if (!msg.key) return;
-      const chatId = msg.key.remoteJid;
-      const senderId = (msg.key.participant || msg.key.remoteJid || "");
-      const text = (() => {
-        const m = msg.message || {};
-        const content = m.extendedTextMessage || m.conversation || m.imageMessage || m.videoMessage;
-        const t = (content && (content.text || content.caption)) || m.conversation || "";
-        return String(t).trim();
-      })();
-
-      if (!chatId || !text) return;
-
-      // Solo owner por ahora
-      const ownerJid = db.settings.get("owner_jid");
-      if (ownerJid && senderId.split(":")[0] + "@s.whatsapp.net" !== ownerJid) return;
-
-      if (text.toLowerCase() === "ping") {
-        await engine.getSendQueue().enqueue(
-          () => sock.sendMessage(chatId, { text: "🏓 pong" }),
-          { messageLength: text.length }
-        );
-      }
-    })().catch(err => log.error("handleMessage: " + (err.message || err)));
-  }
+  // Router de comandos (carga cmds/)
+  const router = createRouter(engine);
+  await router.init();
 
   // Conectar socket
   const sockModule = connectSocket(engine, {
     sessionDir: "./Sessions/Owner",
     pairingMethod: args.code ? "code" : "qr",
     pairingNumber: args.pairingNumber,
-    onMessage: handleMessage,
+    onMessage: (sock, msg) => router.handle(sock, msg),
     onReady: sock => log.success("Bot listo ✓"),
     watchdog,
   });

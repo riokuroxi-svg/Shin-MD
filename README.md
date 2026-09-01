@@ -1,75 +1,118 @@
 <div align="center">
 
-# 反魂 Shin-MD
+<img src="https://capsule-render.vercel.app/api?type=waving&height=220&color=gradient&customColorList=12,23,25,30&text=反魂%20SHIN-MD&fontSize=54&fontColor=ffffff&animation=fadeIn&fontAlignY=38&desc=Bot%20WhatsApp%20Multi-Device%20Superior&descSize=18&descAlignY=60" width="100%"/>
 
-**Bot WhatsApp Multi-Device superior — anti-ban nativo, auto-healing, eficiente en recursos.**
+<br>
 
-[![Node.js](https://img.shields.io/badge/Node.js-22.5+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
+[![WhatsApp Bot](https://img.shields.io/badge/WhatsApp-Bot-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://github.com/riokuroxi-svg/Shin-MD)
+[![Node.js](https://img.shields.io/badge/Node.js-24+-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![Baileys](https://img.shields.io/badge/Baileys-6.7.24-25D366?style=for-the-badge)](https://github.com/WhiskeySockets/Baileys)
 [![License](https://img.shields.io/badge/License-AGPLv3-red?style=for-the-badge)](LICENSE)
 [![Termux](https://img.shields.io/badge/Termux-Compatible-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://termux.com)
 
+<br>
+
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=26&duration=2800&pause=600&color=4ADE80&center=true&vCenter=true&width=640&lines=反魂+Shin-MD;El+renacer+de+un+bot+superior;Hecho+desde+cero;Arquitectura+limpia+y+moderna;AGPL-3.0+Protegido" alt="Typing SVG" />
+
+<br>
+
+<img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" width="100%">
+
 </div>
 
-## ⚠️ Licencia — AGPL-3.0
+## 🏆 ¿Qué hace a Shin-MD superior?
 
-Este proyecto se distribuye bajo la **GNU Affero General Public License v3.0**.
+| Característica | Shin-MD | Otros bots |
+|---|---|---|
+| **Arquitectura** | Capas separadas (core, network, services, storage, web) | Todo en index.js |
+| **Auth** | SQLite nativo (`node:sqlite`, WAL, atómico) | JSON frágil que se corrompe |
+| **Anti-ban** | Jitter gaussiano + warm-up + monitor de riesgo + auto-pausa | "Random delay" sin lógica |
+| **Cola de envío** | Cola serial con reintento, pasa por el throttler | Envío directo, riesgo de ban |
+| **Logging** | Pino estructurado + salida legible | console.log espartano |
+| **Backoff** | Exponencial con jitter | Lineal o inexistente |
+| **Licencia** | AGPL-3.0 (protección real anti-comercial) | MIT sin restricciones |
+| **Dependencias** | Versiones fijas, mínimas | Versiones sueltas |
 
-Esto significa: **cualquiera que use o modifique este código debe publicar su versión modificada bajo la misma licencia AGPL-3.0**, incluyendo servicios ofrecidos a través de una red. Impide el aprovechamiento comercial cerrado del trabajo.
+## 🛡️ Anti-ban integrado (nativo)
 
-## 🏗️ Arquitectura
+No es un "delay random": es una capa pensada para parecer humano y auto-protegerse.
 
-Capa por responsabilidad, sin código repetido, sin "index.js gigante".
+- **Jitter gaussiano**: los delays siguen una distribución natural, no predecible.
+- **Warm-up diario**: empieza con un tope bajo de mensajes/día y sube gradualmente en 7 días.
+- **Penalización a contactos nuevos**: el primer contacto espera más, como una persona.
+- **Monitor de riesgo (0-100)**: puntúa disconnects, errores y fallos de envío.
+- **Watchdog auto-healing**: si el riesgo es crítico **pausa los envíos solo**, sin matar el bot; si el proceso se cuelga, lo detecta.
+- **Backoff exponencial + jitter** en reconexiones (máx 15 intentos antes de limpiar sesión).
+- **Regla #1**: solo responde a quien te escribe — no enfría mensajes a desconocidos.
 
-```
-src/
-├── core/            # Núcleo del bot
-│   ├── engine.js    # Ciclo de vida (BOOT → INIT → CONNECT → READY → RUNNING → SHUTDOWN)
-│   ├── socket.js    # Conexión Baileys: reconexión, backoff, captura de mensajes
-│   └── auth.js      # Auth state persistido en SQLite (creds + Signal keys)
-├── network/         # Capa anti-ban
-│   ├── throttler.js # Jitter gaussiano, warm-up diario, penalización a contactos nuevos
-│   ├── queue.js     # Cola de envío serial, reintento, pausa por riesgo
-│   └── health.js    # Monitor de riesgo de ban (puntuación 0-100)
-├── services/        # Servicios transversales
-│   ├── logger.js    # Pino + Chalk, 6 niveles, timestamps ISO
-│   └── watchdog.js  # Auto-healing: detecta bloqueos, pausa en riesgo alto
-├── storage/         # Persistencia
-│   ├── database.js  # SQLite (node:sqlite) con migraciones versionadas
-│   ├── migrations.js# Definiciones de migración (single source of truth)
-│   └── cache.js     # Caché en memoria con TTL y auto-GC
-└── web/             # Panel local
-    └── server.js    # /, /health, /metrics (solo 127.0.0.1 por defecto)
+## 🚀 Inicio rápido
 
-boot/index.js        # Arranque: monta engine + socket + watchdog + web
-index.js             # Entry point público (npm start)
-test/                # Tests (node --test)
-```
-
-## 🛡️ Anti-ban integrado
-
-- **Jitter gaussiano**: los delays entre mensajes siguen una distribución natural, no son fijos ni predecibles.
-- **Warm-up diario**: arranca con un tope bajo de mensajes/día y sube gradualmente durante 7 días.
-- **Penalización a contactos nuevos**: primer contacto espera más, imita comportamiento humano.
-- **Monitor de riesgo**: puntúa disconnects, errores y fallos de envío; el watchdog pausa automáticamente ante riesgo crítico.
-- **Backoff exponencial + jitter** en reconexiones, con tope de 15 reintentos antes de limpiar sesión.
-
-## 🚀 Instalación
+### Termux (Android)
 
 ```bash
-# Requiere Node.js >= 22.5.0 (node:sqlite)
+pkg update && pkg upgrade -y
+pkg install -y git nodejs-lts ffmpeg
+git clone https://github.com/riokuroxi-svg/Shin-MD
+cd Shin-MD
 npm install
-
-# Copiar configuración
-cp .env.example .env   # rellena OWNER_NUMBER y método de vinculación
-
-# QR
+cp .env.example .env
+# Edita .env con tu número y método de conexión
 npm start
-# ó npm run start:qr
+```
 
-# Pairing code (recomendado en Termux)
-npm run start:code          # usando el número de .env
-node index.js --code 521234567890
+### BoxMine / VPS
+
+```bash
+git clone https://github.com/riokuroxi-svg/Shin-MD
+cd Shin-MD
+npm install
+# Configura .env con PAIRING_METHOD=code y PAIRING_NUMBER
+npm start
+```
+
+## ⚙️ Configuración
+
+Copia `.env.example` a `.env` y rellena:
+
+| Variable | Descripción | Default |
+|---|---|---|
+| `OWNER_NUMBER` | Tu número (solo dígitos) | — |
+| `PAIRING_METHOD` | `code` o `qr` | `code` |
+| `PAIRING_NUMBER` | Número para pairing | — |
+| `LOG_LEVEL` | trace, debug, info, warn, error, silent | `info` |
+| `PORT` | Puerto del panel HTTP | `3000` |
+| `LOOPBACK` | `1` = solo local, `0` = red | `1` |
+
+## 🗂️ Estructura del proyecto
+
+```
+Shin-MD/
+├── index.js              ← Entry point (npm start)
+├── boot/index.js         ← Arranque: engine + socket + router + web
+├── cmds/                 ← Comandos/plugins (carga dinámica)
+├── test/                 ← Tests (node --test)
+├── src/
+│   ├── core/
+│   │   ├── engine.js     ← Ciclo de vida + eventos + cola
+│   │   ├── socket.js     ← Conexión Baileys (reconexión, backoff)
+│   │   ├── auth.js       ← Auth state en SQLite (creds + keys)
+│   │   └── metaCache.js  ← Caché de metadatos de grupos
+│   ├── network/          ← Capa anti-ban
+│   │   ├── throttler.js  ← Jitter + warm-up + penalizaciones
+│   │   ├── queue.js      ← Cola de envío serial
+│   │   └── health.js     ← Monitor de riesgo de ban
+│   ├── commands/
+│   │   ├── loader.js     ← Cargador dinámico de cmds/
+│   │   ├── router.js     ← Pipeline: prefijo → cooldown → permisos → handler
+│   │   └── middleware/   ← cooldown (antispam) + permisos
+│   ├── services/
+│   │   ├── logger.js     ← Pino + Chalk
+│   │   └── watchdog.js   ← Auto-healing
+│   ├── storage/
+│   │   ├── database.js   ← SQLite + migraciones
+│   │   ├── migrations.js ← Migraciones (source of truth)
+│   │   └── cache.js      ← Caché TTL
+│   └── web/server.js     ← Panel local /health /metrics
 ```
 
 ## 🖥️ Panel local
@@ -80,16 +123,34 @@ Con el bot corriendo:
 - `http://127.0.0.1:3000/health` — riesgo, cola, memoria
 - `http://127.0.0.1:3000/metrics` — métricas de proceso
 
-## 🧪 Tests
+## 📜 Licencia
 
-```bash
-npm test
-```
+**Shin-MD** está protegido bajo **GNU Affero General Public License v3.0**.
 
-## 📁 Estructura de sesión
+Esto significa que:
+- ✅ Puedes usar, modificar y compartir el código
+- ❌ **No puedes** usarlo en servicios comerciales cerrados
+- ❌ **No puedes** vender este bot o una versión modificada
+- ✅ Si haces mejoras, debes compartirlas bajo la misma licencia
 
-La sesión de WhatsApp se guarda en `./Sessions/Owner/auth.db` (SQLite, WAL), más robusta que los JSON planos que se corrompen.
+El objetivo es claro: que nadie lucre con este trabajo. Es y será siempre libre.
+
+## 🧠 Filosofía
+
+> **"No quiero clonar una base ya hecha de otro bot y ponerle mi nombre. Quiero construir algo superior con herramientas actuales, no con lo que 'siempre se ha hecho así' en estos bots MD."**
+
+Este bot está construido desde cero con investigación profunda, no copiando lo que otros hacen. Cada decisión técnica tiene una razón.
+
+## 🍁 Créditos
+
+**Creador:** [riokuroxi-svg](https://github.com/riokuroxi-svg)
+
+Basado en la experiencia de Ginko-MD, pero reconstruido desde cero para ser superior.
 
 ---
 
-**Shin-MD** — Hecho desde cero. AGPL-3.0.
+<div align="center">
+  <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" width="100%">
+  <br><br>
+  <strong>反魂 Shin-MD</strong> — El renacer de un bot superior
+</div>
