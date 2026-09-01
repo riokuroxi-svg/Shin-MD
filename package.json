@@ -39,11 +39,17 @@
   "dependencies": {
     "baileys": "npm:@whiskeysockets/baileys@6.7.24",
     "chalk": "4.1.2",
+    "cheerio": "^1.2.0",
     "dotenv": "16.4.7",
     "express": "4.22.2",
+    "jimp": "^1.6.1",
+    "node-webpmux": "^3.2.1",
     "pino": "8.21.0",
     "qrcode": "1.5.4",
-    "qrcode-terminal": "0.12.0"
+    "qrcode-terminal": "0.12.0",
+    "sharp": "^0.35.4",
+    "ytdl-core": "^4.11.5",
+    "ytsr": "^3.8.4"
   },
   "overrides": {
     "libsignal": "npm:libsignal@6.0.0"
