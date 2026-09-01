@@ -38,7 +38,7 @@ export function connectSocket(engine, opts) {
   const SMAX = 1000;
   const SK = "__sent__:";
 
-  const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, seClones: false });
+  const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
 
   function remove(s) {
     if (!s) return;
@@ -172,7 +172,7 @@ export function connectSocket(engine, opts) {
 
         // FORZAR guardado inmediato de credenciales ANTES de que se cierre
         clearTimeout(saveTimer);
-        sc().catch(() => {});
+        try { await sc(); } catch {}
         saveTimer = null;
 
         engine.transit(engine.LIFECYCLE.READY);
@@ -187,7 +187,7 @@ export function connectSocket(engine, opts) {
         log.info("Nuevo dispositivo vinculado");
         // Forzar saveCreds inmediato cuando se vincula
         clearTimeout(saveTimer);
-        sc().catch(() => {});
+        try { await sc(); } catch {}
         saveTimer = null;
       }
 
@@ -196,6 +196,10 @@ export function connectSocket(engine, opts) {
         health.recordDisconnect();
 
         const code = lastDisconnect?.error?.output?.statusCode || 0;
+
+        // DEBUG: mostrar codigo exacto
+        const reasonName = Object.keys(DisconnectReason).find(k => DisconnectReason[k] === code) || "unknown";
+        log.gray("▸ Desconexion codigo: " + code + " (" + reasonName + ")");
 
         if ([DisconnectReason.loggedOut, DisconnectReason.forbidden,
              DisconnectReason.multideviceMismatch].includes(code)) {
