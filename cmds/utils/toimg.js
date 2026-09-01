@@ -1,6 +1,6 @@
 // ToImg — convertir sticker WebP a imagen PNG
-// Usa Jimp (puro JS, funciona en Termux sin compilación nativa)
-import Jimp from 'jimp';
+// Usa sharp (con soporte WASM para Termux)
+import sharp from 'sharp';
 
 export default {
   name: "toimg", aliases: ["toimage"], category: "utility",
@@ -16,8 +16,7 @@ export default {
         message: { stickerMessage: quoted.stickerMessage }
       });
       if (!buf) return '❌ No se pudo descargar el sticker.';
-      const image = await Jimp.read(buf);
-      const pngBuf = await image.getBufferAsync(Jimp.MIME_PNG);
+      const pngBuf = await sharp(buf).png().toBuffer();
       await engine.getSendQueue().enqueue(
         () => sock.sendMessage(ctx.chatId, { image: pngBuf }, { quoted: ctx.full }),
         { messageLength: 10 }

@@ -39,6 +39,7 @@
     "npm": ">=10.0.0"
   },
   "dependencies": {
+    "@img/sharp-wasm32": "^0.35.4",
     "@vitalets/google-translate-api": "^9.2.1",
     "baileys": "npm:@whiskeysockets/baileys@6.7.24",
     "cfonts": "^3.3.1",
