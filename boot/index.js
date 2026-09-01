@@ -72,16 +72,17 @@ function printBanner() {
 
 function logCommand(ctx, cmdName, ms) {
   const t = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
-  const name = ctx.pushname || "Usuario";
+  const name = ctx.pushName || ctx.pushname || "Usuario";
   const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
+  const boxColor = chalk.hex("#00ff88");
   console.log("");
-  console.log(chalk.gray("  ╭───────────────────────────────────────"));
-  console.log(chalk.gray("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
-  console.log(chalk.gray("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
-  console.log(chalk.gray("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
-  console.log(chalk.gray("  │") + chalk.magenta("  Grupo: ") + chalk.white(g));
-  console.log(chalk.gray("  │") + chalk.cyanBright("  Comando: ") + chalk.gray(cmdName) + chalk.gray(` (${ms}ms)`));
-  console.log(chalk.gray("  ╰───────────────────────────────────────"));
+  console.log(boxColor("  ╭───────────────────────────────────────"));
+  console.log(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
+  console.log(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
+  console.log(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
+  console.log(boxColor("  │") + chalk.magenta("  Grupo: ") + chalk.white(g));
+  console.log(boxColor("  │") + chalk.cyanBright("  Comando: ") + chalk.white(cmdName) + boxColor(` (${ms}ms)`));
+  console.log(boxColor("  ╰───────────────────────────────────────"));
 }
 
 // ==================================================================

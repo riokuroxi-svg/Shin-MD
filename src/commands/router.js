@@ -62,11 +62,13 @@ export function createRouter(engine, opts) {
       // Respuesta de botón (clic en un botón interactivo)
       const btnId = parseButtonResponse(msg);
       if (btnId) {
-        // El id del botón se trata como un comando con prefijo
-        // Ej: botón "ttt:a1" → ".ttt a1", botón "menu" → ".menu"
+        // El botón debe tener formato: "comando:argumento" o solo "comando"
+        // Ej: "kuro:1" → ".kuro 1", "menu" → ".menu"
+        const [btnCmd, ...btnArgs] = btnId.split(":");
+        const btnArg = btnArgs.join(" ");
         const virtualMsg = {
           ...msg,
-          message: { conversation: BOT_PREFIX + btnId },
+          message: { conversation: BOT_PREFIX + btnCmd + (btnArg ? " " + btnArg : "") },
         };
         return handle(sock, virtualMsg);
       }
