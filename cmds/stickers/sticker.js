@@ -1,8 +1,9 @@
 // Sticker — convierte imagen a sticker WebP con metadatos
-// Sin ffmpeg: usa sharp (puro Node.js nativo) + node-webpmux para EXIF
+// Sin sharp nativo: usa Jimp (puro JS) + node-webpmux para EXIF
+// Funciona en Termux sin compilación
 // El usuario puede configurar STICKER_PACK y STICKER_AUTHOR en .env
 
-import sharp from 'sharp';
+import Jimp from 'jimp';
 import pkg from 'node-webpmux';
 
 const { Image } = pkg;
@@ -58,14 +59,12 @@ export default {
         if (parts.length > 1 && parts[1]) packAuthor = parts[1];
       }
 
-      // Procesar con Sharp: redimensionar a 512x512 y convertir a WebP
-      const webpBuffer = await sharp(imgBuffer)
-        .resize(STICKER_SIZE, STICKER_SIZE, {
-          fit: 'cover',
-          background: { r: 0, g: 0, b: 0, alpha: 0 }
-        })
-        .webp({ quality: 80 })
-        .toBuffer();
+      // Procesar con Jimp: redimensionar a 512x512
+      const image = await Jimp.read(imgBuffer);
+      image.resize(STICKER_SIZE, STICKER_SIZE);
+
+      // Obtener buffer WebP
+      const webpBuffer = await image.getBufferAsync(Jimp.MIME_WEBP);
 
       // Añadir EXIF metadata de WhatsApp con node-webpmux
       const img = new Image();
@@ -78,7 +77,7 @@ export default {
       });
       img.exif = Buffer.from(exifData, 'utf-8');
 
-      const finalWebp = await img.save(null); // devuelve buffer
+      const finalWebp = await img.save(null);
 
       // Enviar sticker
       await engine.getSendQueue().enqueue(
