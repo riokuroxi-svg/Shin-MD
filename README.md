@@ -77,10 +77,35 @@ npm install
 npm start
 ```
 
+## 🗂️ Comandos disponibles
+
+| Comando | Aliases | Descripción |
+|---|---|---|
+| `.menu` | `help`, `ayuda`, `h` | Menú interactivo con botones por categoría |
+| `.play` | `yt`, `mp3`, `playmp3`, `ytaudio`, `ytmp3`, `musica`, `playaudio` | Descargar audio de YouTube 🎵 |
+| `.tiktok` | `tt` | Descargar video de TikTok sin marca de agua |
+| `.deezer` | `dzr` | Buscar música en Deezer (preview 30s) |
+| `.ytsearch` | `search`, `ys` | Buscar videos en YouTube |
+| `.facebook` | `fb` | Descargar video de Facebook |
+| `.mediafire` | `mf` | Descargar archivos de MediaFire |
+| `.drive` | `gdrive` | Descargar archivos de Google Drive |
+| `.apk` | `aptoide`, `apkdl` | Buscar y descargar APKs de Aptoide |
+| `.imagen` | `img`, `image` | Buscar imágenes 📷 |
+| `.sticker` | `s`, `stiker` | Crear sticker desde imagen con tu pack/author |
+| `.ttt` | `tresenraya`, `tateti` | Jugar Tres en Raya con botones interactivos |
+| `.demo` | `showcase`, `carousel`, `reels` | Carrusel todo-en-uno (imagen + texto + botones) |
+| `.ping` | `p` | Latencia del bot |
+| `.runtime` | `status`, `uptime`, `estado` | Estado del bot |
+| `.owner` | `creator`, `creador`, `dueño`, `dev` | Info del creador |
+
+⚠️ **Servicios temporalmente fuera de línea** (sin API gratuita estable): `instagram`/`ig`/`reel`, `twitter`/`x`, `pinterest`/`pin`. Se reactivarán cuando haya APIs funcionales.
+
 ## ⚙️ Configuración
 
 Copia `.env.example` a `.env` y rellena:
 
+| Variable | Descripción | Default |
+|---|---|---|
 | Variable | Descripción | Default |
 |---|---|---|
 | `OWNER_NUMBER` | Tu número (solo dígitos) | — |
@@ -89,6 +114,12 @@ Copia `.env.example` a `.env` y rellena:
 | `LOG_LEVEL` | trace, debug, info, warn, error, silent | `info` |
 | `PORT` | Puerto del panel HTTP | `3000` |
 | `LOOPBACK` | `1` = solo local, `0` = red | `1` |
+| `YT_API_URL` | URL de API de YouTube→MP3 con `{url}` | — |
+| `YT_API_KEY` | API key para `YT_API_URL` | — |
+| `YTDL_ENABLED` | Usar ytdl-core como fallback de descarga | `0` |
+| `MENU_IMAGE` | URL de imagen de banner para el menú | — |
+| `STICKER_PACK` | Nombre del pack de stickers | `Shin-MD` |
+| `STICKER_AUTHOR` | Autor del sticker | `@ShinBot` |
 
 ## 🗂️ Estructura del proyecto
 

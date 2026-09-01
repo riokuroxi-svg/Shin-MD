@@ -4,6 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { DatabaseSync } from "node:sqlite";
+import { initAuthCreds } from "baileys";
 import fs from "fs";
 import path from "path";
 import log from "#logger";
@@ -48,7 +49,9 @@ export async function useSQLiteAuthState(sessionDir) {
   `);
 
   const credsRow = db.prepare("SELECT data FROM creds WHERE id = 1").get();
-  const creds = credsRow ? JSON.parse(credsRow.data) : null;
+  // Si no hay creds guardados, inicializamos una estructura válida (Baileys
+  // 6.7.24 crashea si creds es null: espera claves Signal y campos base).
+  const creds = credsRow ? JSON.parse(credsRow.data) : initAuthCreds();
 
   function parseEntry(category, id, buffer) {
     let value = null;
