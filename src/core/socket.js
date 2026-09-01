@@ -151,7 +151,8 @@ export function connectSocket(engine, opts) {
     s.ev.on("connection.update", async (upd) => {
       const { qr, connection, lastDisconnect, isNewLogin } = upd;
 
-      if (qr != null && !state.creds.registered) {
+      // Solo mostrar QR si el usuario eligió QR (no pairing code)
+      if (qr != null && !state.creds.registered && pairingMethod !== "code") {
         console.log("");
         console.log(chalk.green("╔═══════════════════════════════════════════════╗"));
         console.log(chalk.green("║") + chalk.white("         📱 ESCANEA EL CÓDIGO QR            ") + chalk.green("║"));

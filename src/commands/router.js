@@ -12,7 +12,7 @@ import createCooldown from "#cooldown";
 import checkPermissions from "#permissions";
 import { parseButtonResponse, isButtonResponse } from "#interactive";
 
-export const PREFIX = process.env.PREFIX || ".";
+export const BOT_PREFIX = process.env.BOT_PREFIX || ".";
 
 export function createRouter(engine, opts) {
   opts = opts || {};
@@ -21,7 +21,7 @@ export function createRouter(engine, opts) {
 
   async function init() {
     commands = await loadCommands();
-    log.success("Router listo — prefijo '" + PREFIX + "', " + countUnique() + " comandos únicos");
+    log.success("Router listo — prefijo '" + BOT_PREFIX + "', " + countUnique() + " comandos únicos");
   }
 
   function countUnique() {
@@ -66,16 +66,16 @@ export function createRouter(engine, opts) {
         // Ej: botón "ttt:a1" → ".ttt a1", botón "menu" → ".menu"
         const virtualMsg = {
           ...msg,
-          message: { conversation: PREFIX + btnId },
+          message: { conversation: BOT_PREFIX + btnId },
         };
         return handle(sock, virtualMsg);
       }
 
       const ctx = serializeMessage(msg, sock);
       if (!ctx.text || ctx.isBot || ctx.chatId === "status@broadcast") return;
-      if (!ctx.text.startsWith(PREFIX)) return;
+      if (!ctx.text.startsWith(BOT_PREFIX)) return;
 
-      const raw = ctx.text.slice(PREFIX.length).trim();
+      const raw = ctx.text.slice(BOT_PREFIX.length).trim();
       if (!raw) return;
 
       const [nameRaw, ...rest] = raw.split(/\s+/);
@@ -126,7 +126,7 @@ export function createRouter(engine, opts) {
     }
   }
 
-  return { init, handle, reload, getCommand, commandList, countUnique, PREFIX };
+  return { init, handle, reload, getCommand, commandList, countUnique, PREFIX: BOT_PREFIX };
 }
 
 export default createRouter;
