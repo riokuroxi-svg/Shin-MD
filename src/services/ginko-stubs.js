@@ -49,3 +49,8 @@ export const writeExifImg = async (b, o) => b;
 export const writeExifVid = async (b, o) => b;
 
 export default { normalizeJid, getBuffer, fastFetch, bodyMenu };
+export function withLimit(key, max, ttl, fn) { return fn(); }
+export async function downloadAudioYtdlp() { return null; }
+export const globalFetchCache = new Map();
+export function clearAllCaches() {}
+export async function synthesize(text) { return null; }
