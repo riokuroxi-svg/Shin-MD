@@ -61,7 +61,7 @@ export function connectSocket(engine, opts) {
 
   async function start() {
     engine.transit(engine.LIFECYCLE.CONNECT);
-    log.gray("Connecting to WhatsApp...");
+    console.log(chalk.gray("\n     ⏳ Conectando con WhatsApp...\n"));
 
     const { state, saveCreds: sc } = await useSQLiteAuthState(sessionDir);
 
