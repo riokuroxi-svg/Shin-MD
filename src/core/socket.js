@@ -180,8 +180,7 @@ export function connectSocket(engine, opts) {
         remove(s);
         health.recordDisconnect();
 
-        const code = (lastDisconnect && lastDisconnect.error)
-          ? lastDisconnect.error.output.statusCode : 0;
+        const code = lastDisconnect?.error?.output?.statusCode || 0;
 
         if ([DisconnectReason.loggedOut, DisconnectReason.forbidden,
              DisconnectReason.multideviceMismatch].includes(code)) {
