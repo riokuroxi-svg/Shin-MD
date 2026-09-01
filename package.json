@@ -1,0 +1,51 @@
+{
+  "name": "shin-md",
+  "version": "1.0.0",
+  "description": "反魂 Shin-MD — Bot WhatsApp Multi-Device superior. Núcleo reconstruido con separación real de capas, rate-limiting, logging estructurado y AGPL-3.0.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "start:code": "node index.js --code",
+    "start:qr": "node index.js --qr"
+  },
+  "imports": {
+    "#src/*": "./src/*.js",
+    "#core/*": "./src/core/*.js",
+    "#lib/*": "./src/lib/*.js",
+    "#router/*": "./src/router/*.js",
+    "#system/*": "./src/system/*.js",
+    "#events": "./src/events.js",
+    "#serialize": "./src/serialize.js"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
+  "dependencies": {
+    "baileys": "npm:@whiskeysockets/baileys@6.7.24",
+    "axios": "1.20.0",
+    "chalk": "4.1.2",
+    "cfonts": "3.3.1",
+    "dotenv": "16.6.1",
+    "express": "4.22.2",
+    "file-type": "21.3.4",
+    "fluent-ffmpeg": "2.1.3",
+    "form-data": "4.0.6",
+    "grapheme-splitter": "1.0.4",
+    "human-readable": "0.2.1",
+    "jimp": "1.6.1",
+    "moment": "2.30.1",
+    "moment-timezone": "0.5.48",
+    "node-cache": "5.1.2",
+    "node-fetch": "3.3.2",
+    "node-webpmux": "3.2.1",
+    "pino": "8.21.0",
+    "qrcode": "1.5.4",
+    "qrcode-terminal": "0.12.0",
+    "ws": "8.21.3"
+  },
+  "overrides": {
+    "libsignal": "npm:libsignal@6.0.0"
+  }
+}
