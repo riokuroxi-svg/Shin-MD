@@ -161,7 +161,7 @@ export function connectSocket(engine, opts) {
       const { qr, connection, lastDisconnect, isNewLogin } = upd;
 
       if (qr != null && !state.creds.registered && pairingMethod !== "code") {
-        console.log(chalk.green.bold("\n[ ✿ ] Escanea este código QR\n"));
+        console.log(chalk.green.bold("[ ✿ ] Escanea este código QR\n"));
         qrcode.generate(qr, { small: true });
         console.log("");
       }
@@ -177,7 +177,7 @@ export function connectSocket(engine, opts) {
 
         engine.transit(engine.LIFECYCLE.READY);
         engine.emit("connected", s.user);
-        log.success("Conectado: " + (s.user ? s.user.name || s.user.id : "?"));
+        log.success("[ ✿ ] Conectado a: " + (s.user?.name || s.user?.id || "?"));
         if (onReady) onReady(s);
         if (engine.getState() < engine.LIFECYCLE.RUNNING) engine.transit(engine.LIFECYCLE.RUNNING);
         if (watchdog) watchdog.tick();

@@ -29,7 +29,7 @@ export function createEngine() {
   function transit(newState) {
     const old = getStateName();
     state = newState;
-    log.info(`Engine: ${old} → ${getStateName()}`);
+    log.gray(`Engine: ${old} → ${getStateName()}`);
     emit("lifecycle", { from: old, to: getStateName(), ts: Date.now() });
   }
 
