@@ -1,10 +1,11 @@
 // ═══════════════════════════════════════════════════════════════════
 //  auth.js — Auth state de Baileys persistido en SQLite
-//  (creds + Signal keys) en vez de archivos JSON planos.
+//  WAL mode + synchronous=NORMAL + busy_timeout para evitar locks
+//  durante el pairing (como Ginko-MD)
 // ═══════════════════════════════════════════════════════════════════
 
 import { DatabaseSync } from "node:sqlite";
-import { initAuthCreds } from "baileys";
+import { initAuthCreds, BufferJSON } from "baileys";
 import fs from "fs";
 import path from "path";
 import log from "#logger";
@@ -18,10 +19,6 @@ const KEY_MAP = {
   "trusted-sender-key": "trusted-sender-key",
 };
 
-/**
- * Devuelve { state, saveCreds } compatible con Baileys.
- * state: { creds, keys } donde keys tiene methods get/set/remove.
- */
 export async function useSQLiteAuthState(sessionDir) {
   fs.mkdirSync(sessionDir, { recursive: true });
   const dbPath = path.join(sessionDir, "auth.db");
@@ -33,6 +30,11 @@ export async function useSQLiteAuthState(sessionDir) {
     log.error("SQLite auth failed: " + (err.message || err));
     throw err;
   }
+
+  // ── PRAGMAs estilo Ginko-MD: evitan locks durante pairing ──
+  db.exec("PRAGMA journal_mode = WAL");
+  db.exec("PRAGMA synchronous = NORMAL");
+  db.exec("PRAGMA busy_timeout = 5000");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS creds (
@@ -49,21 +51,18 @@ export async function useSQLiteAuthState(sessionDir) {
   `);
 
   const credsRow = db.prepare("SELECT data FROM creds WHERE id = 1").get();
-  // Si no hay creds guardados, inicializamos una estructura válida (Baileys
-  // 6.7.24 crashea si creds es null: espera claves Signal y campos base).
   const creds = credsRow ? JSON.parse(credsRow.data) : initAuthCreds();
 
-  function parseEntry(category, id, buffer) {
-    let value = null;
+  function parseEntry(category, id, raw) {
     try {
-      value = JSON.parse(buffer.toString());
-      if (category === "app-state-sync-key") {
-        value = { keyData: Buffer.from(value.keyData, "base64"), ...value };
+      let value = JSON.parse(raw.toString(), BufferJSON.reviver);
+      if (category === "app-state-sync-key" && value?.keyData) {
+        value = { keyData: Buffer.from(value.keyData, "base64") };
       }
-    } catch (err) {
-      log.error("parseEntry(" + category + "," + id + "): " + (err.message || err));
+      return value;
+    } catch {
+      return null;
     }
-    return value;
   }
 
   const keys = {
@@ -88,14 +87,8 @@ export async function useSQLiteAuthState(sessionDir) {
         for (const id in data[category]) {
           const value = data[category][id];
           const cat = KEY_MAP[category] || category;
-          let serialized;
-          if (cat === "app-state-sync-key" && value.keyData) {
-            serialized = JSON.stringify({ ...value, keyData: value.keyData.toString("base64") });
-          } else {
-            serialized = JSON.stringify(value);
-          }
           try {
-            stmt.run(cat, id, serialized);
+            stmt.run(cat, id, JSON.stringify(value, BufferJSON.replacer));
           } catch (err) {
             log.error("keys.set(" + cat + "," + id + "): " + (err.message || err));
           }
@@ -115,8 +108,12 @@ export async function useSQLiteAuthState(sessionDir) {
 
   async function saveCreds() {
     if (!creds) return;
-    db.prepare("INSERT OR REPLACE INTO creds (id, data) VALUES (1, ?)")
-      .run(JSON.stringify(creds));
+    try {
+      db.prepare("INSERT OR REPLACE INTO creds (id, data) VALUES (1, ?)")
+        .run(JSON.stringify(creds, BufferJSON.replacer));
+    } catch (err) {
+      log.error("saveCreds: " + (err.message || err));
+    }
   }
 
   return { state: { creds, keys }, saveCreds };
