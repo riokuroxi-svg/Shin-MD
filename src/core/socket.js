@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 //  socket.js — Conexión Baileys estilo Ginko-MD
-//  msgRetryCounterCache + transactionOpts para evitar disconnects
+//  Auto-clearing de sesión corrupta + saveCreds forzado
 // ═══════════════════════════════════════════════════════════════════
 
 import makeWASocket, {
@@ -31,19 +31,21 @@ export function connectSocket(engine, opts) {
 
   let sock = null;
   let retries = 0;
+  let isRestarting = false;
   const MAX_RETRIES = 15;
   const msgStore = new Map();
   const msgLimit = 500;
   const SMAX = 1000;
   const SK = "__sent__:";
 
-  const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
+  const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, seClones: false });
 
   function remove(s) {
     if (!s) return;
     try { s.ev.removeAllListeners(); } catch {}
     try { s.ws?.close(); } catch {}
     try { s.end?.(new Error("replaced")); } catch {}
+    try { s.msgRetryCounterCache?.close(); } catch {}
   }
 
   function clearSession() {
@@ -62,6 +64,9 @@ export function connectSocket(engine, opts) {
   }
 
   async function start() {
+    if (isRestarting) return;
+    isRestarting = true;
+
     engine.transit(engine.LIFECYCLE.CONNECT);
     log.gray("Conectando con WhatsApp...");
 
@@ -71,9 +76,6 @@ export function connectSocket(engine, opts) {
     try { const v = await fetchLatestBaileysVersion(); ver = v.version; }
     catch { ver = [2, 3000, 1033105955]; }
 
-    // Guardar credenciales con debounce (estilo Ginko-MD)
-    // creds.update se dispara MUCHAS veces durante el pairing.
-    // Sin debounce, SQLite se llena de writes concurrentes y pierde datos.
     let saveTimer;
     const saveCreds = () => { clearTimeout(saveTimer); saveTimer = setTimeout(sc, 2000); };
 
@@ -166,9 +168,9 @@ export function connectSocket(engine, opts) {
 
       if (connection === "open") {
         retries = 0;
+        isRestarting = false;
 
-        // FORZAR guardado inmediato de credenciales antes de que cierre
-        // El debounce (2s) podría no haber alcanzado a ejecutarse
+        // FORZAR guardado inmediato de credenciales ANTES de que se cierre
         clearTimeout(saveTimer);
         sc().catch(() => {});
         saveTimer = null;
@@ -181,7 +183,13 @@ export function connectSocket(engine, opts) {
         if (watchdog) watchdog.tick();
       }
 
-      if (isNewLogin) log.info("Nuevo dispositivo vinculado");
+      if (isNewLogin) {
+        log.info("Nuevo dispositivo vinculado");
+        // Forzar saveCreds inmediato cuando se vincula
+        clearTimeout(saveTimer);
+        sc().catch(() => {});
+        saveTimer = null;
+      }
 
       if (connection === "close") {
         remove(s);
@@ -199,6 +207,16 @@ export function connectSocket(engine, opts) {
 
         if (code === DisconnectReason.connectionReplaced) {
           log.warn("Conexión reemplazada.");
+          isRestarting = false;
+          return;
+        }
+
+        // ── Sesión inválida: limpiar automáticamente como Ginko-MD ──
+        if (code === DisconnectReason.badSession) {
+          log.warn("Sesión inválida — limpiando y reconectando...");
+          clearSession();
+          isRestarting = false;
+          setTimeout(start, 3000);
           return;
         }
 
@@ -214,10 +232,10 @@ export function connectSocket(engine, opts) {
           [DisconnectReason.connectionClosed]: "Conexión cerrada, reconectando...",
           [DisconnectReason.restartRequired]: "Es necesario reiniciar...",
           [DisconnectReason.timedOut]: "Tiempo agotado, reconectando...",
-          [DisconnectReason.badSession]: "Sesión inválida, limpiando...",
         };
         const d = backoffDelay();
         log.warn(reasonMessages[code] || `Desconexión (${code}), reconectando en ${Math.round(d / 1000)}s...`);
+        isRestarting = false;
         setTimeout(start, d);
       }
     });
@@ -236,6 +254,7 @@ export function connectSocket(engine, opts) {
       }, 3000);
     }
 
+    isRestarting = false;
     return s;
   }
 
