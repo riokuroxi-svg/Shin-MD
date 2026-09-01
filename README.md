@@ -33,6 +33,13 @@
 | **Licencia** | AGPL-3.0 (protección real anti-comercial) | MIT sin restricciones |
 | **Dependencias** | Versiones fijas, mínimas | Versiones sueltas |
 
+## ✨ Características interactivas
+
+- **Menú con botones**: `.menu` abre un menú con botones táctiles por categoría (con fallback a texto).
+- **Juego de tres en raya** (`.ttt`): tablero con botones interactivos — tocas una celda y el bot responde.
+- **Carrusel todo-en-uno** (`.demo`): imagen + texto + botones en un solo mensaje deslizable (estilo reels/insta).
+- **Play sin binarios** (`.play`): descarga YouTube→MP3 vía API HTTP con múltiples fallbacks — cero ffmpeg/yt-dlp en el servidor (ideal para BoxMine). Configurable con `YT_API_URL`/`YT_API_KEY`.
+
 ## 🛡️ Anti-ban integrado (nativo)
 
 No es un "delay random": es una capa pensada para parecer humano y auto-protegerse.
