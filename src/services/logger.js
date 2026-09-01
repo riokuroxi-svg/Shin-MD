@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
 //  logger.js — Logging superior
-//  · Pino estructurado (para archivo/logging service)
-//  · Chalk para consola humana legible
+//  · Pino estructurado a **stderr** (para depuración técnica)
+//  · Chalk formateado a **stdout** (para lectura humana)
 //  · Niveles: trace, debug, info, warn, error, fatal
 //  · Timestamp ISO, contexto automático
 // ═══════════════════════════════════════════════════════════════════
@@ -12,13 +12,14 @@ import chalk from "chalk";
 const LEVEL = (process.env.LOG_LEVEL || "info").toLowerCase();
 const isSilent = LEVEL === "silent";
 
+// Pino a stderr para no mezclarse con la salida humana
 const pinoLogger = pino({
   level: LEVEL === "silent" ? "fatal" : LEVEL,
   name: "shin-md",
   formatters: { level: (l) => ({ level: l }) },
   timestamp: pino.stdTimeFunctions.isoTime,
   enabled: !isSilent,
-});
+}, process.stderr);
 
 function timestamp() {
   return chalk.gray(new Date().toISOString().slice(11, 23));

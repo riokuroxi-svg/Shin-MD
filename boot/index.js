@@ -19,231 +19,152 @@ import { createRouter } from "#router";
 import { useSQLiteAuthState } from "#auth";
 import log from "#logger";
 
-/**
- * Pregunta al usuario en la terminal (Promise wrapper)
- */
-function askQuestion(query) {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise(resolve => {
-    rl.question(query, ans => {
-      rl.close();
-      resolve(ans.trim());
-    });
-  });
+async function ask(query) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(r => { rl.question(query, a => { rl.close(); r(a.trim()); }); });
 }
 
-/**
- * Muestra menú interactivo estilo Ginko-MD para elegir método de conexión
- * Devuelve { pairingMethod, pairingNumber }
- */
-async function interactiveAuthMenu() {
+async function showMenu() {
   console.log("");
-  console.log(chalk.yellow("╔═══════════════════════════════════════════════╗"));
-  console.log(chalk.yellow("║") + chalk.cyan("     Selecciona método de conexión 📲        ") + chalk.yellow("║"));
-  console.log(chalk.yellow("╚═══════════════════════════════════════════════╝"));
+  console.log(chalk.yellow("  ╔═══════════════════════════════╗"));
+  console.log(chalk.yellow("  ║") + chalk.cyan("     📲  CONEXIÓN  📲        ") + chalk.yellow("║"));
+  console.log(chalk.yellow("  ╚═══════════════════════════════╝"));
   console.log("");
-  console.log(chalk.white("  [") + chalk.green("1") + chalk.white("]") + chalk.gray(" QR Code"));
-  console.log(chalk.white("  [") + chalk.green("2") + chalk.white("]") + chalk.gray(" Pairing Code"));
+  console.log(chalk.white("     [1]") + chalk.cyan(" QR Code"));
+  console.log(chalk.white("     [2]") + chalk.cyan(" Pairing Code"));
   console.log("");
 
-  let choice = "";
-  while (choice !== "1" && choice !== "2") {
-    choice = await askQuestion(chalk.cyan("  ➜ Opción: "));
-    if (choice !== "1" && choice !== "2") {
-      console.log(chalk.red("  ✗ Opción inválida. Elige 1 o 2."));
-    }
+  let opt = "";
+  while (opt !== "1" && opt !== "2") {
+    opt = await ask(chalk.yellow("     ❯ Opción: "));
+    if (opt !== "1" && opt !== "2") console.log(chalk.red("     ✗ 1 o 2 solamente"));
   }
 
-  if (choice === "1") {
-    console.log(chalk.green("\n  ✓ QR Code seleccionado. Escanea el código cuando aparezca.\n"));
-    return { pairingMethod: "qr", pairingNumber: "" };
+  if (opt === "1") {
+    console.log(chalk.green("\n     ✓ QR seleccionado\n"));
+    return { method: "qr", phone: "" };
   }
 
-  // Opción 2: Pairing Code
   console.log("");
-  console.log(chalk.yellow("  ─────────────────────────────────────"));
-  console.log(chalk.cyan("  📱 Ingresa tu número de teléfono:"));
-  console.log(chalk.gray("     Ejemplo: 521234567890 (con código de país, sin +)"));
-  console.log(chalk.yellow("  ─────────────────────────────────────"));
-
+  console.log(chalk.cyan("     📱 Ingresa tu número (con código de país)"));
+  console.log(chalk.gray("     Ej: 521234567890"));
   let phone = "";
   while (!/^\d{7,15}$/.test(phone)) {
-    phone = await askQuestion(chalk.cyan("  ➜ Número: "));
-    phone = phone.replace(/\D/g, "");
-    if (!/^\d{7,15}$/.test(phone)) {
-      console.log(chalk.red("  ✗ Número inválido. Debe tener entre 7 y 15 dígitos."));
-    }
+    phone = (await ask(chalk.yellow("     ❯ Número: "))).replace(/\D/g, "");
+    if (!/^\d{7,15}$/.test(phone)) console.log(chalk.red("     ✗ Inválido"));
   }
-
-  console.log(chalk.green(`\n  ✓ Generando código de pares para +${phone}...\n`));
-  return { pairingMethod: "code", pairingNumber: phone };
+  console.log(chalk.green(`\n     ✓ Generando código para +${phone}...\n`));
+  return { method: "code", phone };
 }
 
 function parseArgs(argv) {
-  const args = { qr: false, code: false, pairingNumber: "" };
+  const r = { qr: false, code: false, phone: "" };
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--qr") args.qr = true;
-    if (a === "--code") args.code = true;
-    if (a === "--code" && argv[i + 1] && /^\+?\d{7,15}$/.test(argv[i + 1])) {
-      args.pairingNumber = argv[i + 1];
-      i++;
+    if (argv[i] === "--qr") r.qr = true;
+    if (argv[i] === "--code") r.code = true;
+    if (argv[i] === "--code" && argv[i+1] && /^\+?\d{7,15}$/.test(argv[i+1])) {
+      r.phone = argv[++i].replace(/\D/g, "");
     }
   }
-  if (!args.qr && !args.code && process.env.PAIRING_METHOD === "code") args.code = true;
-  if (!args.pairingNumber && process.env.PAIRING_NUMBER) args.pairingNumber = process.env.PAIRING_NUMBER;
-  return args;
+  if (!r.qr && !r.code && process.env.PAIRING_METHOD === "code") r.code = true;
+  if (!r.phone && process.env.PAIRING_NUMBER) r.phone = process.env.PAIRING_NUMBER.replace(/\D/g, "");
+  return r;
 }
 
 function printBanner() {
-  console.log("");
   cfonts.say("SHIN-MD", {
-    font: "block",
-    align: "center",
+    font: "block", align: "center",
     gradient: ["#ff7eb3", "#f97316"],
-    letterSpacing: 1,
-    space: false,
+    letterSpacing: 1, space: false,
   });
   cfonts.say("Bot WhatsApp Multi-Device", {
-    font: "chrome",
-    align: "center",
-    gradient: ["blue", "magenta"],
-    letterSpacing: 2,
+    font: "chrome", align: "center",
+    gradient: ["blue", "magenta"], letterSpacing: 2,
   });
-  console.log(chalk.cyan("      🍁 Hecho por riokuroxi-svg · Anti-ban nativo") + "\n" + chalk.gray("         ─────────────────────────────────") + "\n");
+  console.log(chalk.cyan("      🍁 Hecho por riokuroxi-svg · Anti-ban nativo") + "\n");
 }
 
 function logCommand(ctx, cmdName, ms) {
-  const pushname = ctx.pushname || "Usuario";
-  const sender = ctx.senderId || ctx.sender || "?";
-  const isGroup = ctx.isGroup;
-  const chatId = ctx.chatId || "?";
-  const groupName = ctx.groupName || "";
-  const botJid = process.env.BOT_JID || "Shin-MD";
-  const time = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
-
-  let output = `╭─────────────────────────────────────────···\n`;
-  output += `│ ${chalk.cyan("Bot")}: ${chalk.greenBright(botJid)}\n`;
-  output += `│ ${chalk.bold.yellow("Fecha")}: ${chalk.yellowBright(time)}\n`;
-  output += `│ ${chalk.bold.blueBright("Usuario")}: ${chalk.blueBright(pushname)}\n`;
-  output += `│ ${chalk.bold.magentaBright("Remitente")}: ${chalk.magentaBright(sender)}\n`;
-  if (isGroup) {
-    output += `│ ${chalk.bold.green("Grupo")}: ${chalk.greenBright(groupName)}\n`;
-    output += `│ ${chalk.bold.magenta("ID")}: ${chalk.blueBright(chatId)}\n`;
-  } else {
-    output += `│ ${chalk.bold.green("Privado")}: ${chalk.magentaBright("Chat Privado")}\n`;
-    output += `│ ${chalk.bold.magenta("ID")}: ${chalk.blueBright("Chat Privado")}\n`;
-  }
-  output += `│ ${chalk.bold.cyanBright("Comando usado")}: ${chalk.gray(cmdName)} (${ms}ms)\n`;
-  output += `╰─────────────────────────────────────────···`;
-  console.log(output);
+  const t = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
+  const name = ctx.pushname || "Usuario";
+  const s = ctx.senderId || ctx.sender || "?";
+  const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
+  console.log("");
+  console.log(chalk.gray("  ╭───────────────────────────────────────"));
+  console.log(chalk.gray("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
+  console.log(chalk.gray("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
+  console.log(chalk.gray("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
+  console.log(chalk.gray("  │") + chalk.magenta("  Grupo: ") + chalk.white(g));
+  console.log(chalk.gray("  │") + chalk.cyanBright("  Comando: ") + chalk.gray(cmdName) + chalk.gray(` (${ms}ms)`));
+  console.log(chalk.gray("  ╰───────────────────────────────────────"));
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-
-  // Banner estilo Ginko-MD con cfonts
   printBanner();
 
-  log.info("╔═══════════════════════════════════════╗");
-  log.info("║      Shin-MD · WhatsApp Multi-Device  ║");
-  log.info("║      Anti-ban native · AGPL-3.0       ║");
-  log.info("╚═══════════════════════════════════════╝");
-
-  // ─── Verificar si ya hay sesión guardada ───
   const sessionDir = "./Sessions/Owner";
   let sessionExists = false;
   try {
-    const authDbPath = path.join(sessionDir, "auth.db");
-    if (fs.existsSync(authDbPath)) {
+    const authDb = path.join(sessionDir, "auth.db");
+    if (fs.existsSync(authDb)) {
       const { state } = await useSQLiteAuthState(sessionDir);
       sessionExists = state.creds?.registered === true;
     }
-  } catch {
-    // Si falla, asumimos que no hay sesión
-  }
+  } catch {}
 
-  // ─── Menú interactivo si NO hay sesión ───
-  let pairingMethod = "qr";
-  let pairingNumber = "";
-
-  if (args.qr) {
-    pairingMethod = "qr";
-  } else if (args.code) {
-    pairingMethod = "code";
-    pairingNumber = args.pairingNumber || process.env.PAIRING_NUMBER || "";
-  } else if (!sessionExists) {
-    // No hay sesión ni flags → mostrar menú interactivo estilo Ginko-MD
-    const choice = await interactiveAuthMenu();
-    pairingMethod = choice.pairingMethod;
-    pairingNumber = choice.pairingNumber;
+  let method = "qr", phone = "";
+  if (args.qr) { method = "qr"; }
+  else if (args.code) { method = "code"; phone = args.phone; }
+  else if (!sessionExists) {
+    const m = await showMenu();
+    method = m.method;
+    phone = m.phone;
   }
 
   let db;
-  try {
-    db = getDatabase();
-  } catch (err) {
-    log.error("DB init failed: " + (err.message || err));
-    process.exit(1);
-  }
+  try { db = getDatabase(); }
+  catch (err) { log.fatal("DB: " + err.message); process.exit(1); }
 
   const engine = createEngine();
-
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
+  createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
 
-  const web = createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
-
-  const ownerFromEnv = process.env.OWNER_NUMBER
-    ? process.env.OWNER_NUMBER.replace(/\D/g, "") + "@s.whatsapp.net" : "";
-  if (ownerFromEnv) {
-    db.settings.set("owner_jid", ownerFromEnv);
-    engine.setOwnerJid(ownerFromEnv);
-  }
+  const ownerEnv = process.env.OWNER_NUMBER?.replace(/\D/g, "") + "@s.whatsapp.net";
+  if (ownerEnv) { db.settings.set("owner_jid", ownerEnv); engine.setOwnerJid(ownerEnv); }
 
   engine.on("connected", user => {
-    const u = user && user.id ? user.id.split(":")[0] : "?";
-    const ownerJid = u + "@s.whatsapp.net";
-    process.env.BOT_JID = u + "@s.whatsapp.net";
-    db.settings.set("owner_jid", ownerJid);
-    engine.setOwnerJid(ownerJid);
-    log.gray("Owner: " + ownerJid);
+    const u = user?.id?.split(":")[0] || "?";
+    const jid = u + "@s.whatsapp.net";
+    process.env.BOT_JID = jid;
+    db.settings.set("owner_jid", jid);
+    engine.setOwnerJid(jid);
   });
 
-  // Router con hook de logging de comandos
   const router = createRouter(engine, { onCommand: logCommand });
   await router.init();
 
   const sockModule = connectSocket(engine, {
-    sessionDir,
-    pairingMethod,
-    pairingNumber,
-    onMessage: (sock, msg) => router.handle(sock, msg),
-    onReady: sock => log.success("Bot listo ✓"),
+    sessionDir, pairingMethod: method, pairingNumber: phone,
+    onMessage: (s, m) => router.handle(s, m),
+    onReady: s => log.success("Bot listo ✓"),
     watchdog,
   });
 
-  process.on("SIGINT", () => shutdown(engine, web, db));
-  process.on("SIGTERM", () => shutdown(engine, web, db));
-
+  process.on("SIGINT", () => shutdown(engine, db));
+  process.on("SIGTERM", () => shutdown(engine, db));
   await sockModule.start();
 }
 
-let shuttingDown = false;
-async function shutdown(engine, web, db) {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  log.warn("Signal received, shutting down...");
+let down = false;
+async function shutdown(engine, db) {
+  if (down) return;
+  down = true;
+  log.warn("Apagando...");
   try { await engine.shutdown(); } catch {}
-  try { web.close(); } catch {}
   try { db.close(); } catch {}
   process.exit(0);
 }
 
-main().catch(err => {
-  log.error("Fatal boot: " + (err.message || err), err);
-  process.exit(1);
-});
+main().catch(e => { log.fatal(e.message, e); process.exit(1); });
