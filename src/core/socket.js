@@ -130,7 +130,7 @@ export function connectSocket(engine, opts) {
 
     s.decodeJid = (jid) => {
       if (!jid) return jid;
-      if (/:\\d+@/i.test(jid)) {
+      if (/:\d+@/i.test(jid)) {
         const d = jidDecode(jid) || {};
         if (d.user && d.server) return d.user + "@" + d.server;
       }
@@ -165,7 +165,14 @@ export function connectSocket(engine, opts) {
       }
 
       if (connection === "open") {
-        retries = 0; // Resetear reintentos al conectar
+        retries = 0;
+
+        // FORZAR guardado inmediato de credenciales antes de que cierre
+        // El debounce (2s) podría no haber alcanzado a ejecutarse
+        clearTimeout(saveTimer);
+        sc().catch(() => {});
+        saveTimer = null;
+
         engine.transit(engine.LIFECYCLE.READY);
         engine.emit("connected", s.user);
         log.success("Conectado: " + (s.user ? s.user.name || s.user.id : "?"));
