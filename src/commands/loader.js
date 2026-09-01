@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
-//  loader.js — Cargador de comandos desde ./cmds/
-//  Escanea los .js de cmds/, cada uno exporta { default } con metadata.
-//  Soporta recarga (reload) sin reiniciar el proceso.
+//  loader.js — Cargador de comandos recursivo
+//  Escanea cmds/ y subdirectorios. Cada .js exporta { default }.
 // ═══════════════════════════════════════════════════════════════════
 
 import fs from "fs";
@@ -12,10 +11,21 @@ import log from "#logger";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CMDS_DIR = path.resolve(__dirname, "../../cmds");
 
-/**
- * Carga todos los comandos de cmds/ en un Map name -> command.
- * @returns {Map<string, object>} comando por su nombre
- */
+function scanFiles(dir) {
+  const results = [];
+  if (!fs.existsSync(dir)) return results;
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!entry.name.startsWith("_")) results.push(...scanFiles(full));
+    } else if (entry.isFile() && entry.name.endsWith(".js") && !entry.name.startsWith("_")) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
 export async function loadCommands() {
   const commands = new Map();
   if (!fs.existsSync(CMDS_DIR)) {
@@ -24,24 +34,23 @@ export async function loadCommands() {
     return commands;
   }
 
-  const files = fs.readdirSync(CMDS_DIR).filter(f => f.endsWith(".js") && !f.startsWith("_"));
-  for (const file of files) {
+  const files = scanFiles(CMDS_DIR);
+  for (const filePath of files) {
     try {
-      const filePath = path.join(CMDS_DIR, file);
       const mod = await import(pathToFileURL(filePath).href + "?t=" + Date.now());
       const cmd = mod.default || mod;
       if (!cmd || typeof cmd.handler !== "function") {
-        log.warn("Comando ignorado (sin handler): " + file);
+        log.warn("Comando ignorado (sin handler): " + path.relative(CMDS_DIR, filePath));
         continue;
       }
-      const name = cmd.name || file.replace(/\.js$/, "");
-      commands.set(name, { ...cmd, name, file });
+      const name = cmd.name || path.basename(filePath, ".js");
+      commands.set(name, { ...cmd, name, file: path.relative(CMDS_DIR, filePath) });
       if (Array.isArray(cmd.aliases)) {
         for (const alias of cmd.aliases) commands.set(alias, commands.get(name));
       }
       log.gray("Comando cargado: " + name);
     } catch (err) {
-      log.error("Fallo al cargar comando " + file + ": " + (err.message || err));
+      log.error("Fallo al cargar comando " + path.relative(CMDS_DIR, filePath) + ": " + (err.message || err));
     }
   }
 
@@ -49,9 +58,6 @@ export async function loadCommands() {
   return commands;
 }
 
-/**
- * Recarga un comando concreto (hot-reload).
- */
 export async function reloadCommand(name, commands) {
   const current = commands.get(name);
   if (!current) return false;
