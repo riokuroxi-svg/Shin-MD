@@ -100,7 +100,13 @@ export function createRouter(engine, opts) {
       const start = Date.now();
       const result = await cmd.handler(sock, ctx, engine, commands);
       const ms = Date.now() - start;
-      if (ms > 1000) log.gray("Comando " + cmd.name + " tardó " + ms + "ms");
+
+      // Log estilo Ginko-MD si hay callback
+      if (typeof opts.onCommand === "function") {
+        try { opts.onCommand(ctx, cmd.name, ms); } catch {}
+      } else if (ms > 1000) {
+        log.gray("Comando " + cmd.name + " tardó " + ms + "ms");
+      }
 
       // Si el handler devolvió texto, enviarlo (conveniencia)
       if (typeof result === "string" && result.length > 0) {
