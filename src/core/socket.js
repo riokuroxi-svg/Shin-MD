@@ -71,9 +71,11 @@ export function connectSocket(engine, opts) {
     try { const v = await fetchLatestBaileysVersion(); ver = v.version; }
     catch { ver = [2, 3000, 1033105955]; }
 
-    // Guardar credenciales inmediatamente (sin debounce de 2s)
-    // La primera vez que se vinculan, debemos persistir YA.
-    const saveCreds = () => { try { sc(); } catch {} };
+    // Guardar credenciales con debounce (estilo Ginko-MD)
+    // creds.update se dispara MUCHAS veces durante el pairing.
+    // Sin debounce, SQLite se llena de writes concurrentes y pierde datos.
+    let saveTimer;
+    const saveCreds = () => { clearTimeout(saveTimer); saveTimer = setTimeout(sc, 2000); };
 
     console.info = () => {};
     console.debug = () => {};
