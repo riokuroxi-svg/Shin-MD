@@ -27,6 +27,8 @@
     "#server": "./src/web/server.js",
     "#commands": "./src/commands/loader.js",
     "#router": "./src/commands/router.js",
+    "#interactive": "./src/commands/interactive.js",
+    "#downloader": "./src/services/downloader.js",
     "#cooldown": "./src/commands/middleware/cooldown.js",
     "#permissions": "./src/commands/middleware/permissions.js"
   },

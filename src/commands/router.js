@@ -10,6 +10,7 @@ import { loadCommands, reloadCommand } from "#commands";
 import { serializeMessage } from "#serialize";
 import createCooldown from "#cooldown";
 import checkPermissions from "#permissions";
+import { parseButtonResponse, isButtonResponse } from "#interactive";
 
 export const PREFIX = process.env.PREFIX || ".";
 
@@ -58,6 +59,18 @@ export function createRouter(engine, opts) {
    */
   async function handle(sock, msg) {
     try {
+      // Respuesta de botón (clic en un botón interactivo)
+      const btnId = parseButtonResponse(msg);
+      if (btnId) {
+        // El id del botón se trata como un comando con prefijo
+        // Ej: botón "ttt:a1" → ".ttt a1", botón "menu" → ".menu"
+        const virtualMsg = {
+          ...msg,
+          message: { conversation: PREFIX + btnId },
+        };
+        return handle(sock, virtualMsg);
+      }
+
       const ctx = serializeMessage(msg, sock);
       if (!ctx.text || ctx.isBot || ctx.chatId === "status@broadcast") return;
       if (!ctx.text.startsWith(PREFIX)) return;
