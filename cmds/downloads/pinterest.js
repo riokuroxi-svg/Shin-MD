@@ -1,51 +1,29 @@
-// Pinterest — buscar y descargar imágenes de Pinterest
-// Requiere FASTSAVER_KEY en .env (gratis en api.fastsaver.io)
+import fetch from 'node-fetch'
 
-import { downloadSocial } from "#fastsaver";
-
+/**
+ * Comando .pin / .pinterest — actualmente FUERA DE SERVICIO.
+ *
+ * Estado (2026-08-12):
+ *   - La API anterior (fare.ink) tiene el certificado TLS roto.
+ *   - APIs alternativas probadas (vihangayt, savekaito, cobalt v10, siputzx, lempi, ootaizumi):
+ *     todas 404 / DNS muerto / requieren JWT de autenticación.
+ *   - El scraping directo de Pinterest es demasiado frágil (React SSR con anti-bot)
+ *     y cambiaría a cada actualización de su web.
+ *
+ * Cuando aparezca una API gratuita estable para Pinterest, este comando se puede
+ * reactivar. Por ahora se deja un mensaje claro para que el usuario no se quede
+ * pensando que es un error del bot.
+ */
 export default {
-  name: "pinterest",
-  aliases: ["pin"],
-  category: "downloads",
-  description: "Descargar imágenes de Pinterest 📌",
-  usage: ".pinterest <url>",
-  cooldown: 15,
-  ownerOnly: false,
-  groupOnly: false,
-  adminOnly: false,
-
-  async handler(sock, ctx, engine) {
-    if (!ctx.arg) {
-      return `📌 *Pinterest Download*\n\nUso: \`.pinterest <url>\`\nEj: \`.pinterest https://pin.it/xxxxx\``;
-    }
-
-    if (!process.env.FASTSAVER_KEY) {
-      return `📌 *Pinterest Download*\n\n⚠️ *Requiere configurar FASTSAVER_KEY*\n\n` +
-        `Pinterest bloquea los scrapers públicos. Para usar este comando:\n\n` +
-        `1. Ve a *api.fastsaver.io* y regístrate (gratis, 1,000 créditos/mes)\n` +
-        `2. Agrega al .env: \`FASTSAVER_KEY=tu_key_aqui\`\n\n` +
-        `_Sin key puedes usar \`.imagen\` para buscar imágenes._`;
-    }
-
-    const url = ctx.arg.trim();
-    if (!/pinterest\.com|pin\.it/i.test(url)) {
-      return "❌ Eso no parece un enlace válido de Pinterest.";
-    }
-
-    try {
-      const result = await downloadSocial("pinterest", url);
-      const caption = `📌 *Pinterest*${result.title ? `\n📌 ${result.title.slice(0, 100)}` : ''}`;
-
-      await engine.getSendQueue().enqueue(
-        () => sock.sendMessage(ctx.chatId, {
-          image: { url: result.url },
-          caption,
-        }, { quoted: ctx.full }),
-        { messageLength: 40 }
-      );
-      return null;
-    } catch (err) {
-      return `❌ Error: ${err.message}`;
-    }
+  command: ['pinterest', 'pin'],
+  category: 'downloads',
+  description: 'Buscar y descargar imágenes de Pinterest (⚠️ servicio temporalmente fuera de línea).',
+  run: async ({ msg, usedPrefix, command }) => {
+    return msg.reply(
+      `《✧》 El servicio de descarga de *Pinterest* está temporalmente fuera de línea.\n\n` +
+      `> La API gratuita que usaba el bot dejó de funcionar (certificado roto) y no hay una alternativa gratuita estable en este momento.\n` +
+      `> Puedes seguir usando otros comandos como *${usedPrefix}imagen*, *${usedPrefix}play* o *${usedPrefix}tiktok* sin problemas.\n\n` +
+      `Se reactivará en cuanto haya una API disponible.`
+    )
   }
-};
+}

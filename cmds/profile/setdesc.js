@@ -1,11 +1,13 @@
-// Setdesc — establecer descripción de perfil
-import { getDatabase } from "#db";
+import db from '../../src/services/ginko-db.js';
 export default {
-  name: "setdesc", aliases: ["setdescription"], category: "profile", description: "Establecer descripción 📝", cooldown: 10,
-  async handler(sock, ctx) {
-    if (!ctx.arg) return '📝 Uso: .setdesc <texto>';
-    const db = getDatabase();
-    db.prepare("UPDATE users SET description = ? WHERE jid = ?").run(ctx.arg.trim(), ctx.senderId);
-    return `📝 Descripción guardada.`;
-  }
+  command: ['setdescription', 'setdesc'],
+  category: 'profile',
+  description: 'Establecer tu descripción de perfil.',
+  run: async ({ msg, args, usedPrefix, command }) => {
+    const user = db.getUser(msg.sender);
+    const input = args.join(' ');    
+    if (!input) return msg.reply(`《✧》 Debes especificar una descripción válida para tu perfil.\n\n> ✐ Ejemplo » *${usedPrefix + command} Hola, uso WhatsApp!*`);    
+    db.setUser(msg.sender, 'description', input);
+    return msg.reply(`✎ Se ha establecido tu descripcion, puedes revisarla con ${usedPrefix}profile ฅ^•ﻌ•^ฅ`);
+  },
 };

@@ -1,23 +1,49 @@
-// GitHub Stalk — info de usuario de GitHub con API pública
+/**
+ * .githubstalk <usuario>  →  información de un usuario de GitHub (avatar, bio, repos, seguidores).
+ */
 export default {
-  name: "githubstalk", aliases: ["ghstalk", "gh"], category: "utility",
-  description: "Ver perfil de GitHub 👤",
-  usage: ".ghstalk <usuario>", cooldown: 8,
-  async handler(sock, ctx, engine) {
-    if (!ctx.arg) return "👤 *GitHub Stalk*\n\nUso: `.ghstalk <usuario>`\nEj: `.ghstalk riokuroxi-svg`";
-    const user = ctx.arg.trim().split(/\s+/)[0].replace(/@/g,'');
+  command: ['githubstalk', 'ghstalk', 'gh'],
+  category: 'utils',
+  description: 'Ver información de un usuario de GitHub.',
+  run: async ({ msg, sock, usedPrefix, command, text }) => {
+    if (!text) {
+      return msg.reply(
+        `《✧》 Escribe el *nombre de usuario* de GitHub.\n> Ejemplo: ${usedPrefix}gh riokuroxi-svg`
+      );
+    }
+    const user = text.trim().replace(/^@/, '').split(/\s+/)[0];
     try {
+      await msg.react('🐙');
       const res = await fetch(`https://api.github.com/users/${encodeURIComponent(user)}`, {
-        headers: {'User-Agent':'Shin-MD/1.0','Accept':'application/vnd.github.v3+json'}
+        headers: { 'User-Agent': 'Ginko-Bot', 'Accept': 'application/vnd.github+json' },
       });
-      if (!res.ok) return '❌ Usuario no encontrado.';
+      if (res.status === 404) return msg.reply(`《✧》 Usuario *${user}* no encontrado en GitHub.`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
-      const txt = `👤 *${d.login}*\n\n📌 *Nombre:* ${d.name || '—'}\n📝 *Bio:* ${d.bio || '—'}\n📍 *Ubicación:* ${d.location || '—'}\n🏢 *Compañía:* ${d.company || '—'}\n📦 *Repos:* ${d.public_repos}\n⭐ *Seguidores:* ${d.followers} · Siguiendo: ${d.following}\n🔗 ${d.html_url}\n📅 ${new Date(d.created_at).toLocaleDateString()}`;
+      const creado = d.created_at ? new Date(d.created_at).toLocaleDateString('es-MX') : '—';
+      const caption = [
+        `🐙 *GitHub:* ${d.login}`,
+        d.name ? `👤 *Nombre:* ${d.name}` : '',
+        d.bio ? `📝 *Bio:* ${d.bio}` : '',
+        `📂 *Repos públicos:* ${d.public_repos ?? 0}`,
+        `⭐ *Seguidores:* ${d.followers ?? 0}`,
+        `👣 *Siguiendo:* ${d.following ?? 0}`,
+        d.location ? `📍 *Ubicación:* ${d.location}` : '',
+        d.blog ? `🔗 *Web:* ${d.blog}` : '',
+        d.company ? `🏢 *Empresa:* ${d.company}` : '',
+        d.twitter_username ? `🐦 *Twitter:* @${d.twitter_username}` : '',
+        `📅 *En GitHub desde:* ${creado}`,
+        `🔗 ${d.html_url}`,
+      ].filter(Boolean).join('\n');
       if (d.avatar_url) {
-        await engine.getSendQueue().enqueue(()=>sock.sendMessage(ctx.chatId,{image:{url:d.avatar_url},caption:txt},{quoted:ctx.full}),{messageLength:txt.length});
-        return null;
+        await sock.sendMessage(msg.chat, { image: { url: d.avatar_url }, caption }, { quoted: msg });
+      } else {
+        await msg.reply(caption);
       }
-      return txt;
-    } catch(e) { return `❌ Error: ${e.message}`; }
-  }
+      await msg.react('✔️');
+    } catch (e) {
+      await msg.react('❌');
+      msg.reply(`《✧》 Error al consultar GitHub.\n> ${e.message}`);
+    }
+  },
 };

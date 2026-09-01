@@ -1,74 +1,63 @@
-// Deezer — busca canciones y envía preview de 30s + info
-// Usa la API oficial de Deezer
+/**
+ * .deezer <búsqueda o enlace>  →  busca música en Deezer y envía preview (30s) + info del track.
+ */
+import { runGuarded } from '#lib/apiBreaker';
 
 export default {
-  name: "deezer",
-  aliases: ["dzr"],
-  category: "downloads",
-  description: "Buscar música en Deezer (preview 30s) 🎧",
-  usage: ".deezer <canción>",
-  cooldown: 10,
-  ownerOnly: false,
-  groupOnly: false,
-  adminOnly: false,
-
-  async handler(sock, ctx, engine) {
-    if (!ctx.arg) {
-      return `🎧 *Deezer*\n\nUso: \`.deezer <nombre de canción>\`\nEj: \`.deezer Bad Bunny Diles\``;
-    }
-
+  command: ['deezer', 'dzr', 'deezermusic'],
+  category: 'downloads',
+  description: 'Buscar música en Deezer (preview de 30 segundos).',
+  run: async ({ msg, sock, usedPrefix, command, text }) => {
+    if (!text) return msg.reply(`《✧》 Escribe qué canción buscar.\n> Ejemplo: ${usedPrefix}deezer Bad Bunny Diles`);
     try {
-      // Buscar en Deezer
-      const searchUrl = `https://api.deezer.com/search?q=${encodeURIComponent(ctx.arg)}&limit=1`;
-      const res = await fetch(searchUrl);
+      await msg.react('🎧');
+      // Buscar
+      const url = `https://api.deezer.com/search?q=${encodeURIComponent(text)}&limit=1`;
+      const res = await runGuarded('deezer', async () => fetch(url));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
       const data = await res.json();
       const track = data?.data?.[0];
-      if (!track) return "❌ No encontré esa canción en Deezer.";
+      if (!track) return msg.reply('《✧》 No encontré esa canción en Deezer.');
 
-      const info = [
+      const caption = [
         `🎧 *Deezer*`,
         `• *Título:* ${track.title}`,
         `• *Artista:* ${track.artist?.name || '—'}`,
         `• *Álbum:* ${track.album?.title || '—'}`,
         `• *Duración:* ${Math.floor(track.duration / 60)}:${String(track.duration % 60).padStart(2, '0')}`,
+        `• *Explícito:* ${track.explicit_lyrics ? 'Sí' : 'No'}`,
         `• *Link:* ${track.link}`,
         '',
-        '_Preview de 30s (Deezer no da canciones completas gratis)._',
+        '_Se envía un preview de 30s (Deezer no da canciones completas gratis)._',
       ].join('\n');
 
-      // Enviar portada si existe
-      const hasCover = track.album?.cover_medium || track.album?.cover;
-      if (hasCover) {
-        const coverUrl = track.album.cover_medium || track.album.cover;
-        await engine.getSendQueue().enqueue(
-          () => sock.sendMessage(ctx.chatId, { image: { url: coverUrl }, caption: info }, { quoted: ctx.full }),
-          { messageLength: info.length, isNewContact: false }
-        );
+      // Enviar portada + info
+      if (track.album?.cover_medium || track.album?.cover) {
+        const cover = track.album?.cover_medium || track.album?.cover;
+        await sock.sendMessage(msg.chat, { image: { url: cover }, caption }, { quoted: msg });
+      } else {
+        await msg.reply(caption);
       }
 
-      // Enviar preview de audio si existe
+      // Enviar preview de audio (30s)
       if (track.preview) {
         const audioRes = await fetch(track.preview);
         if (audioRes.ok) {
-          const fileName = `${track.artist.name} - ${track.title}.mp3`.replace(/[/\\?*:<>|"]/g, '');
-          await engine.getSendQueue().enqueue(
-            () => sock.sendMessage(ctx.chatId, {
-              audio: { url: track.preview },
-              mimetype: 'audio/mpeg',
-              fileName,
-            }, { quoted: ctx.full }),
-            { messageLength: 20, isNewContact: false }
-          );
+          const buf = Buffer.from(await audioRes.arrayBuffer());
+          await sock.sendMessage(msg.chat, {
+            audio: buf,
+            mimetype: 'audio/mpeg',
+            fileName: `${track.artist.name} - ${track.title}.mp3`,
+          }, { quoted: msg });
         }
-      } else if (!hasCover) {
-        return info + '\n\n⚠️ Esta canción no tiene preview disponible.';
+      } else {
+        if (!(track.album?.cover_medium)) await msg.reply(caption);
+        await msg.reply('⚠️ Esta canción no tiene preview disponible.');
       }
-
-      return null;
-    } catch (err) {
-      return `❌ Error en Deezer: ${err.message}`;
+      await msg.react('✔️');
+    } catch (e) {
+      await msg.react('❌');
+      msg.reply(`《✧》 Error en Deezer.\n> ${e.message}`);
     }
-  }
+  },
 };

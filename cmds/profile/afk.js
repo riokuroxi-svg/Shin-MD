@@ -1,14 +1,14 @@
-// AFK — Away From Keyboard
-import { getDatabase } from "#db";
-const afkUsers = new Map();
+import db from '../../src/services/ginko-db.js';
 export default {
-  name: "afk", category: "profile", description: "Modo ausente 🔇", cooldown: 5,
-  async handler(sock, ctx) {
-    const reason = ctx.arg?.trim() || 'Sin razón';
-    afkUsers.set(ctx.senderId, { reason, time: Date.now() });
-    return `🔇 *AFK Activado*\n\nRazón: ${reason}\n\n_Cuando te mencionen, avisaré que estás ausente._`;
+  command: ['afk'],
+  category: 'profile',
+  description: 'Activar el modo ausente (AFK).',
+  run: async ({ msg, sock, args }) => {
+    db.setChatUser(msg.chat, msg.sender, 'afk', Date.now());
+    db.setChatUser(msg.chat, msg.sender, 'afkReason', args.join(' '));    
+    const userData = db.getUser(msg.sender);
+    const nombre = userData?.name || 'Usuario';
+    const motivo = args.length ? `${args.join(' ')}` : 'Sin Especificar!';    
+    return await sock.reply(msg.chat, `ꕥ El Usuario *${nombre}* estará AFK.\n> ○ Motivo » *${motivo}*`, msg);
   }
 };
-// Export for router to check AFK on mentions
-export function isAfk(jid) { return afkUsers.get(jid) || null; }
-export function removeAfk(jid) { afkUsers.delete(jid); }

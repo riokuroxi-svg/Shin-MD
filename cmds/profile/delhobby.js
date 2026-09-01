@@ -1,10 +1,14 @@
-// Delhobby — eliminar pasatiempo
-import { getDatabase } from "#db";
+import db from '../../src/services/ginko-db.js';
 export default {
-  name: "delhobby", aliases: ["removehobby"], category: "profile", description: "Eliminar pasatiempo 🗑️", cooldown: 5,
-  async handler(sock, ctx) {
-    const db = getDatabase();
-    db.prepare("UPDATE users SET pasatiempo = '' WHERE jid = ?").run(ctx.senderId);
-    return '🗑️ Pasatiempo eliminado.';
-  }
+  command: ['delpasatiempo', 'removehobby'],
+  category: 'profile',
+  description: 'Eliminar tu pasatiempo del perfil.',
+  run: async ({ msg }) => {
+    const user = db.getUser(msg.sender);    
+    if (!user.pasatiempo || user.pasatiempo === 'No definido') {
+      return msg.reply('《✧》 No tienes ningún pasatiempo establecido.');
+    }
+    db.setUser(msg.sender, 'pasatiempo', '');
+    return msg.reply(`✎ Se ha eliminado tu pasatiempo.`);
+  },
 };
