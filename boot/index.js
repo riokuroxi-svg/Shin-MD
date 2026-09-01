@@ -4,6 +4,9 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import "dotenv/config";
+import chalk from "chalk";
+import cfonts from "cfonts";
+import moment from "moment-timezone";
 import { createEngine } from "#engine";
 import { connectSocket } from "#socket";
 import { createWatchdog } from "#watchdog";
@@ -23,21 +26,66 @@ function parseArgs(argv) {
       i++;
     }
   }
-  // Fallback a .env
   if (!args.qr && !args.code && process.env.PAIRING_METHOD === "code") args.code = true;
   if (!args.pairingNumber && process.env.PAIRING_NUMBER) args.pairingNumber = process.env.PAIRING_NUMBER;
   return args;
 }
 
+function printBanner() {
+  console.log("");
+  cfonts.say("SHIN-MD", {
+    font: "block",
+    align: "center",
+    gradient: ["#ff7eb3", "#f97316"],
+    letterSpacing: 1,
+    space: false,
+  });
+  cfonts.say("Bot WhatsApp Multi-Device", {
+    font: "chrome",
+    align: "center",
+    gradient: ["blue", "magenta"],
+    letterSpacing: 2,
+  });
+  console.log(chalk.cyan("      🍁 Hecho por riokuroxi-svg · Anti-ban nativo") + "\n" + chalk.gray("         ─────────────────────────────────") + "\n");
+}
+
+function logCommand(ctx, cmdName, ms) {
+  const pushname = ctx.pushname || "Usuario";
+  const sender = ctx.senderId || ctx.sender || "?";
+  const isGroup = ctx.isGroup;
+  const chatId = ctx.chatId || "?";
+  const groupName = ctx.groupName || "";
+  const botJid = process.env.BOT_JID || "Shin-MD";
+  const time = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
+
+  let output = `╭─────────────────────────────────────────···\n`;
+  output += `│ ${chalk.cyan("Bot")}: ${chalk.greenBright(botJid)}\n`;
+  output += `│ ${chalk.bold.yellow("Fecha")}: ${chalk.yellowBright(time)}\n`;
+  output += `│ ${chalk.bold.blueBright("Usuario")}: ${chalk.blueBright(pushname)}\n`;
+  output += `│ ${chalk.bold.magentaBright("Remitente")}: ${chalk.magentaBright(sender)}\n`;
+  if (isGroup) {
+    output += `│ ${chalk.bold.green("Grupo")}: ${chalk.greenBright(groupName)}\n`;
+    output += `│ ${chalk.bold.magenta("ID")}: ${chalk.blueBright(chatId)}\n`;
+  } else {
+    output += `│ ${chalk.bold.green("Privado")}: ${chalk.magentaBright("Chat Privado")}\n`;
+    output += `│ ${chalk.bold.magenta("ID")}: ${chalk.blueBright("Chat Privado")}\n`;
+  }
+  output += `│ ${chalk.bold.cyanBright("Comando usado")}: ${chalk.gray(cmdName)} (${ms}ms)\n`;
+  output += `╰─────────────────────────────────────────···`;
+  console.log(output);
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+
+  // Banner estilo Ginko-MD con cfonts
+  printBanner();
 
   log.info("╔═══════════════════════════════════════╗");
   log.info("║      Shin-MD · WhatsApp Multi-Device  ║");
   log.info("║      Anti-ban native · AGPL-3.0       ║");
   log.info("╚═══════════════════════════════════════╝");
 
-  // Base de datos
   let db;
   try {
     db = getDatabase();
@@ -46,17 +94,13 @@ async function main() {
     process.exit(1);
   }
 
-  // Engine central
   const engine = createEngine();
 
-  // Watchdog (supervisión)
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
 
-  // Web server (health/metrics)
   const web = createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
 
-  // Owner desde .env (semilla) o detectado al conectar
   const ownerFromEnv = process.env.OWNER_NUMBER
     ? process.env.OWNER_NUMBER.replace(/\D/g, "") + "@s.whatsapp.net" : "";
   if (ownerFromEnv) {
@@ -67,16 +111,16 @@ async function main() {
   engine.on("connected", user => {
     const u = user && user.id ? user.id.split(":")[0] : "?";
     const ownerJid = u + "@s.whatsapp.net";
+    process.env.BOT_JID = u + "@s.whatsapp.net";
     db.settings.set("owner_jid", ownerJid);
     engine.setOwnerJid(ownerJid);
     log.gray("Owner: " + ownerJid);
   });
 
-  // Router de comandos (carga cmds/)
-  const router = createRouter(engine);
+  // Router con hook de logging de comandos
+  const router = createRouter(engine, { onCommand: logCommand });
   await router.init();
 
-  // Conectar socket
   const sockModule = connectSocket(engine, {
     sessionDir: "./Sessions/Owner",
     pairingMethod: args.code ? "code" : "qr",

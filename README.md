@@ -38,7 +38,7 @@
 - **Menú con botones**: `.menu` abre un menú con botones táctiles por categoría (con fallback a texto).
 - **Juego de tres en raya** (`.ttt`): tablero con botones interactivos — tocas una celda y el bot responde.
 - **Carrusel todo-en-uno** (`.demo`): imagen + texto + botones en un solo mensaje deslizable (estilo reels/insta).
-- **Play sin binarios** (`.play`): descarga YouTube→MP3 vía API HTTP con múltiples fallbacks — cero ffmpeg/yt-dlp en el servidor (ideal para BoxMine). Configurable con `YT_API_URL`/`YT_API_KEY`.
+- **Play sin binarios** (`.play`/`.play2`): descarga YouTube→MP3/MP4 vía múltiples fuentes — cero ffmpeg/yt-dlp en el servidor (ideal para BoxMine). Configurable con `YT_API_URL`/`YT_API_KEY`.
 
 ## 🛡️ Anti-ban integrado (nativo)
 
@@ -54,18 +54,50 @@ No es un "delay random": es una capa pensada para parecer humano y auto-proteger
 
 ## 🚀 Inicio rápido
 
-### Termux (Android)
+### 📦 Instalación en Termux (Android)
+
+📱 Copia y pega estos comandos uno por uno en Termux. No necesitas saber programar.
+
+**1️⃣ Actualizar paquetes**
 
 ```bash
 pkg update && pkg upgrade -y
-pkg install -y git nodejs-lts ffmpeg
+```
+
+**2️⃣ Instalar las herramientas necesarias**
+
+```bash
+pkg install -y git nodejs python ffmpeg
+```
+
+**3️⃣ Clonar el bot**
+
+```bash
 git clone https://github.com/riokuroxi-svg/Shin-MD
 cd Shin-MD
+```
+
+**4️⃣ Instalar dependencias**
+
+```bash
 npm install
+```
+
+**5️⃣ Configurar**
+
+```bash
 cp .env.example .env
 # Edita .env con tu número y método de conexión
+# nano .env  (o cualquier editor)
+```
+
+**6️⃣ Iniciar el bot**
+
+```bash
 npm start
 ```
+
+Escanea el QR con WhatsApp → Dispositivos vinculados → Vincular dispositivo, ¡y listo! 🌿
 
 ### BoxMine / VPS
 
@@ -73,6 +105,7 @@ npm start
 git clone https://github.com/riokuroxi-svg/Shin-MD
 cd Shin-MD
 npm install
+cp .env.example .env
 # Configura .env con PAIRING_METHOD=code y PAIRING_NUMBER
 npm start
 ```
@@ -83,22 +116,27 @@ npm start
 |---|---|---|
 | `.menu` | `help`, `ayuda`, `h` | Menú interactivo con botones por categoría |
 | `.play` | `yt`, `mp3`, `playmp3`, `ytaudio`, `ytmp3`, `musica`, `playaudio` | Descargar audio de YouTube 🎵 |
+| `.play2` | `mp4`, `playvideo`, `ytvideo`, `ytmp4` | Descargar video de YouTube 📹 |
 | `.tiktok` | `tt` | Descargar video de TikTok sin marca de agua |
-| `.deezer` | `dzr` | Buscar música en Deezer (preview 30s) |
-| `.ytsearch` | `search`, `ys` | Buscar videos en YouTube |
-| `.facebook` | `fb` | Descargar video de Facebook |
-| `.mediafire` | `mf` | Descargar archivos de MediaFire |
-| `.drive` | `gdrive` | Descargar archivos de Google Drive |
-| `.apk` | `aptoide`, `apkdl` | Buscar y descargar APKs de Aptoide |
+| `.deezer` | `dzr` | Buscar música en Deezer (preview 30s) 🎧 |
+| `.ytsearch` | `search`, `ys` | Buscar videos en YouTube 🔍 |
+| `.facebook` | `fb` | Descargar video de Facebook 📹 |
+| `.instagram` | `ig`, `reel` | Descargar reel/story de Instagram (requiere FASTSAVER_KEY) |
+| `.twitter` | `x` | Descargar video de Twitter/X 🐦 |
+| `.pinterest` | `pin` | Descargar imágenes de Pinterest (requiere FASTSAVER_KEY) |
+| `.mediafire` | `mf` | Descargar archivos de MediaFire 📦 |
+| `.drive` | `gdrive` | Descargar archivos de Google Drive 🗂️ |
+| `.apk` | `aptoide`, `apkdl` | Buscar y descargar APKs de Aptoide 📱 |
 | `.imagen` | `img`, `image` | Buscar imágenes 📷 |
-| `.sticker` | `s`, `stiker` | Crear sticker desde imagen con tu pack/author |
+| `.sticker` | `s`, `stiker` | Crear sticker desde imagen con tu pack/author 🏷️ |
 | `.ttt` | `tresenraya`, `tateti` | Jugar Tres en Raya con botones interactivos |
 | `.demo` | `showcase`, `carousel`, `reels` | Carrusel todo-en-uno (imagen + texto + botones) |
+| `.benchdl` | | Prueba de velocidad de las APIs de descarga ⏱️ |
 | `.ping` | `p` | Latencia del bot |
 | `.runtime` | `status`, `uptime`, `estado` | Estado del bot |
 | `.owner` | `creator`, `creador`, `dueño`, `dev` | Info del creador |
 
-⚠️ **Servicios temporalmente fuera de línea** (sin API gratuita estable): `instagram`/`ig`/`reel`, `twitter`/`x`, `pinterest`/`pin`. Se reactivarán cuando haya APIs funcionales.
+🔑 *Instagram y Pinterest requieren `FASTSAVER_KEY` en .env (gratis en api.fastsaver.io). Twitter funciona sin key pero es más estable con ella.*
 
 ## ⚙️ Configuración
 
@@ -120,6 +158,7 @@ Copia `.env.example` a `.env` y rellena:
 | `MENU_IMAGE` | URL de imagen de banner para el menú | — |
 | `STICKER_PACK` | Nombre del pack de stickers | `Shin-MD` |
 | `STICKER_AUTHOR` | Autor del sticker | `@ShinBot` |
+| `FASTSAVER_KEY` | Key gratis de api.fastsaver.io (IG, Twitter, Pinterest) | — |
 
 ## 🗂️ Estructura del proyecto
 
