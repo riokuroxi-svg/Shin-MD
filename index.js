@@ -50,11 +50,17 @@ async function bootstrap() {
   if (!fs.existsSync("./tmp")) fs.mkdirSync("./tmp", { recursive: true });
 
   // Base de datos
-  const db = await import("#system/database");
-  db.initDB();
-  db.clearDB();
-  global.db = db;
-  log.gray("Base de datos lista");
+  let db;
+  try {
+    db = await import("#system/database");
+    db.initDB();
+    db.clearDB();
+    global.db = db;
+    log.gray("Base de datos lista");
+  } catch (e) {
+    log.error("Error al cargar DB: " + (e.message || e));
+    global.db = null;
+  }
 
   // Cargar comandos
   await cmdsLoader();
