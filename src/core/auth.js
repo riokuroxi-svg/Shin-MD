@@ -51,7 +51,7 @@ export async function useSQLiteAuthState(sessionDir) {
   `);
 
   const credsRow = db.prepare("SELECT data FROM creds WHERE id = 1").get();
-  const creds = credsRow ? JSON.parse(credsRow.data) : initAuthCreds();
+  const creds = credsRow ? JSON.parse(credsRow.data, BufferJSON.reviver) : initAuthCreds();
 
   function parseEntry(category, id, raw) {
     try {
