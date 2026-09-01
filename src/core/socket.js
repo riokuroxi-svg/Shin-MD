@@ -224,6 +224,14 @@ export function connectSocket(engine, opts) {
           return;
         }
 
+        // ── RestartRequired (515): normal después del pairing, reconectar YA ──
+        if (code === DisconnectReason.restartRequired || code === 0) {
+          log.gray("Reconectando con credenciales nuevas...");
+          isRestarting = false;
+          setTimeout(start, 1000);
+          return;
+        }
+
         retries++;
         if (retries > MAX_RETRIES) {
           log.fatal("Demasiados reintentos — limpiando sesión");
