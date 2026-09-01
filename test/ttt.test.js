@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import ttt from "../cmds/ttt.js";
+import ttt from "../cmds/games/ttt.js";
 
 function fakeSock() {
   const sent = [];
