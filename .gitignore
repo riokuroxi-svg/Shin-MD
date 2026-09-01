@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+
+# Sessions
+Sessions/
+session/
+
+# Temp files
+tmp/
+cache/
+backups/
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Binaries downloaded at runtime
+bin/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Private config
+config.private.js
+audit/
