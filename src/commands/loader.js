@@ -48,7 +48,7 @@ export async function loadCommands() {
       if (Array.isArray(cmd.aliases)) {
         for (const alias of cmd.aliases) commands.set(alias, commands.get(name));
       }
-      log.gray("Comando cargado: " + name);
+      // Ginko-MD no imprime cada comando cargado, solo muestra errores y un resumen
     } catch (err) {
       log.error("Fallo al cargar comando " + path.relative(CMDS_DIR, filePath) + ": " + (err.message || err));
     }

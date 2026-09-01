@@ -184,19 +184,26 @@ export function connectSocket(engine, opts) {
         }
 
         if (code === DisconnectReason.connectionReplaced) {
-          log.warn("Connection replaced.");
+          log.warn("Conexión reemplazada.");
           return;
         }
 
         retries++;
         if (retries > MAX_RETRIES) {
-          log.fatal("Max retries (" + MAX_RETRIES + ") reached");
+          log.fatal("Demasiados reintentos — limpiando sesión");
           clearSession();
           process.exit(1);
         }
 
+        const reasonMessages = {
+          [DisconnectReason.connectionLost]: "Se perdió la conexión al servidor, reconectando...",
+          [DisconnectReason.connectionClosed]: "Conexión cerrada, reconectando...",
+          [DisconnectReason.restartRequired]: "Es necesario reiniciar...",
+          [DisconnectReason.timedOut]: "Tiempo agotado, reconectando...",
+          [DisconnectReason.badSession]: "Sesión inválida, limpiando...",
+        };
         const d = backoffDelay();
-        log.warn("Disconnected, retry " + retries + "/" + MAX_RETRIES + " in " + Math.round(d / 1000) + "s");
+        log.warn(reasonMessages[code] || `Desconexión (${code}), reconectando en ${Math.round(d / 1000)}s...`);
         setTimeout(start, d);
       }
     });

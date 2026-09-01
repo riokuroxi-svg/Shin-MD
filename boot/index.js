@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 //  boot/index.js — Punto de arranque estilo Ginko-MD
-//  Uso: node index.js [--qr | --code]
+//  Uso: node index.js [--qr | --code | --menu]
 // ═══════════════════════════════════════════════════════════════════
 
 import "dotenv/config";
@@ -10,13 +10,13 @@ import moment from "moment-timezone";
 import readlineSync from "readline-sync";
 import fs from "fs";
 import path from "path";
+import { DatabaseSync } from "node:sqlite";
 import { createEngine } from "#engine";
 import { connectSocket } from "#socket";
 import { createWatchdog } from "#watchdog";
 import { createWebServer } from "#server";
 import { getDatabase } from "#db";
 import { createRouter } from "#router";
-import { useSQLiteAuthState } from "#auth";
 import log from "#logger";
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -30,15 +30,31 @@ function normalizePhone(input) {
 }
 
 function parseArgs(argv) {
-  const r = { qr: false, code: false, phone: "" };
+  const r = { qr: false, code: false, menu: false, phone: "" };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--qr") r.qr = true;
+    if (argv[i] === "--menu") r.menu = true;
     if (argv[i] === "--code") r.code = true;
     if (argv[i] === "--code" && argv[i+1] && /^\+?\d{7,15}$/.test(argv[i+1])) {
       r.phone = normalizePhone(argv[++i]);
     }
   }
   return r;
+}
+
+function hasValidSession(sessionDir) {
+  const authDb = path.join(sessionDir, "auth.db");
+  if (!fs.existsSync(authDb)) return false;
+  try {
+    const db = new DatabaseSync(authDb);
+    const row = db.prepare("SELECT data FROM creds WHERE id = 1").get();
+    db.close();
+    if (!row) return false;
+    const creds = JSON.parse(row.data);
+    return creds?.registered === true;
+  } catch {
+    return false;
+  }
 }
 
 function printBanner() {
@@ -57,7 +73,6 @@ function printBanner() {
 function logCommand(ctx, cmdName, ms) {
   const t = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
   const name = ctx.pushname || "Usuario";
-  const s = ctx.senderId || ctx.sender || "?";
   const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
   console.log("");
   console.log(chalk.gray("  ╭───────────────────────────────────────"));
@@ -70,32 +85,42 @@ function logCommand(ctx, cmdName, ms) {
 }
 
 // ==================================================================
-//  INICIO — SINCRONO hasta el menú, como Ginko-MD
+//  INICIO — TODO SINCRONO hasta el menú (como Ginko-MD)
 // ==================================================================
 
 printBanner();
 
 const args = parseArgs(process.argv.slice(2));
+const sessionDir = "./Sessions/Owner";
+const sessionValida = hasValidSession(sessionDir);
 const methodCodeByEnv = (process.env.PAIRING_METHOD || "").trim().toLowerCase() === "code" && process.env.PAIRING_NUMBER;
 const envNumber = (process.env.PAIRING_NUMBER || "").trim();
-const sessionDir = "./Sessions/Owner";
-const hasSessionFile = fs.existsSync(path.join(sessionDir, "auth.db"));
 
 let opcion, phoneNumber = "";
 
-if (hasSessionFile) {
-  opcion = "0";
-  console.log(chalk.gray("[ ✿ ] Sesión existente detectada, cargando..."));
-} else if (methodCodeByEnv) {
-  opcion = "2";
-  phoneNumber = normalizePhone(envNumber);
-  console.log(chalk.gray(`[ ✿ ] Vinculación por código (número desde .env: ${phoneNumber || '?'} )`));
+if (args.menu) {
+  // Forzar menú aunque haya sesión
+  opcion = "";
 } else if (args.qr) {
   opcion = "1";
 } else if (args.code) {
   opcion = "2";
-  phoneNumber = args.phone || normalizePhone(readlineSync.question(chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp.\n" + chalk.bold.yellowBright("Ejemplo: +57301******\n") + chalk.bold.magentaBright("---> "))));
-} else {
+  phoneNumber = args.phone || normalizePhone(readlineSync.question(
+    chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp.\n") +
+    chalk.bold.yellowBright("Ejemplo: +57301******\n") +
+    chalk.bold.magentaBright("---> ")
+  ));
+} else if (sessionValida) {
+  opcion = "0";
+  console.log(chalk.gray("[ ✿ ] Sesión existente detectada, cargando...\n"));
+} else if (methodCodeByEnv) {
+  opcion = "2";
+  phoneNumber = normalizePhone(envNumber);
+  console.log(chalk.gray(`[ ✿ ] Vinculación por código (número desde .env: ${phoneNumber})\n`));
+}
+
+// Menú interactivo si no se decidió antes
+if (!opcion) {
   const isInteractive = process.stdin.isTTY !== false;
   if (!isInteractive) {
     log.warn("No hay consola interactiva. Usa --qr, --code o configura .env");
@@ -122,7 +147,7 @@ if (hasSessionFile) {
 }
 
 // ==================================================================
-//  ASÍNCRONO — a partir de aquí todo async
+//  ASÍNCRONO — a partir de aquí
 // ==================================================================
 
 async function main() {
