@@ -1,8 +1,16 @@
-// Restart — reinicia el bot
 export default {
-  name: "restart", aliases: ["reboot"], category: "owner", description: "Reiniciar el bot 🔄", ownerOnly: true, cooldown: 3,
-  async handler(sock, ctx) {
-    await sock.sendMessage(ctx.chatId, { text: "🔄 Reiniciando..." }, {});
-    process.exit(0);
-  }
+  command: ['restart'],
+  category: 'owner',
+  description: 'Reiniciar el socket del bot.',
+  isOwner: true,
+  run: async ({ msg, sock }) => {
+    await sock.reply(msg.chat, `✎ Reiniciando el Socket...\n> *Espere un momento...*`, msg);
+    setTimeout(() => {
+      if (process.send) {
+        process.send("restart");
+      } else {
+        process.exit(0);
+      }
+    }, 3000);
+  },
 };

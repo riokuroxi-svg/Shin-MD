@@ -33,10 +33,28 @@
     "#permissions": "./src/commands/middleware/permissions.js",
     "#fastsaver": "./src/services/fastsaver.js",
     "#economy": "./src/services/economy.js",
-    "#games/engine": "./src/games/engine.js"
+    "#games/engine": "./src/games/engine.js",
+    "#serialize": "./src/serialize.js",
+    "#main": "./src/services/ginko-stubs.js",
+    "#events": "./cmds/events.js",
+    "#core/exif": "./src/services/ginko-stubs.js",
+    "#system/commands": "./src/services/ginko-stubs.js",
+    "#lib/*": "./src/services/ginko-stubs.js",
+    "#lib/apiBreaker": "./src/services/ginko-stubs.js",
+    "#lib/cacheMgmt": "./src/services/ginko-stubs.js",
+    "#lib/diagnostics": "./src/services/ginko-stubs.js",
+    "#lib/edgeTTS": "./src/services/ginko-stubs.js",
+    "#lib/fastFetch": "./src/services/ginko-stubs.js",
+    "#lib/geminiRole": "./src/services/ginko-stubs.js",
+    "#lib/interactive-response": "./src/services/ginko-stubs.js",
+    "#lib/limits": "./src/services/ginko-stubs.js",
+    "#lib/mp3Utils": "./src/services/ginko-stubs.js",
+    "#lib/native-reply": "./src/services/ginko-stubs.js",
+    "#lib/sqliteAuth": "./src/services/ginko-stubs.js",
+    "#lib/youtubeSearch": "./src/services/ginko-stubs.js"
   },
   "engines": {
-    "node": ">=24.0.0",
+    "node": ">=22.5.0",
     "npm": ">=10.0.0"
   },
   "dependencies": {

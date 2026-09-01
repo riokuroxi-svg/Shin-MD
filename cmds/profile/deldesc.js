@@ -1,10 +1,14 @@
-// Deldesc — eliminar descripción
-import { getDatabase } from "#db";
+import db from '../../src/services/ginko-db.js';
 export default {
-  name: "deldesc", aliases: ["deldescription"], category: "profile", description: "Eliminar descripción 🗑️", cooldown: 5,
-  async handler(sock, ctx) {
-    const db = getDatabase();
-    db.prepare("UPDATE users SET description = ? WHERE jid = ?").run('', ctx.senderId);
-    return '🗑️ Descripción eliminada.';
-  }
+  command: ['deldescription', 'deldesc'],
+  category: 'profile',
+  description: 'Eliminar tu descripción de perfil.',
+  run: async ({ msg }) => {
+    const user = db.getUser(msg.sender);
+    if (!user.description) {
+      return msg.reply(`《✧》 No tienes una descripción establecida.`);
+    }    
+    db.setUser(msg.sender, 'description', '');
+    return msg.reply(`✎ Tu descripción ha sido eliminada.`);
+  },
 };

@@ -1,26 +1,11 @@
-// Ping — comprueba que el bot está vivo
-
+import db from '../../src/services/ginko-db.js';
 export default {
-  name: "ping",
-  aliases: ["p"],
-  category: "info",
-  description: "Comprueba si el bot está vivo",
-  usage: ".ping",
-  cooldown: 5,
-  ownerOnly: false,
-  groupOnly: false,
-  adminOnly: false,
-
-  async handler(sock, ctx, engine) {
-    const uptime = engine.getUptime();
-    const minutes = Math.floor(uptime / 60000);
-    const seconds = Math.floor((uptime % 60000) / 1000);
-    const risk = engine.getHealth().getRiskScore();
-    const queue = engine.getSendQueue().length();
-
-    return "🏓 *Pong!*\n" +
-      "╰ 📶 Tiempo activo: *" + minutes + "m " + seconds + "s*\n" +
-      "╰ 🛡️ Riesgo: *" + risk + "%*\n" +
-      "╰ ⏳ Cola: *" + queue + "*";
+  command: ['ping', 'p'],
+  category: 'main',
+  run: async ({ msg, sock }) => {
+    const start = Date.now()
+    const sent = await sock.sendMessage(msg.chat, { text: '`❏ ¡Pong!`' + `\n> *${db.getSettings(sock.user.id.split(':')[0] + "@s.whatsapp.net").namebot}*`}, { quoted: msg })
+    const latency = Date.now() - start
+    await sock.sendMessage(msg.chat, { text: `✿ *Pong!*\n> Tiempo ⴵ ${latency.toFixed(4).split(".")[0]}ms`, edit: sent.key }, { quoted: msg })
   },
 };

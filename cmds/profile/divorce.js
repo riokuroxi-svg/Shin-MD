@@ -1,14 +1,17 @@
-// Divorce — divorciarse
-import { getDatabase } from "#db";
+import db from '../../src/services/ginko-db.js';
 export default {
-  name: "divorce", category: "profile", description: "Divorciarse 💔", cooldown: 10,
-  async handler(sock, ctx) {
-    const db = getDatabase();
-    const me = db.prepare("SELECT marry FROM users WHERE jid = ?").get(ctx.senderId);
-    if (!me?.marry) return '❌ No estás casad@.';
-    const ex = me.marry;
-    db.prepare("UPDATE users SET marry = NULL WHERE jid = ?").run(ctx.senderId);
-    db.prepare("UPDATE users SET marry = NULL WHERE jid = ?").run(ex);
-    return `💔 *Divorcio*\n\n@${ctx.senderId.split('@')[0]} se ha divorciado de @${ex.split('@')[0]}.\n\n_El amor terminó... 😢_`;
-  }
+  command: ['divorce'],
+  category: 'profile',
+  description: 'Divorciarte de tu pareja.',
+  run: async ({ msg }) => {
+    const user = db.getUser(msg.sender);
+    const partnerId = user?.marry;    
+    if (!partnerId) {
+      return msg.reply(`《✧》 Tú no estás ${user.genre === 'Mujer' ? 'casada' : user.genre === 'Hombre' ? 'casado' : 'casadx'} con nadie.`);
+    }    
+    const partner = db.getUser(partnerId);
+    db.setUser(msg.sender, 'marry', '');
+    db.setUser(partnerId, 'marry', '');    
+    return msg.reply(`✎ *${user?.name || msg.sender.split('@')[0]}* te has divorciado de *${partner?.name || partnerId.split('@')[0]}*.`);
+  },
 };

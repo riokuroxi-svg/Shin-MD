@@ -5,7 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { getContentType } from "baileys";
-import { getCachedMeta } from "#metaCache";
+import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "#metaCache";
 
 const GROUP_REGEX = /^(\d+)@g\.us$/;
 
@@ -129,4 +129,22 @@ export async function isAdmin(sock, chatId, senderId) {
   }
 }
 
-export default { getText, isJidGroup, normalizeJid, serializeMessage, isAdmin, getReplyTarget };
+// ─── Ginko-compat exports ─────────────────────────────────────
+export { getCachedMeta, setCachedMeta, deleteCachedMeta };
+export function resolveParticipantJid(p) {
+  if (!p) return null;
+  return p.id || p.jid || p.phoneNumber || null;
+}
+export function resolveJidSync(raw) { return normalizeJid(raw); }
+export class BoundedMap extends Map {
+  constructor(m, t) { super(); this.max = m; this.ttl = t || 0; }
+  set(k, v) { if (this.size >= this.max) this.delete(this.keys().next().value); return super.set(k, v); }
+}
+export async function getBuffer(url) {
+  const r = await fetch(url);
+  return Buffer.from(await r.arrayBuffer());
+}
+export function getSelectedResponse() { return null; }
+
+export default { getText, isJidGroup, normalizeJid, serializeMessage, isAdmin, getReplyTarget,
+  getCachedMeta, setCachedMeta, deleteCachedMeta, resolveParticipantJid, resolveJidSync, BoundedMap, getBuffer };

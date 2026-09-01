@@ -1,18 +1,23 @@
-// PPCouple — imágenes de pareja anime
+import fetch from "node-fetch";
+
 export default {
-  name: "ppcouple", aliases: ["ppcp"], category: "anime", description: "Imágenes para pareja 👫", cooldown: 8,
-  async handler(sock, ctx, engine) {
+  command: ['ppcp', 'ppcouple'],
+  category: 'anime',
+  description: 'Generar imágenes para amistades o parejas.',
+  run: async ({ msg, sock, usedPrefix, command }) => {
     try {
-      const r = await fetch('https://raw.githubusercontent.com/ShirokamiRyzen/WAbot-DB/main/fitur_db/ppcp.json');
-      const data = await r.json();
-      const cita = data[Math.floor(Math.random() * data.length)];
-      const m = await fetch(cita.cowo);
-      const cowi = Buffer.from(await m.arrayBuffer());
-      await engine.getSendQueue().enqueue(() => sock.sendMessage(ctx.chatId, { image: cowi, caption: '♂ *Masculino*' }, { quoted: ctx.full }), { messageLength: 10 });
-      const f = await fetch(cita.cewe);
-      const ciwi = Buffer.from(await f.arrayBuffer());
-      await engine.getSendQueue().enqueue(() => sock.sendMessage(ctx.chatId, { image: ciwi, caption: '♀ *Femenino*' }, { quoted: ctx.full }), { messageLength: 10 });
-      return null;
-    } catch (e) { return `❌ Error: ${e.message}`; }
-  }
+      await msg.react('🕒');      
+      let data = await (await fetch('https://raw.githubusercontent.com/ShirokamiRyzen/WAbot-DB/main/fitur_db/ppcp.json')).json();
+      let cita = data[Math.floor(Math.random() * data.length)];      
+      let cowi = Buffer.from(await (await fetch(cita.cowo)).arrayBuffer());
+      await sock.sendFile(msg.chat, cowi, '', '*Masculino* ♂', msg);     
+      let ciwi = Buffer.from(await (await fetch(cita.cewe)).arrayBuffer());
+      await sock.sendFile(msg.chat, ciwi, '', '*Femenina* ♀', msg);
+      await msg.react('✔️');      
+    } catch (e) {
+      await msg.react('✖️');
+      await msg.reply(`> Ocurrió un error inesperado al ejecutar el comando *${usedPrefix + command}*.
+> [Error: *${e.message}*]`);
+    }
+  },
 };

@@ -1,20 +1,32 @@
-// Encuesta — crea encuesta en WhatsApp
+/**
+ * .encuesta <pregunta>|opción1|opción2|...
+ * Crea una encuesta (poll) nativa de WhatsApp.
+ */
 export default {
-  name: "encuesta", aliases: ["poll", "votacion"], category: "utility",
-  description: "Crear una encuesta 📊",
-  usage: ".encuesta <pregunta> | <op1> | <op2> | ...", cooldown: 10,
-  async handler(sock, ctx, engine) {
-    if (!ctx.arg) return "📊 *Encuesta*\n\nUso: `.encuesta Pregunta | Op1 | Op2 | Op3`\nEj: `.encuesta ¿Qué color? | Rojo | Azul | Verde`";
-    const parts = ctx.arg.split('|').map(s=>s.trim());
-    if (parts.length < 3) return "❌ Necesito: Pregunta | Opción1 | Opción2 ...";
-    const question = parts[0];
-    const options = parts.slice(1).filter(Boolean);
-    if (options.length < 2) return "❌ Al menos 2 opciones.";
+  command: ['encuesta', 'poll', 'votacion'],
+  category: 'utils',
+  description: 'Crear una encuesta interactiva de WhatsApp.',
+  run: async ({ msg, usedPrefix, command, text }) => {
+    if (!text || !text.includes('|')) {
+      return msg.reply(
+        `《✧》 Crea una *encuesta*.\n`
+        + `> Formato: ${usedPrefix}encuesta <pregunta>|<opción1>|<opción2>|[más]\n`
+        + `> Ejemplo: ${usedPrefix}encuesta ¿Qué pizza prefiero?|Pepperoni|Hawaiana|4 Quesos`
+      );
+    }
+    const partes = text.split('|').map(s => s.trim()).filter(Boolean);
+    const name = partes.shift();
+    const values = partes.slice(0, 12); // WhatsApp permite hasta 12 opciones
+    if (!name || values.length < 2) {
+      return msg.reply(`《✧》 Debes poner una pregunta y al menos 2 opciones separadas por | (pleca).`);
+    }
     try {
-      await engine.getSendQueue().enqueue(()=>sock.sendMessage(ctx.chatId,{
-        poll: {name:question, values:options.map(o=>({optionName:o}))}
-      },{quoted:ctx.full}),{messageLength:50});
-      return null;
-    } catch(e) { return `❌ Error: ${e.message}`; }
-  }
+      await msg.react('📊');
+      await msg.reply({ poll: { name, values, selectableCount: 1 } });
+      // También podríamos permitir multi-opción: selectableCount > 1, pero por defecto 1 (single choice)
+    } catch (e) {
+      await msg.react('❌');
+      msg.reply(`《✧》 No pude crear la encuesta.\n> ${e.message}`);
+    }
+  },
 };

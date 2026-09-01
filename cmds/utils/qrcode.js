@@ -1,14 +1,25 @@
-// QR Code — genera QR desde texto
+/**
+ * .qr <texto|url>  →  genera un código QR como imagen.
+ */
 export default {
-  name: "qrcode", aliases: ["qrgen", "makeqr"], category: "utility",
-  description: "Generar código QR 📱",
-  usage: ".qrcode <texto>", cooldown: 5,
-  async handler(sock, ctx, engine) {
-    if (!ctx.arg) return "📱 *QR Code*\n\nUso: `.qrcode <texto>`\nEj: `.qrcode https://github.com`";
+  command: ['qrcode', 'qrgen', 'makeqr'],
+  category: 'utils',
+  description: 'Generar un código QR a partir de un texto o enlace.',
+  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+    if (!text) {
+      return msg.reply(
+        `《✧》 Escribe el *texto* o *enlace* para generar el QR.\n`
+        + `> Ejemplo: ${usedPrefix}qr https://github.com/riokuroxi-svg/Ginko-MD`
+      );
+    }
     try {
-      const url = `https://api.qrserver.com/v1/create-qr-code/?size=512x512&data=${encodeURIComponent(ctx.arg.trim())}`;
-      await engine.getSendQueue().enqueue(()=>sock.sendMessage(ctx.chatId,{image:{url},caption:`📱 *QR:* ${ctx.arg.slice(0,50)}`},{quoted:ctx.full}),{messageLength:20});
-      return null;
-    } catch(e) { return `❌ Error: ${e.message}`; }
-  }
+      const url = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(text)}`;
+      await sock.sendMessage(msg.chat, {
+        image: { url },
+        caption: `📱 *QR generado*\n\n> Contenido: ${text.slice(0, 200)}`,
+      }, { quoted: msg });
+    } catch (e) {
+      msg.reply(`《✧》 No pude generar el QR.\n> ${e.message || 'error'}`);
+    }
+  },
 };

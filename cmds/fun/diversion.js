@@ -1,86 +1,143 @@
-// Diversión — chistes, datos, consejos, 8ball, amor, dados
+/**
+ * Comandos divertidos (offline, sin APIs):
+ *   .chiste         → chiste corto
+ *   .dato           → dato curioso
+ *   .consejo        → consejo aleatorio
+ *   .piropo         → piropo
+ *   .8ball / .8bola → respuesta estilo bola 8 mágica
+ *   .love @usuario  → calculadora de amor / compatibilidad
+ *   .ship @usuario  → alias de love
+ *   .dado [caras]   → lanzar un dado
+ *   .moneda / .coin → cara o cruz
+ */
+
 const chistes = [
   '¿Qué le dice un jaguar a otro jaguar? Jaguar you! 🐆',
   '¿Por qué el libro de matemáticas está triste? Porque tiene demasiados problemas. 📚',
   '¿Qué hace una abeja en el gimnasio? ¡Zum-ba! 🐝',
-  '¿Cómo se dice pez en inglés? Fish. ¿Y pez que viaja? Fishcamino. 🐟',
+  '¿Cómo se dice "pez" en inglés? Fish. ¿Y cómo se dice "pez" que viaja? Fishcamino. 🐟',
   '¿Qué le dice un techo a otro? Te echo de menos. 🏠',
   '¿Por qué los pájaros no usan Facebook? Porque ya tienen Twitter. 🐦',
   '¿Qué hace una vaca con los ojos cerrados? Leche condensada. 🐄',
+  'Se abre el telón y aparece un gato con una ametralladora. ¿Cómo se llama la película? Miaw-seros. 🐱',
   '¿Qué hace un perro con un taladro? ¡Ta-ladrando! 🐶',
-  '¿Por qué los fantasmas son malos para mentir? Porque se les ve a través. 👻',
-  '¿Cuál es el colmo de un calvo? Tener ideas descabelladas. 🧑‍🦲',
+  '¿Qué hace un pez sin ojos? ¡Nada! 🐟',
 ];
 const datos = [
   '🐙 Los pulpos tienen 3 corazones y sangre azul.',
   '🍌 Las bananas son ligeramente radiactivas.',
-  '🐜 Las hormigas levantan hasta 50x su peso.',
-  '🧠 Tu cerebro usa ~20% de la energía del cuerpo.',
-  '💧 El agua caliente se congela más rápido que la fría.',
-  '🦉 Las lechuzas giran la cabeza hasta 270°.',
-  '🐳 La ballena azul pesa como 30 elefantes.',
-  '🌱 Los árboles se comunican por hongos subterráneos.',
-  '👃 Tu nariz recuerda más de 50,000 olores.',
+  '🐜 Las hormigas pueden levantar hasta 50 veces su propio peso.',
+  '🌍 La Tierra es el único planeta que no lleva nombre de un dios.',
+  '🧠 Tu cerebro usa alrededor del 20% de la energía total del cuerpo.',
   '🦒 Las jirafas no tienen cuerdas vocales.',
+  '💧 El agua caliente se congela más rápido que la fría (efecto Mpemba).',
+  '🦉 Las lechuzas no pueden mover los ojos, giran la cabeza hasta 270°.',
+  '🐳 La ballena azul puede pesar tanto como 30 elefantes.',
+  '🌱 Los árboles se comunican entre sí mediante hongos subterráneos.',
+  '🍫 Se necesitan unos 400 granos de cacao para hacer una libra de chocolate.',
+  '👃 Tu nariz puede recordar más de 50,000 olores diferentes.',
 ];
 const consejos = [
-  '💧 Toma agua antes de tener sed.',
-  '😴 Dormir 7-8 horas mejora memoria y ánimo.',
-  '📱 Toma descansos de pantalla cada 20 min.',
-  '🏃 Caminar 30 min al día hace gran diferencia.',
-  '🙏 Agradece algo cada día: mejora el ánimo.',
-  '🥦 Come más vegetales y menos procesado.',
+  '💧 Toma agua antes de sentir sed.',
+  '😴 Dormir 7-8 horas mejora tu memoria y ánimo.',
+  '📱 Toma descansos de la pantalla cada 20 min.',
+  '🏃 Caminar 30 min al día hace una gran diferencia.',
+  '🙏 Agradece algo cada día: mejora tu estado de ánimo.',
+  '🥦 Come más vegetales y menos comida procesada.',
   '🧘 Respira profundo cuando estés estresado.',
-  '📚 Lee 10 páginas al día: 20+ libros al año.',
+  '📚 Lee 10 páginas al día: en un año son más de 20 libros.',
+  '🎵 Escucha música nueva: tu cerebro lo agradece.',
+  '📝 Anota tus pendientes para no llevarlos en la cabeza.',
 ];
 const piropos = [
-  'Si la belleza fuera crimen, cadena perpetua 😍',
-  '¿Tienes mapa? Me pierdo en tus ojos 🗺️',
-  '¿Eres azúcar? Endulzas mi vida 🍬',
-  '¿Crees en amor a primera vista o vuelvo a pasar? 💕',
-  '¿Tienes fuego? Me encendiste el corazón 🔥',
+  'Si la belleza fuera un crimen, te sentenciarían a cadena perpetua 😍',
+  '¿Tienes un mapa? Porque me pierdo en tus ojos 🗺️',
+  'Si fueras un boomerang, nunca volverías porque te irías conmigo 😏',
+  '¿Eres de azúcar? Porque estás endulzando mi vida 🍬',
+  '¿Crees en el amor a primera vista o vuelvo a pasar? 💕',
+  '¿Tienes fuego? Porque me has encendido el corazón 🔥',
+  'Si la luna es de queso, tú eres la estrella de mi cielo 🌙',
 ];
 const respuestas8 = [
-  'Es cierto ✅', 'Definitivamente sí 💯', 'Sin duda 🌟',
-  'Sí, definitivamente 👍', 'Puedes confiar 🔮', 'Probablemente 🤔',
-  'No cuentes con eso ❌', 'Mi respuesta es no 🙅', 'Muy dudoso 🤨',
-  'Pregunta más tarde ⏳', 'Mejor no te digo 🤫',
+  'Es cierto ✅',
+  'Definitivamente sí 💯',
+  'Sin duda 🌟',
+  'Sí, definitivamente 👍',
+  'Puedes confiar en ello 🔮',
+  'Como yo lo veo, sí 👀',
+  'Probablemente 🤔',
+  'Buena perspectiva 💭',
+  'No cuentes con ello ❌',
+  'Mi respuesta es no 🙅',
+  'Mis fuentes dicen que no 🚫',
+  'No puedo predecirlo ahora 🌫️',
+  'Pregunta más tarde ⏳',
+  'Mejor no te lo digo ahora 🤫',
+  'Muy dudoso 🤨',
 ];
-const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 export default {
-  name: "diversion", aliases: ["chiste","dato","consejo","piropo","8ball","8bola","love","ship","dado","moneda","coin"],
-  category: "fun", description: "Chistes, datos, 8ball, amor, dados 🎲", cooldown: 3,
-  async handler(sock, ctx) {
-    const cmd = ctx.text.replace(/^[.!]/, '').split(/\s+/)[0].toLowerCase();
-    switch (cmd) {
-      case 'chiste': return `🤣 ${pick(chistes)}`;
-      case 'dato': return `🧠 *Dato curioso:*\n${pick(datos)}`;
-      case 'consejo': return `💡 *Consejo:*\n${pick(consejos)}`;
-      case 'piropo': return pick(piropos);
-      case '8ball':
-      case '8bola':
-        if (!ctx.arg) return '🔮 *8Ball*\n\nHaz una pregunta: .8ball ¿Hoy es mi día?';
-        return `🔮 *Pregunta:* ${ctx.arg}\n\n*Respuesta:* ${pick(respuestas8)}`;
-      case 'love':
-      case 'ship': {
-        const target = ctx.mentions?.[0] || ctx.arg?.trim();
-        if (!target) return '💕 *Love*\n\nMenciona alguien: .love @user';
-        const pct = Math.floor(Math.random() * 101);
-        const em = pct >= 80 ? '💞' : pct >= 50 ? '💗' : pct >= 25 ? '💔' : '💀';
-        const msg = pct >= 80 ? 'Almas gemelas!' : pct >= 50 ? 'Hay quimica' : pct >= 25 ? 'Tal vez en otra vida...' : 'Ni lo intentes';
-        return `💕 *Compatibilidad*\n@${ctx.senderId.split('@')[0]} x @${target.split('@')[0]}\n${em} ${pct}%\n_${msg}_`;
-      }
-      case 'dado': {
-        const caras = parseInt(ctx.arg) || 6;
-        return `🎲 Dado ${caras}\nResultado: ${Math.floor(Math.random() * caras) + 1}`;
-      }
-      case 'moneda':
-      case 'coin':
-        const res = Math.random() < 0.5 ? 'Cara' : 'Cruz';
-        return `🪙 Moneda: ${res}`;
-      default:
-        return '🎲 Diversion: .chiste .dato .consejo .piropo .8ball .love .dado .moneda';
+  command: ['chiste', 'dato', 'datointeresante', 'consejo', 'piropo', '8ball', '8bola', 'ship', 'pareja', 'dado', 'moneda', 'coin'],
+  category: 'fun',
+  description: 'Comandos divertidos: chistes, datos, piropos, bola 8, love, dado, moneda.',
+  run: async ({ msg, sock, command, usedPrefix, text, args }) => {
+    const senderName = msg.pushName || msg.sender.split('@')[0];
+
+    // CHISTE
+    if (command === 'chiste') return msg.reply(`😂 *Chiste*\n\n${pick(chistes)}`);
+
+    // DATO CURIOSO
+    if (command === 'dato' || command === 'datointeresante') {
+      return msg.reply(`🤓 *Dato curioso*\n\n${pick(datos)}`);
     }
-  }
+
+    // CONSEJO
+    if (command === 'consejo') return msg.reply(`💡 *Consejo del día*\n\n${pick(consejos)}`);
+
+    // PIROPO
+    if (command === 'piropo') {
+      return msg.reply(`💘 *Piropo* para @${msg.sender.split('@')[0]}\n\n${pick(piropos)}`, { mentions: [msg.sender] });
+    }
+
+    // BOLA 8
+    if (command === '8ball' || command === '8bola') {
+      if (!text) return msg.reply(`《✧》 Hazme una *pregunta de sí/no*.`);
+      return msg.reply(`🎱 *Bola 8*\n\nPregunta: ${text}\n\n» ${pick(respuestas8)}`);
+    }
+
+    // SHIP / PAREJA
+    if (command === 'ship' || command === 'pareja') {
+      const target = msg.mentionedJid?.[0] || (text && text.trim() + '@s.whatsapp.net');
+      if (!target) {
+        return msg.reply(`《✧》 Etiqueta a alguien para calcular compatibilidad.\n> Ej: ${usedPrefix}love @amigo`);
+      }
+      const porcentaje = Math.floor(Math.random() * 101);
+      let comentario;
+      if (porcentaje >= 85) comentario = '💞 ¡Almas gemelas! Boda a la vista.';
+      else if (porcentaje >= 60) comentario = '😍 Hay mucha química entre ustedes.';
+      else if (porcentaje >= 35) comentario = '😊 Hay potencial, inténtenlo.';
+      else comentario = '😬 Mejor quedan como amigos...';
+      return msg.reply(
+        `💕 *Test de amor*\n\n`
+        + `@${msg.sender.split('@')[0]}  💘  @${target.split('@')[0]}\n`
+        + `\nCompatibilidad: *${porcentaje}%*\n\n${comentario}`,
+        { mentions: [msg.sender, target] }
+      );
+    }
+
+    // DADO
+    if (command === 'dado') {
+      const caras = Math.max(2, Math.min(100, parseInt(args[0], 10) || 6));
+      const n = Math.floor(Math.random() * caras) + 1;
+      return msg.reply(`🎲 *Dado* de ${caras} caras\n\n» Salió *${n}*`);
+    }
+
+    // MONEDA
+    if (command === 'moneda' || command === 'coin') {
+      const lado = Math.random() < 0.5 ? '🪙 Cara' : '🪙 Cruz';
+      return msg.reply(`🪙 *Lanzamiento de moneda*\n\n» ${lado}`);
+    }
+  },
 };

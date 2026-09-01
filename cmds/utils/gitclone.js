@@ -1,25 +1,76 @@
-// GitClone — descargar repositorio de GitHub como ZIP
+import fetch from 'node-fetch';
+import defaultAvatar from '../../lib/default-avatar.js';
+
+const regex = /^(?:https:\/\/|git@)github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/i;
+
 export default {
-  name: "gitclone", aliases: ["git"], category: "utility",
-  description: "Descargar repositorio de GitHub 📦",
-  usage: ".gitclone <usuario/repo>", cooldown: 20,
-  async handler(sock, ctx, engine) {
-    if (!ctx.arg) return "📦 *Git Clone*\n\nUso: `.gitclone <usuario/repo>`\nEj: `.gitclone riokuroxi-svg/Shin-MD`";
-    const text = ctx.arg.trim();
-    let user, repo;
-    if (text.includes('/')) { const p = text.split('/'); user = p[0]; repo = p[1]; }
-    else return "❌ Formato: usuario/repo";
+  command: ['gitclone', 'git'],
+  category: 'utils',
+  description: 'Buscar y descargar un repositorio de GitHub.',
+  run: async ({ msg, sock, usedPrefix, command, text }) => {
+    if (!text) {
+      return sock.reply(msg.chat, '《✧》 Por favor, proporciona un enlace o nombre del repositorio de GitHub.', msg);
+    }
     try {
-      const repoRes = await fetch(`https://api.github.com/repos/${user}/${repo}`,{headers:{'User-Agent':'Shin-MD'}});
-      if (!repoRes.ok) return '❌ Repositorio no encontrado.';
-      const info = await repoRes.json();
-      const zipRes = await fetch(`https://api.github.com/repos/${user}/${repo}/zipball`,{headers:{'User-Agent':'Shin-MD'}});
-      if (!zipRes.ok) return '❌ Error al descargar.';
-      const buf = Buffer.from(await zipRes.arrayBuffer());
-      const caption = `📦 *${info.full_name}*\n⭐ ${info.stargazers_count} · 🍴 ${info.forks_count}\n📝 ${info.description||''}\n📏 ${(buf.length/1024/1024).toFixed(1)} MB`;
-      if (buf.length > 50*1024*1024) return `${caption}\n\n⚠️ Archivo muy grande para WhatsApp. Descarga directa:\n${info.html_url}/archive/master.zip`;
-      await engine.getSendQueue().enqueue(()=>sock.sendMessage(ctx.chatId,{document:buf,mimetype:'application/zip',fileName:`${repo}-main.zip`,caption},{quoted:ctx.full}),{messageLength:caption.length});
-      return null;
-    } catch(e) { return `❌ Error: ${e.message}`; }
+      await msg.react('🕒');
+      let info = '';
+      let image;
+      let zipBuffer, zipName;
+      let repos = [];
+      const match = text.match(regex);
+      if (match) {
+        const [, user, repo] = match;
+        const repoRes = await fetch(`https://api.github.com/repos/${user}/${repo}`);
+        const zipRes = await fetch(`https://api.github.com/repos/${user}/${repo}/zipball`);
+        const repoData = await repoRes.json();
+        zipName = zipRes.headers.get('content-disposition')?.match(/filename=(.*)/)?.[1];
+        if (!zipName) zipName = `${repo}-${user}.zip`;
+        zipBuffer = Buffer.from(await zipRes.arrayBuffer());
+        repos.push(repoData);
+        image = defaultAvatar();
+      } else {
+        const res = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(text)}`);
+        const json = await res.json();
+        if (!json.items.length) {
+          return sock.reply(msg.chat, '《✧》 No se encontraron resultados.', msg);
+        }
+        if (json.items.length === 1) {
+          const repo = json.items[0];
+          const zipRes = await fetch(`https://api.github.com/repos/${repo.owner.login}/${repo.name}/zipball`);
+          zipName = zipRes.headers.get('content-disposition')?.match(/filename=(.*)/)?.[1];
+          if (!zipName) zipName = `${repo.name}-${repo.owner.login}.zip`;
+          zipBuffer = Buffer.from(await zipRes.arrayBuffer());
+          repos.push(repo);
+          image = Buffer.from(await (await fetch(repo.owner.avatar_url)).arrayBuffer());
+        } else {
+          repos = json.items;
+          image = Buffer.from(await (await fetch(repos[0].owner.avatar_url)).arrayBuffer());
+        }
+      }
+      info += repos.map((repo, index) => `✩ Resultado: ${index + 1}
+✩ Creador: ${repo.owner.login}
+✩ Nombre: ${repo.name}
+✩ Creado: ${formatDate(repo.created_at)}
+✩ Actualizado: ${formatDate(repo.updated_at)}
+✩ Visitas: ${repo.watchers}
+✩ Bifurcado: ${repo.forks}
+✩ Estrellas: ${repo.stargazers_count}
+✩ Issues: ${repo.open_issues}
+✩ Descripción: ${repo.description ? repo.description : 'Sin Descripción'}
+✩ Enlace: ${repo.clone_url}`).join('\n────────────────────\n');
+      await sock.sendFile(msg.chat, image, 'github_info.jpg', info.trim(), msg);
+      if (zipBuffer && zipName) {
+        await sock.sendFile(msg.chat, zipBuffer, zipName, null, msg);
+      }
+      await msg.react('✔️');
+    } catch (e) {
+      await msg.react('✖️');
+      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+    }
   }
 };
+
+function formatDate(n, locale = 'es') {
+  const d = new Date(n);
+  return d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' });
+}

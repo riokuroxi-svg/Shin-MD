@@ -1,75 +1,67 @@
-// Twitter/X — descargar videos de Twitter/X
-// Usa fxtwitter API pública (sin key) o FastSaver si está configurado
-
-import { downloadSocial } from "#fastsaver";
+import fetch from 'node-fetch'
 
 export default {
-  name: "twitter",
-  aliases: ["x"],
-  category: "downloads",
-  description: "Descargar video de Twitter/X 🐦",
-  usage: ".twitter <url>",
-  cooldown: 15,
-  ownerOnly: false,
-  groupOnly: false,
-  adminOnly: false,
-
-  async handler(sock, ctx, engine) {
-    if (!ctx.arg) {
-      return `🐦 *Twitter/X Download*\n\nUso: \`.twitter <url>\`\nEj: \`.twitter https://x.com/user/status/12345\``;
+  command: ['twitter', 'x'],
+  category: 'downloads',
+  description: 'Descargar un video/imagen de Twitter/X.',
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
+    if (!args[0]) {
+      return msg.reply('《✧》 Por favor, ingrese un enlace de Twitter/X.')
     }
-
-    const url = ctx.arg.trim();
-    if (!/(twitter|x)\.com\/\w+\/status\//i.test(url)) {
-      return "❌ Eso no parece un enlace válido de Twitter/X.";
+    if (!args[0].match(/(twitter|x)\.com\/\w+\/status\//)) {
+      return msg.reply('《✧》 El enlace no parece válido. Asegúrate de que sea de Twitter/X.')
     }
-
-    // Sin FastSaver key, intentar con fxtwitter (público)
-    if (!process.env.FASTSAVER_KEY) {
-      try {
-        const match = url.match(/status\/(\d+)/);
-        if (!match) return "❌ URL no válida.";
-        const res = await fetch(`https://api.fxtwitter.com/status/${match[1]}`, {
-          headers: { "User-Agent": "Shin-MD/1.0", "Accept": "application/json" }
-        });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const data = await res.json();
-        if (!data.tweet?.media?.videos?.length) {
-          return "❌ No se encontró video en ese tweet (puede ser una imagen).";
-        }
-        const video = data.tweet.media.videos[0];
-        const caption = `🐦 *Twitter/X*${data.tweet.text ? `\n📌 ${data.tweet.text.slice(0, 100)}` : ''}${data.tweet.author?.screen_name ? `\n👤 @${data.tweet.author.screen_name}` : ''}`;
-
-        await engine.getSendQueue().enqueue(
-          () => sock.sendMessage(ctx.chatId, {
-            video: { url: video.url },
-            caption,
-            mimetype: 'video/mp4'
-          }, { quoted: ctx.full }),
-          { messageLength: 50 }
-        );
-        return null;
-      } catch (e) {
-        return `❌ Error: ${e.message}\n\n💡 *Sugerencia:* Configura FASTSAVER_KEY en .env para mejor soporte (gratis en api.fastsaver.io)`;
-      }
-    }
-
-    // Con FastSaver key
     try {
-      const result = await downloadSocial("twitter", url);
-      const caption = `🐦 *Twitter/X*${result.title ? `\n📌 ${result.title}` : ''}${result.author ? `\n👤 ${result.author}` : ''}`;
-
-      await engine.getSendQueue().enqueue(
-        () => sock.sendMessage(ctx.chatId, {
-          video: { url: result.url },
-          caption,
-          mimetype: 'video/mp4'
-        }, { quoted: ctx.full }),
-        { messageLength: 50 }
-      );
-      return null;
-    } catch (err) {
-      return `❌ Error: ${err.message}`;
+      const data = await getTwitterMedia(args[0])
+      if (!data) return msg.reply('《✧》 No se pudo obtener el contenido.')
+      const caption = `ㅤ۟∩　ׅ　★ ໌　ׅ　🅣witter 🅓ownload　ׄᰙ\n\n${data.title ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Título* › ${data.title}\n` : ''}${data.author ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Autor* › ${data.author}\n` : ''}${data.date ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Fecha* › ${data.date}\n` : ''}${data.duration ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Duración* › ${data.duration}\n` : ''}${data.resolution ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Resolución* › ${data.resolution}\n` : ''}${data.views ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Vistas* › ${data.views}\n` : ''}${data.likes ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Likes* › ${data.likes}\n` : ''}${data.comments ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Comentarios* › ${data.comments}\n` : ''}${data.retweets ? `𖣣ֶㅤ֯⌗ ❀  ⬭ *Retweets* › ${data.retweets}\n` : ''}𖣣ֶㅤ֯⌗ ❀  ⬭ *Enlace* › ${args[0]}`
+      if (data.type === 'video') {
+        await sock.sendMessage(msg.chat, { video: { url: data.url }, caption, mimetype: 'video/mp4', fileName: 'twitter.mp4' }, { quoted: msg })
+      } else if (data.type === 'image') {
+        await sock.sendMessage(msg.chat, { image: { url: data.url }, caption }, { quoted: msg })
+      } else {
+        throw new Error('Contenido no soportado.')
+      }
+    } catch (e) {
+      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`)
     }
   }
-};
+}
+
+async function getTwitterMedia(url) {
+  const apis = [
+    { endpoint: `${global.APIs.delirius.url}/download/twitterdl?url=${encodeURIComponent(url)}`, extractor: (res) => {
+        if (!res.found || !res.media?.length) return null
+        return { type: res.type || 'video', title: res.info?.text || null, author: res.info?.user_name || res.info?.user_screen_name || null, date: res.info?.date || null, url: res.media[0]?.url || null, likes: res.info?.likes || null, comments: res.info?.replies || null, retweets: res.info?.retweets || null }
+      }
+    },
+    { endpoint: `${global.APIs.Ginko.url}/dl/twitter?url=${encodeURIComponent(url)}&key=${global.APIs.Ginko.key}`, extractor: (res) => {
+        if (!res.status || !res.data?.result?.length) return null
+        const hd = res.data.result.find(x => x.quality === '1920p' || x.quality === '1280p')
+        const sd = res.data.result.find(x => x.quality === '852p' || x.quality === '568p')
+        const media = hd || sd || res.data.result[0]
+        if (!media?.url) return null
+        return { type: res.data.type || 'video', title: res.data.title || null, duration: res.data.duration || null, resolution: media.quality || null, url: media.url, thumbnail: res.data.thumbnail || null }
+      }
+    },
+    { endpoint: `${global.APIs.zenzxz.url}/download/twitter?url=${encodeURIComponent(url)}`, extractor: (res) => {
+        if (!res.status || !res.result?.length) return null
+        const hd = res.result.find(x => x.quality.includes('1080') || x.quality.includes('HD'))
+        const sd = res.result.find(x => x.quality.includes('720'))
+        const media = hd || sd || res.result[0]
+        if (!media?.url) return null
+        return { type: 'video', resolution: media.quality || null, url: media.url }
+      }
+    }
+  ]
+
+  for (const { endpoint, extractor } of apis) {
+    try {
+      const res = await fetch(endpoint).then(r => r.json())
+      const result = extractor(res)
+      if (result) return result
+    } catch {}
+    await new Promise(r => setTimeout(r, 500))
+  }
+  return null
+}
