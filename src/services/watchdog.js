@@ -8,15 +8,17 @@ export function createWatchdog(engine, opts) {
   let lastTick = Date.now();
   let watchInterval = null;
   let enabled = false;
+  let stuckWarningSent = false;
+  let healthLogCounter = 0;
+  const HEALTH_LOG_INTERVAL = 60; // cada ~60 checks (~10min)
 
-  function tick() { lastTick = Date.now(); }
+  function tick() { lastTick = Date.now(); stuckWarningSent = false; }
 
   function start() {
     if (enabled) return;
     enabled = true;
     watchInterval = setInterval(check, CHECK_INTERVAL);
     if (watchInterval.unref) watchInterval.unref();
-    log.gray("Watchdog started (every " + (CHECK_INTERVAL / 1000) + "s)");
   }
 
   function stop() {
@@ -31,28 +33,36 @@ export function createWatchdog(engine, opts) {
     const now = Date.now();
     const elapsed = now - lastTick;
 
-    // Check if main loop is stuck
+    // Solo mostrar stuck si no lo hemos mostrado ya
     if (elapsed > STUCK_THRESHOLD) {
-      log.error("Watchdog: engine appears stuck (" + Math.round(elapsed / 1000) + "s since last tick)", null);
-      engine.getHealth().recordError(new Error("engine_stuck"));
+      if (!stuckWarningSent) {
+        stuckWarningSent = true;
+        log.warn("Watchdog: sin actividad del socket (" + Math.round(elapsed / 1000) + "s)");
+      }
+    } else {
+      stuckWarningSent = false;
     }
 
-    // Check ban risk
-    const risk = engine.getHealth().getRiskScore();
-    if (risk >= 80) {
-      log.warn("Watchdog: ban risk critical (" + risk + "%) - auto-pausing sends");
-      engine.getSendQueue().pause();
-    } else if (risk < 50 && engine.getSendQueue().isPaused()) {
-      log.success("Watchdog: ban risk recovered (" + risk + "%) - resuming sends");
-      engine.getSendQueue().resume();
-    }
+    // Ban risk cada 10 checks aprox
+    healthLogCounter++;
+    if (healthLogCounter % 10 === 0) {
+      const risk = engine.getHealth().getRiskScore();
+      if (risk >= 80) {
+        log.warn("Watchdog: ban risk critical (" + risk + "%) - auto-pausing sends");
+        engine.getSendQueue().pause();
+      } else if (risk < 50 && engine.getSendQueue().isPaused()) {
+        log.success("Watchdog: ban risk recovered (" + risk + "%) - resuming sends");
+        engine.getSendQueue().resume();
+      }
 
-    // Log health status periodically
-    if (Math.random() < 0.1) {
-      const health = engine.getHealth().getStatus();
-      log.gray("Health: risk=" + health.score + "% level=" + health.level +
-        " queue=" + engine.getSendQueue().length() +
-        " uptime=" + Math.round(engine.getUptime() / 60000) + "m");
+      // Log health solo cada 60 ciclos
+      if (healthLogCounter >= HEALTH_LOG_INTERVAL) {
+        healthLogCounter = 0;
+        const health = engine.getHealth().getStatus();
+        log.gray("Health: risk=" + health.score + "% level=" + health.level +
+          " queue=" + engine.getSendQueue().length() +
+          " uptime=" + Math.round(engine.getUptime() / 60000) + "m");
+      }
     }
   }
 

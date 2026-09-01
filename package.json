@@ -32,7 +32,8 @@
     "#cooldown": "./src/commands/middleware/cooldown.js",
     "#permissions": "./src/commands/middleware/permissions.js",
     "#fastsaver": "./src/services/fastsaver.js",
-    "#economy": "./src/services/economy.js"
+    "#economy": "./src/services/economy.js",
+    "#games/engine": "./src/games/engine.js"
   },
   "engines": {
     "node": ">=24.0.0",
