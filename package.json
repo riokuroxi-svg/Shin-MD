@@ -30,13 +30,15 @@
     "#interactive": "./src/commands/interactive.js",
     "#downloader": "./src/services/downloader.js",
     "#cooldown": "./src/commands/middleware/cooldown.js",
-    "#permissions": "./src/commands/middleware/permissions.js"
+    "#permissions": "./src/commands/middleware/permissions.js",
+    "#fastsaver": "./src/services/fastsaver.js"
   },
   "engines": {
     "node": ">=24.0.0",
     "npm": ">=10.0.0"
   },
   "dependencies": {
+    "@vitalets/google-translate-api": "^9.2.1",
     "baileys": "npm:@whiskeysockets/baileys@6.7.24",
     "cfonts": "^3.3.1",
     "chalk": "4.1.2",
@@ -51,6 +53,7 @@
     "qrcode": "1.5.4",
     "qrcode-terminal": "0.12.0",
     "sharp": "^0.35.4",
+    "ws": "^8.21.3",
     "ytdl-core": "^4.11.5",
     "ytsr": "^3.8.4"
   },
