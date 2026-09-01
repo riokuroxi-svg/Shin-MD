@@ -9,6 +9,7 @@ export function createEngine() {
   let state = LIFECYCLE.BOOT;
   let sock = null;
   let bootTime = Date.now();
+  let ownerJid = null;
   const health = createHealthMonitor();
   const throttler = createThrottler();
   const sendQueue = createSendQueue(throttler, health);
@@ -18,6 +19,8 @@ export function createEngine() {
   function getStateName() { return Object.keys(LIFECYCLE).find(k => LIFECYCLE[k] === state) || "UNKNOWN"; }
   function getSock() { return sock; }
   function setSock(s) { sock = s; }
+  function setOwnerJid(j) { ownerJid = j; }
+  function getOwnerJid() { return ownerJid; }
   function getHealth() { return health; }
   function getThrottler() { return throttler; }
   function getSendQueue() { return sendQueue; }
@@ -67,6 +70,7 @@ export function createEngine() {
 
   return {
     getState, getStateName, getSock, setSock,
+    setOwnerJid, getOwnerJid,
     getHealth, getThrottler, getSendQueue, getUptime,
     transit, emit, on, once, shutdown, LIFECYCLE,
     bootTime,

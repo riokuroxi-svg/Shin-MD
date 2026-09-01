@@ -78,4 +78,9 @@ export class TtlCache {
 const globalCache = new TtlCache();
 globalCache.startAutoGc();
 
+/** Devuelve una caché nueva (o la global) según uso */
+export function getCache(defaultTtlMs) {
+  return new TtlCache(defaultTtlMs || 300_000);
+}
+
 export default globalCache;
