@@ -1,3 +1,9 @@
+// ═══════════════════════════════════════════════════════════════════
+//  watchdog.js — Watchdog minimalista (SIN SPAM de consola)
+//  Solo monitorea internamente, nunca imprime nada a menos que
+//  sea una advertencia crítica real (ban risk > 80%).
+// ═══════════════════════════════════════════════════════════════════
+
 import log from "#logger";
 
 export function createWatchdog(engine, opts) {
@@ -8,11 +14,9 @@ export function createWatchdog(engine, opts) {
   let lastTick = Date.now();
   let watchInterval = null;
   let enabled = false;
-  let stuckWarningSent = false;
-  let healthLogCounter = 0;
-  const HEALTH_LOG_INTERVAL = 60; // cada ~60 checks (~10min)
+  let stuckWarningPrinted = false;
 
-  function tick() { lastTick = Date.now(); stuckWarningSent = false; }
+  function tick() { lastTick = Date.now(); stuckWarningPrinted = false; }
 
   function start() {
     if (enabled) return;
@@ -33,37 +37,28 @@ export function createWatchdog(engine, opts) {
     const now = Date.now();
     const elapsed = now - lastTick;
 
-    // Solo mostrar stuck si no lo hemos mostrado ya
+    // ─── Si el socket está colgado, mostrar UNA advertencia ───
     if (elapsed > STUCK_THRESHOLD) {
-      if (!stuckWarningSent) {
-        stuckWarningSent = true;
-        log.warn("Watchdog: sin actividad del socket (" + Math.round(elapsed / 1000) + "s)");
+      if (!stuckWarningPrinted) {
+        stuckWarningPrinted = true;
+        log.warn("Sin actividad del socket (" + Math.round(elapsed / 1000) + "s)");
+        // ^ NUNCA se repite este mensaje hasta que el engine haga tick()
       }
     } else {
-      stuckWarningSent = false;
+      stuckWarningPrinted = false;
     }
 
-    // Ban risk cada 10 checks aprox
-    healthLogCounter++;
-    if (healthLogCounter % 10 === 0) {
+    // ─── Ban risk: solo actuar, NUNCA imprimir health de rutina ───
+    try {
       const risk = engine.getHealth().getRiskScore();
       if (risk >= 80) {
-        log.warn("Watchdog: ban risk critical (" + risk + "%) - auto-pausing sends");
+        log.warn("Ban risk alto (" + risk + "%) — pausando envíos");
         engine.getSendQueue().pause();
       } else if (risk < 50 && engine.getSendQueue().isPaused()) {
-        log.success("Watchdog: ban risk recovered (" + risk + "%) - resuming sends");
+        log.success("Ban risk recuperado (" + risk + "%) — reanudando envíos");
         engine.getSendQueue().resume();
       }
-
-      // Log health solo cada 60 ciclos
-      if (healthLogCounter >= HEALTH_LOG_INTERVAL) {
-        healthLogCounter = 0;
-        const health = engine.getHealth().getStatus();
-        log.gray("Health: risk=" + health.score + "% level=" + health.level +
-          " queue=" + engine.getSendQueue().length() +
-          " uptime=" + Math.round(engine.getUptime() / 60000) + "m");
-      }
-    }
+    } catch {}
   }
 
   return { start, stop, tick };
