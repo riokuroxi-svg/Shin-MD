@@ -16,7 +16,8 @@
     "#router/*": "./src/router/*.js",
     "#system/*": "./src/system/*.js",
     "#events": "./src/events.js",
-    "#serialize": "./src/serialize.js"
+    "#serialize": "./src/serialize.js",
+    "#db": "./src/system/database.js"
   },
   "engines": {
     "node": ">=20.0.0",

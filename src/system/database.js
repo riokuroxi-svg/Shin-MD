@@ -230,3 +230,171 @@ export function setChatUser(chatId, userId, field, val) {
   memCache.delete(ck("chatuser", `${chatId}:${userId}`));
   return stmt(`UPDATE chat_users SET ${field} = ? WHERE chat_id = ? AND user_id = ?`).run(toStore(val), chatId, userId);
 }
+
+// ── Settings ──────────────────────────────────────────────────────
+export function getSettings(id) {
+  if (!id) {
+    return stmt("SELECT * FROM settings").all().map(row => {
+      row.prefix = parseJSON(row.prefix, []);
+      return row;
+    });
+  }
+  const key = ck("set", id);
+  const cached = memCache.get(key);
+  if (cached !== undefined) return cached;
+
+  let row = stmt("SELECT * FROM settings WHERE id = ?").get(id);
+  if (!row) {
+    stmt(`INSERT OR IGNORE INTO settings (id, self, prefix, commandsejecut, newsletter_id, nameid, type, link, banner, icon, currency, namebot, botname, owner) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(id, defSets.self, defSets.prefix, defSets.commandsejecut, defSets.newsletter_id, defSets.nameid, defSets.type, defSets.link, defSets.banner, defSets.icon, defSets.currency, defSets.namebot, defSets.botname, defSets.owner);
+    row = stmt("SELECT * FROM settings WHERE id = ?").get(id);
+  }
+  if (row.prefix != null) {
+    try { row.prefix = JSON.parse(row.prefix); } catch { row.prefix = row.prefix === "true" || row.prefix === "1" ? true : []; }
+  }
+  memCache.set(key, row, 300000);
+  return row;
+}
+
+export function setSettings(id, field, val) {
+  if (!stmt("SELECT id FROM settings WHERE id = ?").get(id)) return;
+  memCache.delete(ck("set", id));
+  let stored = val;
+  if (val === true) stored = "1";
+  else if (Array.isArray(val) || typeof val === "object") stored = JSON.stringify(val);
+  return stmt(`UPDATE settings SET ${field} = ? WHERE id = ?`).run(stored, id);
+}
+
+// ── Characters ────────────────────────────────────────────────────
+export function getCharacter(id) {
+  const key = ck("char", id || "all");
+  const cached = memCache.get(key);
+  if (cached !== undefined) return cached;
+  if (!id) {
+    const rows = stmt("SELECT id, data FROM characters").all();
+    const chars = {};
+    for (const r of rows) chars[r.id] = parseJSON(r.data, r.data);
+    memCache.set(key, chars, 600000);
+    return chars;
+  }
+  const row = stmt("SELECT data FROM characters WHERE id = ?").get(id);
+  if (!row) return null;
+  const data = parseJSON(row.data, row.data);
+  memCache.set(key, data, 600000);
+  return data;
+}
+
+export function setCharacter(id, data) {
+  memCache.delete(ck("char", id));
+  stmt("REPLACE INTO characters (id, data) VALUES (?, ?)").run(id, toStore(data));
+  return true;
+}
+
+// ── Sticker Packs ─────────────────────────────────────────────────
+export function getStickersPack(id) {
+  if (!id) return stmt("SELECT * FROM sticker_packs").all();
+  const key = ck("stickerpack", id);
+  const cached = memCache.get(key);
+  if (cached !== undefined) return cached;
+  let sp = stmt("SELECT * FROM sticker_packs WHERE id = ?").get(id);
+  if (!sp) {
+    stmt("INSERT OR IGNORE INTO sticker_packs (id, packs) VALUES (?, ?)").run(id, defStickerPack.packs);
+    sp = stmt("SELECT * FROM sticker_packs WHERE id = ?").get(id);
+  }
+  sp.packs = parseJSON(sp.packs, []);
+  memCache.set(key, sp, 600000);
+  return sp;
+}
+
+export function setStickersPack(id, field, val) {
+  if (!stmt("SELECT id FROM sticker_packs WHERE id = ?").get(id)) return;
+  memCache.delete(ck("stickerpack", id));
+  return stmt(`UPDATE sticker_packs SET ${field} = ? WHERE id = ?`).run(toStore(val), id);
+}
+
+// ── Delete ────────────────────────────────────────────────────────
+export function deletedb(type, ...ids) {
+  if (!type || !ids || ids.length === 0) return false;
+  switch (type) {
+    case "user": memCache.delete(ck("user", ids[0])); return stmt("DELETE FROM users WHERE id = ?").run(ids[0]).changes > 0;
+    case "chat": memCache.delete(ck("chat", ids[0])); return stmt("DELETE FROM chats WHERE id = ?").run(ids[0]).changes > 0;
+    case "chatuser":
+      if (ids.length < 2) return false;
+      memCache.delete(ck("chatuser", ids[0] + ":" + ids[1]));
+      return stmt("DELETE FROM chat_users WHERE chat_id = ? AND user_id = ?").run(ids[0], ids[1]).changes > 0;
+    case "settings": memCache.delete(ck("set", ids[0])); return stmt("DELETE FROM settings WHERE id = ?").run(ids[0]).changes > 0;
+    case "character": memCache.delete(ck("char", ids[0])); return stmt("DELETE FROM characters WHERE id = ?").run(ids[0]).changes > 0;
+    case "stickerpack": memCache.delete(ck("stickerpack", ids[0])); return stmt("DELETE FROM sticker_packs WHERE id = ?").run(ids[0]).changes > 0;
+    default: return false;
+  }
+}
+
+// ── Cache helpers ─────────────────────────────────────────────────
+export function clearCache(type, id) {
+  if (!type && !id) { memCache.clear(); return true; }
+  if (id) memCache.delete(ck(type, id));
+  else memCache.deletePrefix(type + ":");
+}
+
+export function clearDB() {
+  if (global.__dbCleanupStarted) return;
+  global.__dbCleanupStarted = true;
+  const INACTIVE_MS = 20 * 86400000;
+  setInterval(() => {
+    const now = Date.now();
+    for (const cu of stmt("SELECT chat_id, user_id, usedTime, lastCmd FROM chat_users").all()) {
+      const last = cu.lastCmd > 0 ? cu.lastCmd : (cu.usedTime ? new Date(JSON.parse(cu.usedTime)).getTime() : 0);
+      if (last === 0 || now - last > INACTIVE_MS) {
+        stmt("DELETE FROM chat_users WHERE chat_id = ? AND user_id = ?").run(cu.chat_id, cu.user_id);
+        memCache.delete(ck("chatuser", cu.chat_id + ":" + cu.user_id));
+      }
+    }
+    for (const u of stmt("SELECT id FROM users WHERE exp = 0 AND id NOT IN (SELECT user_id FROM chat_users)").all()) {
+      stmt("DELETE FROM users WHERE id = ?").run(u.id);
+      memCache.delete(ck("user", u.id));
+    }
+  }, 86400000);
+}
+
+export function setCreate(table, identifier, field, value) {
+  // Simplified - creates column if not exists
+  const colExists = (tbl, col) => {
+    try { return stmt(`PRAGMA table_info(${tbl})`).all().some(c => c.name === col); } catch { return false; }
+  };
+  if (!colExists(table, field)) {
+    const sqlType = typeof value === "number" ? "INTEGER" : typeof value === "boolean" ? "BOOLEAN" : "TEXT";
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${field} ${sqlType} DEFAULT ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+// ── Auto-migración de columnas faltantes ──────────────────────────
+try {
+  const tables = [
+    { name: "users", def: defUser, exclude: ["id"] },
+    { name: "chats", def: defChat, exclude: ["id"] },
+    { name: "chat_users", def: defChatUser, exclude: ["chat_id", "user_id"] },
+    { name: "settings", def: defSets, exclude: ["id"] },
+    { name: "sticker_packs", def: defStickerPack, exclude: ["id"] },
+  ];
+  for (const table of tables) {
+    if (!stmt(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table.name)) continue;
+    const existingCols = stmt(`PRAGMA table_info(${table.name})`).all().map(c => c.name);
+    const missing = Object.keys(table.def).filter(col => !existingCols.includes(col) && !table.exclude.includes(col));
+    for (const col of missing) {
+      const def = table.def[col];
+      const sqlType = typeof def === "number" ? "INTEGER" : typeof def === "boolean" ? "BOOLEAN" : "TEXT";
+      const defaultStr = def === null ? "NULL" : JSON.stringify(def);
+      db.exec(`ALTER TABLE ${table.name} ADD COLUMN ${col} ${sqlType} DEFAULT ${defaultStr}`);
+    }
+  }
+} catch (e) {
+  console.error("[DB migration error]", e);
+}
+
+// Re-export default
+export default {
+  initDB, getUser, setUser, getChat, setChat, getChatUser, setChatUser,
+  getSettings, setSettings, getCharacter, setCharacter,
+  getStickersPack, setStickersPack, deletedb, setCreate, clearCache, clearDB, db
+};
