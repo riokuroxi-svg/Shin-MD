@@ -9,8 +9,52 @@
 // no lo renderiza, hace fallback a texto plano (nunca rompe).
 
 import { sendInteractive, quickReply } from "#interactive";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const BANNER_URL = process.env.MENU_IMAGE || ""; // opcional, URL de imagen
+
+// ─── Versión + aviso de desactualización ────────────────────────
+// Aviso transparente (no manda datos): solo compara la versión local
+// con la del repo oficial y, si hay una más nueva, la muestra en el
+// menú. Si no hay red, no pasa nada (el menú sale igual).
+let __localVersion = null;
+function localVersion() {
+  if (__localVersion) return __localVersion;
+  try {
+    const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
+    __localVersion = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version || "0.0.0";
+  } catch { __localVersion = "0.0.0"; }
+  return __localVersion;
+}
+
+function versionIsNewer(a, b) {
+  const pa = String(a).split(".").map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  }
+  return false;
+}
+
+async function checkForUpdate() {
+  try {
+    const local = localVersion();
+    const res = await fetch(
+      "https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/package.json",
+      { signal: AbortSignal.timeout(2500) }
+    );
+    const remote = await res.json();
+    if (remote && remote.version && versionIsNewer(remote.version, local)) {
+      return (
+        "⚠️ Desactualizado: v" + local + " → v" + remote.version +
+        "\n📥 Oficial: github.com/riokuroxi-svg/Shin-MD"
+      );
+    }
+  } catch { /* sin red: el menú se muestra igual */ }
+  return "";
+}
 
 const catLabel = {
   info: "✦ *INFORMACIÓN*",
@@ -73,7 +117,11 @@ export default {
         if (c.description) subBody += "│  ⤷ " + c.description + "\n";
         if (c.usage) subBody += "│  ▸ Uso: `" + c.usage + "`\n";
       }
-      subBody += "\n╰────「 反魂 」────";
+      subBody +=
+        "\n╭───────────────────\n" +
+        "│  _Basado en Shin-MD por riokuroxi-svg_\n" +
+        "│  _github.com/riokuroxi-svg/Shin-MD · AGPL-3.0_\n" +
+        "╰────「 反魂 」────";
       return subBody;
     }
 
@@ -102,6 +150,16 @@ export default {
     const riskEmoji = risk >= 80 ? "🔴" : risk >= 50 ? "🟠" : risk >= 20 ? "🟡" : "🟢";
     const total = seenNames.size;
 
+    // Aviso de desactualización (transparente, nunca bloquea) + crédito
+    // fijo requerido por AGPL §7 / NOTICE.
+    const upd = await checkForUpdate();
+    let footer =
+      "╭───────────────────\n" +
+      "│  Escribe `menu <categoría>` para detalle\n" +
+      "│  _Basado en Shin-MD por riokuroxi-svg_\n" +
+      "│  _github.com/riokuroxi-svg/Shin-MD · AGPL-3.0_\n";
+    if (upd) footer = "╭───────────────────\n" + upd.replace(/\n/g, "\n│  ") + "\n" + footer;
+
     const text = "╭───「 ✨ *SHIN-MD* 」───\n" +
       "│  反魂 · Bot WhatsApp superior\n" +
       "│  🏷️ *" + engine.getStateName() + "* · " + timeStr + " de actividad\n" +
@@ -109,9 +167,7 @@ export default {
       "│  👤 " + total + " comandos · prefijo `.`\n" +
       "╰───────────────────\n" +
       body +
-      "\n╭───────────────────\n" +
-      "│  Escribe `menu <categoría>` para detalle\n" +
-      "│  _Hecho desde cero · AGPL-3.0_\n" +
+      "\n" + footer +
       "╰────「 反魂 」────";
 
     // Botones por categoría

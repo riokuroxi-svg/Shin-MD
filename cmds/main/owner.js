@@ -4,30 +4,43 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-// Owner — muestra contacto del dueño
+// Owner — tarjeta del owner + crédito fijo requerido por AGPL §7.
+// El texto "Basado en Shin-MD por riokuroxi-svg" es obligatorio en
+// este comando (ver NOTICE): cada bot, incluso clonado, lo muestra.
 
 export default {
   name: "owner",
-  aliases: ["creator", "creador", "dueño", "dev"],
+  aliases: ["creator", "creador", "padre"],
   category: "info",
-  description: "Contacto del dueño del bot",
+  description: "Muestra al owner del bot",
   usage: ".owner",
-  cooldown: 10,
+  cooldown: 5,
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,
 
   async handler(sock, ctx, engine) {
     const ownerJid = engine.getOwnerJid() || "";
-    const num = ownerJid.split("@")[0] || "";
-    const name = process.env.OWNER_NAME || "反魂";
+    // "521234567890:12@s.whatsapp.net" → "+521234567890"
+    let ownerNum = "";
+    if (ownerJid) {
+      const digits = String(ownerJid).split("@")[0].split(":")[0].replace(/\D/g, "");
+      ownerNum = digits ? "+" + digits : "";
+    }
+    const ownerName =
+      (ctx.senderId && ctx.isOwner && ctx.full?.pushName) ? ctx.full.pushName
+        : (engine.getOwnerName ? engine.getOwnerName() : "El Owner");
 
-    return "👑 *Owner* · 反魂 Shin-MD\n" +
-      "╭───────────────────\n" +
-      "│  🧑‍💻 *Nombre:* " + name + "\n" +
-      "│  📱 *Número:* +" + num + "\n" +
-      "│  🏷️ *Bot:* Shin-MD (AGPL-3.0)\n" +
-      "╰────「 反魂 」────\n\n" +
-      "_Bot construido desde cero, anti-ban nativo._";
+    return (
+      "╭───「 👑 *OWNER* 」───\n" +
+      "│  ⚔️ " + ownerName + "\n" +
+      (ownerNum ? "│  📱 " + ownerNum + "\n" : "") +
+      "│  ───────────────────\n" +
+      "│  *Basado en Shin-MD* por\n" +
+      "│  *riokuroxi-svg*\n" +
+      "│  📥 github.com/riokuroxi-svg/Shin-MD\n" +
+      "│  📜 AGPL-3.0-only · ver .terminos\n" +
+      "╰────「 反魂 」────"
+    );
   },
 };
