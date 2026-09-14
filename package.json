@@ -8,7 +8,8 @@
     "start": "node index.js",
     "start:code": "node index.js --code",
     "start:qr": "node index.js --qr",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "postinstall": "node scripts/patch-baileys-pairing.cjs"
   },
   "imports": {
     "#engine": "./src/core/engine.js",

@@ -25,6 +25,7 @@ import { getDatabase } from "#db";
 import { createRouter } from "#router";
 import log from "#logger";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 // ─── Check legal AGPL (Sección 7) ───────────────────────────────
 // LICENSE y NOTICE son parte de la licencia. Si esta copia no los
@@ -47,6 +48,24 @@ import { fileURLToPath } from "node:url";
   let __ver = "dev";
   try { __ver = JSON.parse(fs.readFileSync(path.join(__root, "package.json"), "utf8")).version || __ver; } catch {}
   console.log(chalk.magenta("Shin-MD v" + __ver + " - Powered by riokuroxi-svg"));
+}
+
+// Red de seguridad de vinculación (companion_reg_refresh):
+// el npm install aplica el parche a Baileys (postinstall), pero si el
+// update se hizo solo con "git pull", node_modules queda viejo. El script
+// es idempotente (solo parchea lo que falta y se auto-verifica), así que
+// siempre nos deja en estado conocido. Si falla NO bloqueamos el arranque:
+// las sesiones existentes siguen funcionando; solo la vinculación nueva se
+// ve afectada y el aviso manda a ejecutar "npm install".
+{
+  const __patchScript = path.resolve(__dirname, "..", "scripts", "patch-baileys-pairing.cjs");
+  const __baileysSocket = path.resolve(__dirname, "..", "node_modules", "baileys", "lib", "Socket", "socket.js");
+  if (fs.existsSync(__patchScript) && fs.existsSync(__baileysSocket)) {
+    const r = spawnSync(process.execPath, [__patchScript], { stdio: "inherit" });
+    if (r.status !== 0) {
+      console.log(chalk.red("[ ✗ ]  AVISO: no se pudo aplicar el parche de vinculación. Si no puedes vincular un dispositivo nuevo, ejecuta \"npm install\"."));
+    }
+  }
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
