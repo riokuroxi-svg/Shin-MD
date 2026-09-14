@@ -80,7 +80,8 @@ export function connectSocket(engine, opts) {
 
     let ver;
     try { const v = await fetchLatestBaileysVersion(); ver = v.version; }
-    catch { ver = [2, 3000, 1033105955]; }
+    // Fallback verificado en vivo (2026-09): 1044802095 conecta y da QR.
+    catch { ver = [2, 3000, 1044802095]; }
 
     let saveTimer;
     const saveCreds = () => { clearTimeout(saveTimer); saveTimer = setTimeout(sc, 2000); };
@@ -91,7 +92,7 @@ export function connectSocket(engine, opts) {
     const s = makeWASocket({
       version: ver,
       logger: pino({ level: "silent" }),
-      browser: Browsers.macOS("Chrome"),
+      browser: Browsers.ubuntu("Chrome"),
       printQRInTerminal: false,
       auth: {
         creds: state.creds,
@@ -121,10 +122,24 @@ export function connectSocket(engine, opts) {
     s.ev.on("creds.update", saveCreds);
     s.sendText = (j, t, q, o) => s.sendMessage(j, { text: t, ...o }, { quoted: q });
 
-    // Fix "Waiting for message"
+    // ═══ Punto único de envío (anti-ban) ═══════════════════════════
+    // TODO lo que sale por esta conexión (comandos Ginko, msg.reply,
+    // router, envíos internos) pasa por la cola serial del engine con
+    // shinJitter + warm-up: se envía la función RAW de Baileys
+    // (origSM) a la cola, NO este wrapper, para evitar recursión
+    // (la cola processa una tarea a la vez; encolar desde dentro
+    // deadlockearía). El router ya no encola explícitamente:
+    // sock.sendMessage lo hace solo.
+    // (También conserva el fix "Waiting for message" del msgStore.)
     const origSM = s.sendMessage.bind(s);
+    const sendQueue = engine.getSendQueue();
     s.sendMessage = async (j, c, o) => {
-      const r = await origSM(j, c, o);
+      const qo = {
+        messageLength: c?.text?.length || 0,
+        isPriority: !!(o && o._priority),
+      };
+      if (o) { delete o._priority; } // no fugarse a Baileys
+      const r = await sendQueue.enqueue(() => origSM(j, c, o), qo);
       try {
         if (r?.key?.id) {
           const st = { key: r.key, message: c };
@@ -134,6 +149,16 @@ export function connectSocket(engine, opts) {
         }
       } catch {}
       return r;
+    };
+
+    // relayMessage (tarjetas interactivas: menú con botones, templates)
+    // TAMBIÉN por la cola; sin esto los interactivos se saltarían el
+    // anti-ban. Seguro: el sendMessage interno de Baileys usa su propia
+    // closure relayMessage, no esta propiedad, así no hay recursión.
+    const origRelay = s.relayMessage.bind(s);
+    s.relayMessage = async (j, m, o) => {
+      const text = m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || "";
+      return sendQueue.enqueue(() => origRelay(j, m, o), { messageLength: String(text).length });
     };
 
     s.decodeJid = (jid) => {
