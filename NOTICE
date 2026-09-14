@@ -1,0 +1,37 @@
+Shin-MD
+Copyright (C) 2026 riokuroxi-svg
+https://github.com/riokuroxi-svg/Shin-MD
+
+Shin-MD es una marca de riokuroxi-svg.
+
+Este proyecto está licenciado bajo AGPL-3.0-only (ver archivo LICENSE).
+Se aplican términos adicionales permitidos por la Sección 7 de AGPL-3.0:
+
+1. Atribución obligatoria
+   Las obras derivadas (forks, clones, zips redistribuidos, bots
+   renombrados) deben preservar:
+     - Este archivo NOTICE
+     - El archivo LICENSE
+     - El header SPDX de cada archivo
+   y deben mostrar de forma visible y permanente en el comando #menu
+   y en el comando #owner el texto:
+     "Basado en Shin-MD por riokuroxi-svg - github.com/riokuroxi-svg/Shin-MD"
+
+2. Marca
+   "Shin-MD" es una marca de riokuroxi-svg. No se debe usar el nombre
+   Shin-MD, 反魂, ni variantes para promocionar obras derivadas, clones
+   o proyectos distintos de este.
+
+3. Fingerprint (marcador de obras derivadas)
+   El motor de Shin-MD incluye una combinación de parámetros única y
+   documentada:
+     - shinJitter(): jitter Gaussiano (Box-Muller, desviación 0.25)
+     - retardo base 1200 ms (rango 400–5000 ms, +25 ms por carácter)
+     - penalización x1.5 para contactos nuevos
+     - warm-up de 7 días: 20 → 500 mensajes/día
+     - cola serial de envío con reintentos (createSendQueue)
+   Un proyecto que contenga esta combinación de parámetros es una obra
+   derivada de Shin-MD y está sujeto a todos los términos de este
+   archivo, la licencia AGPL-3.0-only y el copyright de arriba.
+
+SPDX-License-Identifier: AGPL-3.0-only

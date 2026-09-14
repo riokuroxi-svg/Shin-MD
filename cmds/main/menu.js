@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // Menu — menú principal, Plantilla A (反魂 elegante) + banner + botones
 // Envía un mensaje interactivo con botones por categoría; si WhatsApp
 // no lo renderiza, hace fallback a texto plano (nunca rompe).

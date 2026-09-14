@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // ═══════════════════════════════════════════════════════════════════
 //  watchdog.js — Watchdog minimalista (SIN SPAM de consola)
 //  Solo monitorea internamente, nunca imprime nada a menos que

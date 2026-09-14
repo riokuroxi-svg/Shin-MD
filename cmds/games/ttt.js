@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // Tic-Tac-Toe con botones interactivos
 // El tablero se pinta con botones: tocas una celda y el bot actualiza el juego.
 // Cómo funciona: el botón manda "ttt a1" → el router lo reinyecta como comando.

@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // ═══════════════════════════════════════════════════════════════════
 //  boot/index.js — Punto de arranque estilo Ginko-MD
 //  Uso: node index.js [--qr | --code | --menu]
@@ -18,6 +24,30 @@ import { createWebServer } from "#server";
 import { getDatabase } from "#db";
 import { createRouter } from "#router";
 import log from "#logger";
+import { fileURLToPath } from "node:url";
+
+// ─── Check legal AGPL (Sección 7) ───────────────────────────────
+// LICENSE y NOTICE son parte de la licencia. Si esta copia no los
+// incluye, es incompleta o modificada sin respetar AGPL: no arranca.
+// (Lo que cualquier proyecto AGPL serio exige — no es un virus.)
+{
+  const __root = path.dirname(fileURLToPath(import.meta.url)) + "/..";
+  const __required = [
+    { file: "LICENSE", desc: "licencia AGPL-3.0-only" },
+    { file: "NOTICE", desc: "atribución y marca Shin-MD" },
+  ];
+  for (const r of __required) {
+    if (!fs.existsSync(path.join(__root, r.file))) {
+      console.error(chalk.red("[Shin-MD] ERROR AGPL: falta el archivo " + r.file + " (" + r.desc + ")."));
+      console.error(chalk.red("[Shin-MD] Esta copia no respeta la licencia; el bot no arrancará."));
+      console.error(chalk.yellow("[Shin-MD] Descarga oficial: https://github.com/riokuroxi-svg/Shin-MD"));
+      process.exit(1);
+    }
+  }
+  let __ver = "dev";
+  try { __ver = JSON.parse(fs.readFileSync(path.join(__root, "package.json"), "utf8")).version || __ver; } catch {}
+  console.log(chalk.magenta("Shin-MD v" + __ver + " - Powered by riokuroxi-svg"));
+}
 
 // ─── Helpers ────────────────────────────────────────────────────
 function normalizePhone(input) {

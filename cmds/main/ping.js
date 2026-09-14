@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // Ping — latencia de procesamiento + estado del motor (estilo nuevo).
 // Devuelve UN solo texto: el router lo envía por la cola anti-ban.
 // No usa sock.sendMessage directamente (evita saltarse el throttler/queue).

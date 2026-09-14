@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // FastSaver API — descarga unificada de redes sociales
 // Configurable via .env: FASTSAVER_KEY (free tier: api.fastsaver.io)
 // Plataformas: instagram, twitter/x, pinterest, tiktok, facebook
