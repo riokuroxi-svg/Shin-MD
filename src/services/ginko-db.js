@@ -45,7 +45,15 @@ function r(sql, ...p) { return db().prepare(sql).run(...p); }
 
 const gdb = {
   getUser(id) {
-    if (!id) return null;
+    // Sin id = TODOS los usuarios (API de Ginko; la usan favboard,
+    // status, lboard, help, health...)
+    if (!id) {
+      return db().prepare('SELECT * FROM g_users').all().map(u => {
+        if (u.metadatos && typeof u.metadatos == 'string') { try { u.metadatos = JSON.parse(u.metadatos); } catch {} }
+        if (u.metadatos2 && typeof u.metadatos2 == 'string') { try { u.metadatos2 = JSON.parse(u.metadatos2); } catch {} }
+        return u;
+      });
+    }
     const key = ck('u', id); const ca = gC(key); if (ca !== undefined) return ca;
     let u = q('SELECT * FROM g_users WHERE id = ?', id);
     if (!u) { r('INSERT OR IGNORE INTO g_users (id) VALUES (?)', id); u = q('SELECT * FROM g_users WHERE id = ?', id); }
@@ -53,16 +61,23 @@ const gdb = {
     if (u && u.metadatos2 && typeof u.metadatos2 == 'string') try { u.metadatos2 = JSON.parse(u.metadatos2); } catch {}
     sC(key, u); return u;
   },
-  setUser(id, field, val) { dC(ck('u', id)); return r('UPDATE g_users SET ' + field + ' = ? WHERE id = ?', sv(val), id); },
+  setUser(id, field, val) { dC(ck('u', id)); r('INSERT OR IGNORE INTO g_users (id) VALUES (?)', id); return r('UPDATE g_users SET ' + field + ' = ? WHERE id = ?', sv(val), id); },
   getChat(id) {
-    if (!id) return null;
+    // Sin id = TODOS los chats (API de Ginko; la usan gachareserved,
+    // status, health...)
+    if (!id) {
+      return db().prepare('SELECT * FROM g_chats').all().map(c => {
+        if (c.rolls && typeof c.rolls == 'string') { try { c.rolls = pj(c.rolls, {}); } catch {} }
+        return c;
+      });
+    }
     const key = ck('c', id); const ca = gC(key); if (ca !== undefined) return ca;
     let c = q('SELECT * FROM g_chats WHERE id = ?', id);
     if (!c) { r('INSERT OR IGNORE INTO g_chats (id) VALUES (?)', id); c = q('SELECT * FROM g_chats WHERE id = ?', id); }
     if (c && c.rolls && typeof c.rolls == 'string') try { c.rolls = pj(c.rolls, {}); } catch {}
     sC(key, c); return c;
   },
-  setChat(id, field, val) { dC(ck('c', id)); return r('UPDATE g_chats SET ' + field + ' = ? WHERE id = ?', sv(val), id); },
+  setChat(id, field, val) { dC(ck('c', id)); r('INSERT OR IGNORE INTO g_chats (id) VALUES (?)', id); return r('UPDATE g_chats SET ' + field + ' = ? WHERE id = ?', sv(val), id); },
   getChatUser(chatId, userId) {
     if (!chatId || !userId) return null;
     const key = ck('cu', chatId + ':' + userId); const ca = gC(key); if (ca !== undefined) return ca;
@@ -72,9 +87,15 @@ const gdb = {
     if (cu && cu.stats && typeof cu.stats == 'string') try { cu.stats = pj(cu.stats, {}); } catch {}
     sC(key, cu); return cu;
   },
-  setChatUser(chatId, userId, field, val) { dC(ck('cu', chatId + ':' + userId)); return r('UPDATE g_chat_users SET ' + field + ' = ? WHERE chat_id = ? AND user_id = ?', sv(val), chatId, userId); },
+  setChatUser(chatId, userId, field, val) { dC(ck('cu', chatId + ':' + userId)); r('INSERT OR IGNORE INTO g_chat_users (chat_id, user_id) VALUES (?, ?)', chatId, userId); return r('UPDATE g_chat_users SET ' + field + ' = ? WHERE chat_id = ? AND user_id = ?', sv(val), chatId, userId); },
   getSettings(id) {
-    if (!id) return null;
+    // Sin id = TODAS las filas de settings (API de Ginko)
+    if (!id) {
+      return db().prepare('SELECT * FROM g_settings').all().map(s => {
+        if (s.prefix && typeof s.prefix == 'string') { try { s.prefix = pj(s.prefix, []); } catch {} }
+        return s;
+      });
+    }
     const key = ck('s', id); const ca = gC(key); if (ca !== undefined) return ca;
     let s = q('SELECT * FROM g_settings WHERE id = ?', id);
     if (!s) { r('INSERT OR IGNORE INTO g_settings (id) VALUES (?)', id); s = q('SELECT * FROM g_settings WHERE id = ?', id); }
@@ -83,6 +104,7 @@ const gdb = {
   },
   setSettings(id, field, val) {
     dC(ck('s', id));
+    r('INSERT OR IGNORE INTO g_settings (id) VALUES (?)', id);
     let st = val; if (val === true) st = '1'; else if (Array.isArray(val) || typeof val == 'object') st = JSON.stringify(val);
     return r('UPDATE g_settings SET ' + field + ' = ? WHERE id = ?', st, id);
   },
