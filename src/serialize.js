@@ -146,5 +146,32 @@ export async function getBuffer(url) {
 }
 export function getSelectedResponse() { return null; }
 
-export default { getText, isJidGroup, normalizeJid, serializeMessage, isAdmin, getReplyTarget,
-  getCachedMeta, setCachedMeta, deleteCachedMeta, resolveParticipantJid, resolveJidSync, BoundedMap, getBuffer };
+// Alias de compatibilidad: los comandos de Ginko importan `smsg`.
+export const smsg = serializeMessage;
+
+// ─── Ginko-compat: parchea sock.groupMetadata para consultar la caché ──
+// (adaptado de Ginko-MD/core/serialize.js — igual de espíritu)
+export function patchGroupMetadata(sock) {
+  const socks = Array.isArray(sock) ? sock : [sock];
+  for (const s of socks) {
+    if (!s || s.groupMetadataPatched || typeof s.groupMetadata !== "function") continue;
+    s.groupMetadataPatched = true;
+    const orig = s.groupMetadata.bind(s);
+    s.groupMetadata = async (jid) => {
+      try {
+        const cached = getCachedMeta(jid);
+        if (cached) return cached;
+        const meta = await orig(jid);
+        if (meta?.participants) setCachedMeta(jid, meta);
+        return meta;
+      } catch {
+        deleteCachedMeta(jid);
+        return null;
+      }
+    };
+  }
+}
+
+export default { getText, isJidGroup, normalizeJid, serializeMessage, smsg, patchGroupMetadata,
+  isAdmin, getReplyTarget, getCachedMeta, setCachedMeta, deleteCachedMeta,
+  resolveParticipantJid, resolveJidSync, BoundedMap, getBuffer };
