@@ -95,12 +95,11 @@ export function createRouter(engine, opts) {
       if (cooldown.check({ senderId: ctx.senderId, cmd })) return;
 
       // Permisos
+      // (sock.sendMessage ya encola en la cola anti-ban del socket;
+      // encolarlo otra vez aquí deadlockearía la cola serial)
       const denied = await checkPermissions(sock, ctx, cmd, engine);
       if (denied) {
-        await engine.getSendQueue().enqueue(
-          () => sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg }),
-          { messageLength: denied.length }
-        );
+        await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
         return;
       }
 
@@ -116,20 +115,16 @@ export function createRouter(engine, opts) {
         log.gray("Comando " + cmd.name + " tardó " + ms + "ms");
       }
 
-      // Si el handler devolvió texto, enviarlo (conveniencia)
+      // Si el handler devolvió texto, enviarlo (conveniencia).
+      // La cola se aplica dentro de sock.sendMessage (punto único).
       if (typeof result === "string" && result.length > 0) {
-        await engine.getSendQueue().enqueue(
-          () => sock.sendMessage(ctx.chatId, { text: result }, { quoted: msg }),
-          { messageLength: result.length }
-        );
+        await sock.sendMessage(ctx.chatId, { text: result }, { quoted: msg });
       }
     } catch (err) {
       log.error("Router: " + (err.message || err), err);
       try {
-        await engine.getSendQueue().enqueue(
-          () => sock.sendMessage(msg.key.remoteJid, { text: "⚠️ Error interno al procesar el comando." }),
-          { messageLength: 40, isPriority: true }
-        );
+        // _priority: la cola lo envía antes que el tráfico normal
+        await sock.sendMessage(msg.key.remoteJid, { text: "⚠️ Error interno al procesar el comando." }, { _priority: true });
       } catch {}
     }
   }
