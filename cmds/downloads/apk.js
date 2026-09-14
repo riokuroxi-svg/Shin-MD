@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 import { getBuffer } from "#serialize"
 // aptoide-scraper se importa de forma PESA dentro del handler: al cargarlo
 // crea un setInterval interno que impediría la salida limpia del proceso

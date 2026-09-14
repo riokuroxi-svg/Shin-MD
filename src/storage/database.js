@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // ═══════════════════════════════════════════════════════════════════
 //  database.js — Capa SQLite con migraciones versionadas
 //  Usa node:sqlite (Node >= 22.5.0). Singleton con export por defecto.

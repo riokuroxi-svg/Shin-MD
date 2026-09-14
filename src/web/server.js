@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // ═══════════════════════════════════════════════════════════════════
 //  server.js — Panel HTTP local: health, metrics, uptime
 //  Solamente escucha en 127.0.0.1 salvo que se configure LOOPBACK=0

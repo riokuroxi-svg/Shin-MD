@@ -1,4 +1,10 @@
 /**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+/**
  * .recordar <minutos>|<mensaje>  →  programa un recordatorio en el mismo chat.
  *
  * Los temporizadores se guardan en memoria global para que no se pierdan

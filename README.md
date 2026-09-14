@@ -173,11 +173,11 @@ Shin-MD/
 │   │   ├── engine.js     ← Ciclo de vida + eventos + cola
 │   │   ├── socket.js     ← Conexión Baileys (reconexión, backoff)
 │   │   ├── auth.js       ← Auth state en SQLite (creds + keys)
-│   │   └── metaCache.js  ← Caché de metadatos de grupos
-│   ├── network/          ← Capa anti-ban
-│   │   ├── throttler.js  ← Jitter + warm-up + penalizaciones
-│   │   ├── queue.js      ← Cola de envío serial
-│   │   └── health.js     ← Monitor de riesgo de ban
+│   │   ├── metaCache.js  ← Caché de metadatos de grupos
+│   │   └── engine/       ← Motor anti-ban (el fingerprint de Shin-MD)
+│   │       ├── throttler.js  ← shinJitter + warm-up + penalizaciones
+│   │       ├── queue.js      ← Cola de envío serial
+│   │       └── health.js     ← Monitor de riesgo de ban
 │   ├── commands/
 │   │   ├── loader.js     ← Cargador dinámico de cmds/
 │   │   ├── router.js     ← Pipeline: prefijo → cooldown → permisos → handler
@@ -211,6 +211,40 @@ Esto significa que:
 - ✅ Si haces mejoras, debes compartirlas bajo la misma licencia
 
 El objetivo es claro: que nadie lucre con este trabajo. Es y será siempre libre.
+
+### 🏷️ Marca y atribución (AGPL, Sección 7)
+
+Además del texto de AGPL-3.0, este proyecto aplica los **términos
+adicionales permitidos por la Sección 7** (ver archivo `NOTICE`):
+
+1. **Atribución obligatoria.** Las obras derivadas (forks, zips
+   redistribuidos, bots renombrados) deben preservar `LICENSE`, `NOTICE`
+   y los headers SPDX de cada archivo, y deben mostrar de forma visible
+   en `#menu` y `#owner`:
+
+   > Basado en Shin-MD por riokuroxi-svg - github.com/riokuroxi-svg/Shin-MD
+
+2. **Marca.** *Shin-MD* es una marca de riokuroxi-svg. No se puede usar
+   (ni 反魂 ni variantes) para promocionar clones u obras derivadas.
+
+3. **Check de arranque.** El bot verifica en cada arranque que `LICENSE`
+   y `NOTICE` existan; si faltan, no arranca. Eso no es un virus: es la
+   licencia exigiendo que se respete.
+
+### 🧬 Fingerprint de Shin-MD (marcador de obras derivadas)
+
+El motor anti-ban de Shin-MD tiene una combinación de parámetros única
+(documentada en `NOTICE`):
+
+- `shinJitter()` — jitter gaussiano (Box-Muller, desviación **0.25**)
+- Retardo base **1200 ms** (rango 400–5000 ms, +25 ms por carácter)
+- Penalización **×1.5** para contactos nuevos
+- Warm-up de **7 días**: 20 → 500 mensajes/día
+- Cola serial de envío con reintentos (`createSendQueue`)
+
+Si encuentras esta combinación en otro proyecto, es una obra derivada
+de Shin-MD y está sujeta a la licencia AGPL-3.0-only y a los términos
+del archivo `NOTICE`.
 
 ## 🧠 Filosofía
 

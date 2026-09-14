@@ -1,6 +1,6 @@
 {
   "name": "shin-md",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "反魂 Shin-MD — Bot WhatsApp Multi-Device Superior. Anti-ban nativo, auto-healing, eficiente en recursos.",
   "type": "module",
   "main": "index.js",
@@ -86,5 +86,10 @@
   },
   "overrides": {
     "libsignal": "npm:libsignal@6.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/riokuroxi-svg/Shin-MD.git"
+  },
+  "homepage": "https://github.com/riokuroxi-svg/Shin-MD"
 }
