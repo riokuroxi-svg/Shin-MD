@@ -1,5 +1,7 @@
-import { search, download } from 'aptoide-scraper'
 import { getBuffer } from "#serialize"
+// aptoide-scraper se importa de forma PESA dentro del handler: al cargarlo
+// crea un setInterval interno que impediría la salida limpia del proceso
+// (tests/shutdown) y tardaría en importar sin usarse nunca.
 
 export default {
   command: ['apk', 'aptoide', 'apkdl'],
@@ -10,11 +12,12 @@ export default {
     }
     const query = args.join(' ').trim()
     try {
-      const searchA = await search(query)
+      const aptoide = await import('aptoide-scraper')
+      const searchA = await aptoide.search(query)
       if (!searchA || searchA.length === 0) {
         return msg.reply('《✧》 No se encontraron resultados.')
       }
-      const apkInfo = await download(searchA[0].id)
+      const apkInfo = await aptoide.download(searchA[0].id)
       if (!apkInfo) {
         return msg.reply('《✧》 No se pudo obtener la información de la aplicación.')
       }

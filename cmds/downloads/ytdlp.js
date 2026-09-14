@@ -208,11 +208,14 @@ async function actualizarPlugin() {
 if (!global.__ytdlpUpdater) {
   global.__ytdlpUpdater = true
   if ((process.env.YTDLP_AUTO_UPDATE || '').toLowerCase() !== 'off') {
-    setTimeout(() => actualizarYtdlp().catch(() => {}), 60 * 1000) // 1ª comprobación al minuto
-    setInterval(() => actualizarYtdlp().catch(() => {}), UPDATER_INTERVAL_MS)
+    // .unref(): mantenimiento en segundo plano — no debe impedir la salida
+    // limpia del proceso (tests, shutdown). En prod, el socket Baileys ya
+    // mantiene el proceso vivo.
+    setTimeout(() => actualizarYtdlp().catch(() => {}), 60 * 1000).unref?.() // 1ª comprobación al minuto
+    setInterval(() => actualizarYtdlp().catch(() => {}), UPDATER_INTERVAL_MS).unref?.()
     if (process.env.YTDLP_PLUGIN_URL) {
-      setTimeout(() => actualizarPlugin().catch(() => {}), 2 * 60 * 1000)
-      setInterval(() => actualizarPlugin().catch(() => {}), UPDATER_INTERVAL_MS)
+      setTimeout(() => actualizarPlugin().catch(() => {}), 2 * 60 * 1000).unref?.()
+      setInterval(() => actualizarPlugin().catch(() => {}), UPDATER_INTERVAL_MS).unref?.()
     }
   }
 }
