@@ -1,6 +1,6 @@
 import log from "#logger";
 
-function gaussianRandom(mean, stddev) {
+function shinJitter(mean, stddev) {
   let u = 0, v = 0;
   while (u === 0) u = Math.random();
   while (v === 0) v = Math.random();
@@ -56,7 +56,7 @@ export function createThrottler(opts) {
 
     if (extra.isPriority) return config.minDelayMs;
 
-    let delay = config.baseDelayMs + gaussianRandom(0, config.baseDelayMs * config.jitterStddev);
+    let delay = config.baseDelayMs + shinJitter(0, config.baseDelayMs * config.jitterStddev);
 
     if (extra.messageLength > 10) {
       delay += Math.min(extra.messageLength * config.msPerChar, 2000);

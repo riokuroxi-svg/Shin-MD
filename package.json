@@ -17,7 +17,7 @@
     "#serialize": "./src/serialize.js",
     "#auth": "./src/core/auth.js",
     "#queue": "./src/network/queue.js",
-    "#throttler": "./src/network/throttler.js",
+    "#throttler": "./src/core/engine/throttler.js",
     "#health": "./src/network/health.js",
     "#logger": "./src/services/logger.js",
     "#watchdog": "./src/services/watchdog.js",
