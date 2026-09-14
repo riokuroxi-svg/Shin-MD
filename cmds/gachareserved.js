@@ -27,5 +27,6 @@ const limpiarRolls = async () => {
   }
 };
 
-setInterval(limpiarRolls, 1800000);
+// .unref(): no debe impedir la salida limpia del proceso (tests/shutdown)
+setInterval(limpiarRolls, 1800000).unref?.();
 limpiarRolls();
