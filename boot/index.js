@@ -58,8 +58,9 @@ import { spawnSync } from "node:child_process";
 // las sesiones existentes siguen funcionando; solo la vinculación nueva se
 // ve afectada y el aviso manda a ejecutar "npm install".
 {
-  const __patchScript = path.resolve(__dirname, "..", "scripts", "patch-baileys-pairing.cjs");
-  const __baileysSocket = path.resolve(__dirname, "..", "node_modules", "baileys", "lib", "Socket", "socket.js");
+  const __rootDir = path.dirname(fileURLToPath(import.meta.url));
+  const __patchScript = path.resolve(__rootDir, "..", "scripts", "patch-baileys-pairing.cjs");
+  const __baileysSocket = path.resolve(__rootDir, "..", "node_modules", "baileys", "lib", "Socket", "socket.js");
   if (fs.existsSync(__patchScript) && fs.existsSync(__baileysSocket)) {
     const r = spawnSync(process.execPath, [__patchScript], { stdio: "inherit" });
     if (r.status !== 0) {
