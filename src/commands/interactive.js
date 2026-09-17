@@ -122,9 +122,17 @@ export async function sendInteractive(sock, jid, opts = {}) {
     return msg;
   } catch (err) {
     log.warn("interactive: fallback a texto (" + (err.message || err) + ")");
-    // Fallback: enviar como texto plano para no romper la experiencia
-    const sent = await sock.sendMessage(jid, { text: body + (footer ? "\n\n" + footer : "") }, { quoted: opts.quoted });
-    return sent;
+    // Fallback: texto plano. Usa el MISMO filtro que el intento principal:
+    // si el fallo fue por quoted inválido (key sin message), reenviar con
+    // el quoted crudo re-lanzaba el error DENTRO del catch.
+    try {
+      const safeQuoted = (opts.quoted && opts.quoted.message) ? opts.quoted : undefined;
+      const sent = await sock.sendMessage(jid, { text: body + (footer ? "\n\n" + footer : "") }, safeQuoted ? { quoted: safeQuoted } : {});
+      return sent;
+    } catch (err2) {
+      log.error("interactive: el fallback de texto también falló: " + (err2.message || err2));
+      return null;
+    }
   }
 }
 
@@ -192,8 +200,14 @@ export async function sendCarousel(sock, jid, opts = {}) {
     return msg;
   } catch (err) {
     log.warn("interactive: carousel fallback (" + (err.message || err) + ")");
-    const sent = await sock.sendMessage(jid, { text: opts.body || "" }, { quoted: opts.quoted });
-    return sent;
+    try {
+      const safeQuoted = (opts.quoted && opts.quoted.message) ? opts.quoted : undefined;
+      const sent = await sock.sendMessage(jid, { text: opts.body || "" }, safeQuoted ? { quoted: safeQuoted } : {});
+      return sent;
+    } catch (err2) {
+      log.error("interactive: el fallback de texto del carousel también falló: " + (err2.message || err2));
+      return null;
+    }
   }
 }
 

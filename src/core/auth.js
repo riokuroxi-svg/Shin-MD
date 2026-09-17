@@ -16,15 +16,6 @@ import fs from "fs";
 import path from "path";
 import log from "#logger";
 
-const KEY_MAP = {
-  "pre-key": "pre-key",
-  session: "session",
-  "sender-key": "sender-key",
-  "app-state-sync-key": "app-state-sync-key",
-  "app-state-sync-version": "app-state-sync-version",
-  "trusted-sender-key": "trusted-sender-key",
-};
-
 export async function useSQLiteAuthState(sessionDir) {
   fs.mkdirSync(sessionDir, { recursive: true });
   const dbPath = path.join(sessionDir, "auth.db");
@@ -71,41 +62,45 @@ export async function useSQLiteAuthState(sessionDir) {
     }
   }
 
+  // Statement preparado UNA sola vez (antes se creaba dentro del loop).
+  const stmtGet = db.prepare("SELECT data FROM signal_keys WHERE category = ? AND id = ?");
+  const stmtSet = db.prepare("INSERT OR REPLACE INTO signal_keys (category, id, data) VALUES (?, ?, ?)");
+  const stmtRemove = db.prepare("DELETE FROM signal_keys WHERE category = ? AND id = ?");
+
   const keys = {
     async get(type, ids) {
       const out = {};
       for (const id of ids) {
-        const cat = KEY_MAP[type] || type;
-        const row = db.prepare("SELECT data FROM signal_keys WHERE category = ? AND id = ?")
-          .get(cat, id);
+        const row = stmtGet.get(type, id);
         if (row) {
-          const parsed = parseEntry(cat, id, row.data);
+          const parsed = parseEntry(type, id, row.data);
           if (parsed) out[id] = parsed;
         }
       }
       return out;
     },
     async set(data) {
-      const stmt = db.prepare(
-        "INSERT OR REPLACE INTO signal_keys (category, id, data) VALUES (?, ?, ?)"
-      );
       for (const category in data) {
         for (const id in data[category]) {
           const value = data[category][id];
-          const cat = KEY_MAP[category] || category;
           try {
-            stmt.run(cat, id, JSON.stringify(value, BufferJSON.replacer));
+            stmtSet.run(category, id, JSON.stringify(value, BufferJSON.replacer));
           } catch (err) {
-            log.error("keys.set(" + cat + "," + id + "): " + (err.message || err));
+            log.error("keys.set(" + category + "," + id + "): " + (err.message || err));
           }
         }
       }
     },
     async remove(ids) {
-      const stmt = db.prepare("DELETE FROM signal_keys WHERE category = ? AND id = ?");
+      // Baileys llama a remove con ids como "senderKey:<chat>:<sender>"
+      // (varios ":" dentro). split(":") truncaba la keyId → DELETE que
+      // nunca coincidía → las keys muertas se acumulaban en la tabla.
+      // Partir SOLO en el primer ":".
       for (const id of ids) {
-        const [cat, keyId] = id.split(":");
-        try { stmt.run(cat, keyId); } catch (err) {
+        const idx = String(id).indexOf(":");
+        const cat = idx === -1 ? id : id.slice(0, idx);
+        const keyId = idx === -1 ? "" : id.slice(idx + 1);
+        try { stmtRemove.run(cat, keyId); } catch (err) {
           log.error("keys.remove(" + id + "): " + (err.message || err));
         }
       }

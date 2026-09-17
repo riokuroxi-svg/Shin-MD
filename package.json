@@ -1,7 +1,7 @@
 {
   "name": "shin-md",
-  "version": "3.0.0",
-  "description": "反魂 Shin-MD — Bot WhatsApp Multi-Device Superior. Anti-ban nativo, auto-healing, eficiente en recursos.",
+  "version": "3.0.1",
+  "description": "\u53cd\u9b42 Shin-MD \u2014 Bot WhatsApp Multi-Device Superior. Anti-ban nativo, auto-healing, eficiente en recursos.",
   "type": "module",
   "main": "index.js",
   "scripts": {

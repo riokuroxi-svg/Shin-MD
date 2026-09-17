@@ -34,7 +34,8 @@ export async function checkPermissions(sock, ctx, cmd, engine) {
 
   if (cmd.botAdmin) {
     if (!ctx.isGroup) return "📢 Solo en *grupos*.";
-    const botJid = sock.user ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : "";
+    // JID real del bot (userPart dentro de isAdmin normaliza :device/@server)
+    const botJid = sock.user ? sock.user.id : "";
     const botAdmin = await isAdmin(sock, ctx.chatId, botJid);
     if (!botAdmin) return "🤖 Necesito ser *admin del grupo* para esto.";
   }

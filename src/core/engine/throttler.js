@@ -95,7 +95,11 @@ export function createThrottler(opts) {
       dailyLimit: getDailyLimit(),
       msgsToday: state.warmUpMsgsToday,
       totalSent: state.totalSent,
-      warmUpComplete: state.warmUpMsgsToday >= getDailyLimit(),
+      // (Antes: warmUpComplete significaba "cumplió la cuota de HOY",
+      //  que no es lo mismo que haber completado el período de warm-up.)
+      warmUpComplete: day > config.warmUpDays,
+      // Cumplió la cuota diaria actual (canSend() == false)
+      dailyLimitReached: state.warmUpMsgsToday >= getDailyLimit(),
     };
   }
 

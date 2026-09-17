@@ -17,8 +17,29 @@ import { serializeMessage } from "#serialize";
 import createCooldown from "#cooldown";
 import checkPermissions from "#permissions";
 import { parseButtonResponse, isButtonResponse } from "#interactive";
+import db from "../services/ginko-db.js";
 
 export const BOT_PREFIX = process.env.BOT_PREFIX || ".";
+
+// Modo Self (compat Ginko): el bot procesa sus PROPIOS mensajes como
+// comandos. Lo activa `.self enable` (guarda settings.self=1 en la fila
+// del JID del bot). Antes el flag se guardaba pero el router NUNCA lo
+// consultaba: ctx.isBot → return inmediato.
+let selfMode = { value: false, ts: 0 };
+function isSelfMode(sock) {
+  const now = Date.now();
+  if (now - selfMode.ts < 30000) return selfMode.value; // caché 30s (evita SQLite por mensaje)
+  selfMode.ts = now;
+  try {
+    const botJid = sock?.user?.id;
+    if (!botJid) { selfMode.value = false; return false; }
+    const settings = db.getSettings(botJid) || {};
+    selfMode.value = !!settings.self;
+  } catch {
+    selfMode.value = false;
+  }
+  return selfMode.value;
+}
 
 export function createRouter(engine, opts) {
   opts = opts || {};
@@ -80,7 +101,10 @@ export function createRouter(engine, opts) {
       }
 
       const ctx = serializeMessage(msg, sock);
-      if (!ctx.text || ctx.isBot || ctx.chatId === "status@broadcast") return;
+      if (!ctx.text || ctx.chatId === "status@broadcast") return;
+      // Self mode ON → los mensajes propios (fromMe) SÍ se procesan;
+      // OFF → se ignoran (comportamiento original).
+      if (ctx.isBot && !isSelfMode(sock)) return;
       if (!ctx.text.startsWith(BOT_PREFIX)) return;
 
       const raw = ctx.text.slice(BOT_PREFIX.length).trim();
