@@ -43,6 +43,19 @@ export function normalizeJid(jid) {
 }
 
 /**
+ * Parte de usuario de un JID: sin servidor (@...) ni sufijo de
+ * dispositivo (:0, :1...). Para comparar identidad de forma agnóstica
+ * cuando Baileys 6.7.x no expone el mapa LID↔teléfono (los identificadores
+ * cruzados phone↔LID NO se pueden puentear en esta versión; si el servidor
+ * reporta al mismo usuario con formatos distintos en la lista de
+ * participantes, la comparación fallará — limitación documentada).
+ */
+export function userPart(jid) {
+  if (!jid) return "";
+  return String(jid).split("@")[0].split(":")[0];
+}
+
+/**
  * Serializa un mensaje de Baileys a un objeto manejable por comandos.
  * @param {object} msg - WAMessage de Baileys
  * @param {object} sock - socket de Baileys
@@ -87,7 +100,8 @@ export function serializeMessage(msg, sock) {
   const isOwner = (ownerJid) => {
     if (!ownerJid) return false;
     return normalizeJid(senderId) === normalizeJid(ownerJid) ||
-           normalizeJid(senderId) === normalizeJid(ownerJid.split(":")[0] + "@s.whatsapp.net");
+           normalizeJid(senderId) === normalizeJid(ownerJid.split(":")[0] + "@s.whatsapp.net") ||
+           userPart(senderId) === userPart(ownerJid);
   };
 
   const timestampMs = (msg.messageTimestamp ? msg.messageTimestamp * 1000 : Date.now());
@@ -123,13 +137,26 @@ export function getReplyTarget(jid, isGroup) {
 
 export async function isAdmin(sock, chatId, senderId) {
   try {
-    const meta = getCachedMeta(chatId);
-    if (meta && Array.isArray(meta.participants)) {
-      const participant = meta.participants.find(p => p.id === senderId);
-      return participant ? (participant.admin === "admin" || participant.admin === "superadmin") : false;
+    const target = userPart(senderId);
+    if (!target) return false;
+
+    let meta = getCachedMeta(chatId);
+    if (!meta || !Array.isArray(meta.participants)) {
+      // Fallback en vivo cuando la caché está vacía (antes: si no había
+      // caché, isAdmin SIEMPRE devolvía false y los comandos adminOnly
+      // nunca funcionaban hasta que un evento de grupo llenara la caché).
+      // groupMetadata() ya está parcheado por patchGroupMetadata
+      // (caché primero, y repone la caché al volver).
+      meta = await sock?.groupMetadata?.(chatId);
+      if (meta?.participants) setCachedMeta(chatId, meta);
     }
-    // Si no hay caché, no asumir admin (evita privilegios indebidos)
-    return false;
+    if (!meta || !Array.isArray(meta.participants)) return false;
+
+    // Comparación por user-part: tolera sufijo :device y diferencia de
+    // servidor (@s.whatsapp.net vs @lid) entre el key.participant y la
+    // lista de participantes.
+    const participant = meta.participants.find(p => userPart(p.id) === target);
+    return participant ? (participant.admin === "admin" || participant.admin === "superadmin") : false;
   } catch {
     return false;
   }
@@ -178,6 +205,6 @@ export function patchGroupMetadata(sock) {
   }
 }
 
-export default { getText, isJidGroup, normalizeJid, serializeMessage, smsg, patchGroupMetadata,
+export default { getText, isJidGroup, normalizeJid, userPart, serializeMessage, smsg, patchGroupMetadata,
   isAdmin, getReplyTarget, getCachedMeta, setCachedMeta, deleteCachedMeta,
   resolveParticipantJid, resolveJidSync, BoundedMap, getBuffer };

@@ -63,10 +63,25 @@ export function createHealthMonitor() {
     return { score, level, events: events.length };
   }
 
+  // Extrae el status HTTP real. Los errores de Baileys/WhatsApp son Boom:
+  // el código vive en err.output.statusCode (o err.statusCode), NO en
+  // err.code (que es una cadena como "Error: Forbidden"). Sin esto el 403
+  // nunca llegaba a la rule has403 ni al riesgo de errores.
+  function errCode(err) {
+    return err?.output?.statusCode ?? err?.statusCode ?? err?.code
+      ?? (err?.message ? String(err.message).slice(0, 60) : "unknown");
+  }
+
   function recordSend() { record("send"); }
   function recordDisconnect() { record("disconnect"); }
-  function recordError(err) { record("error", { code: err?.code, msg: err?.message }); }
-  function recordSendFail(err) { record("send_fail", { msg: err?.message }); }
+  function recordError(err) { record("error", { code: errCode(err), msg: err?.message }); }
+  function recordSendFail(err) {
+    const code = errCode(err);
+    record("send_fail", { code, msg: err?.message });
+    // Un 403/429 en envío es una señal de BAN a nivel de error: también
+    // se registra como "error" para que la rule has403 y el error-rate lo vean.
+    if (code === 403 || code === 429) record("error", { code, msg: err?.message });
+  }
 
   return {
     recordSend, recordDisconnect, recordError, recordSendFail,

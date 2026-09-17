@@ -211,8 +211,27 @@ async function main() {
   watchdog.start();
   createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
 
-  const ownerEnv = process.env.OWNER_NUMBER?.replace(/\D/g, "") + "@s.whatsapp.net";
-  if (ownerEnv) { db.settings.set("owner_jid", ownerEnv); engine.setOwnerJid(ownerEnv); }
+  // (Antes: si OWNER_NUMBER no existía, `undefined + "@s.whatsapp.net"`
+  //  dejaba owner_jid = "undefined@s.whatsapp.net" — owner fantasma.)
+  const ownerNum = (process.env.OWNER_NUMBER || "").replace(/\D/g, "");
+  if (ownerNum) {
+    const ownerEnv = ownerNum + "@s.whatsapp.net";
+    db.settings.set("owner_jid", ownerEnv);
+    engine.setOwnerJid(ownerEnv);
+  }
+
+  // ── Globals legacy de Ginko ─────────────────────────────────────
+  // 21 comandos portados (self, kick, setprefix, setowner...) leen
+  // global.owner y global.mess. Sin definirlos, el primer uso lanza
+  // TypeError en runtime (global.owner.map sobre undefined).
+  globalThis.owner = ownerNum ? [ownerNum] : [];
+  globalThis.mess = {
+    default: "⚠️ Comando no disponible.",
+    socket: "🚫 *Solo el dueño* puede usar este comando.",
+    success: "✓ Listo.",
+    error: "⚠️ Error al ejecutar el comando.",
+    wait: "⏳ Espera un momento...",
+  };
 
   engine.on("connected", user => {
     const u = user?.id?.split(":")[0] || "?";

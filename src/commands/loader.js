@@ -8,6 +8,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import log from "#logger";
+import { isAdmin, userPart, getCachedMeta } from "#serialize";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CMDS_DIR = path.resolve(__dirname, "../../cmds");
@@ -36,8 +37,23 @@ function wrapGinkoCmd(gk) {
     category: gk.category || "utils",
     description: gk.description || "",
     cooldown: 3,
-    handler: async (sock, ctx) => {
+    handler: async (sock, ctx, engine) => {
       const full = ctx.full || {};
+      // ── Permisos REALES (antes: isAdmins/isBotAdmins/isOwner duros
+      //    en false → promote/demote/kick nunca funcionaban) ──
+      let isAdmins = false, isBotAdmins = false, isOwner = false, groupMetadata = null;
+      if (ctx.isGroup) {
+        isAdmins = await isAdmin(sock, ctx.chatId, ctx.senderId);
+        const botJid = sock?.user?.id;
+        if (botJid) isBotAdmins = await isAdmin(sock, ctx.chatId, botJid);
+        const ownerJid = engine?.getOwnerJid?.();
+        if (ownerJid) isOwner = userPart(ctx.senderId) === userPart(ownerJid);
+      }
+      if (ctx.isGroup) {
+        groupMetadata = getCachedMeta(ctx.chatId)
+          || (await sock?.groupMetadata?.(ctx.chatId).catch(() => null))
+          || null;
+      }
       const msg = {
         chat: ctx.chatId,
         sender: ctx.senderId,
@@ -72,8 +88,9 @@ function wrapGinkoCmd(gk) {
           text: ctx.arg || "",
           command: mainName,
           args: ctx.args || [],
-          groupMetadata: null, participants: [],
-          isAdmins: false, isBotAdmins: false, isOwner: false,
+          groupMetadata,
+          participants: (groupMetadata?.participants || []),
+          isAdmins, isBotAdmins, isOwner,
         });
       } catch (err) {
         log.error("Ginko cmd '" + mainName + "': " + (err.message || err));
@@ -89,9 +106,15 @@ export async function loadCommands() {
 
   const files = scanFiles(CMDS_DIR);
   let shinCount = 0, ginkoCount = 0;
+  let dupeCount = 0;
 
   for (const filePath of files) {
     try {
+      // ?t= fuerza el re-import de ESM. LIMITACIÓN DOCUMENTADA: Node no
+      // expone API para borrar módulos del cache, así que cada recarga
+      // completa deja la copia anterior huérfina en memoria. loadCommands
+      // está pensada para el ARRANQUE (y para /reloadall, que es raro);
+      // para cambios de un archivo usa /reload <cmd> (reloadCommand).
       const mod = await import(pathToFileURL(filePath).href + "?t=" + Date.now());
       const cmd = mod.default || mod;
       if (!cmd) continue;
@@ -108,6 +131,13 @@ export async function loadCommands() {
       }
 
       const name = shinCmd.name || path.basename(filePath, ".js");
+      // (Antes: el set cegaba silenciosamente cualquier comando con el
+      // mismo nombre/alias — ahora al menos se deja rastro en el log.)
+      const prev = commands.get(name);
+      if (prev) {
+        dupeCount++;
+        if (dupeCount <= 10) log.warn("Duplicado: '" + name + "' (" + path.relative(CMDS_DIR, filePath) + ") reemplaza a " + (prev.file || "?"));
+      }
       commands.set(name, { ...shinCmd, name, file: path.relative(CMDS_DIR, filePath) });
       if (Array.isArray(shinCmd.aliases)) {
         for (const alias of shinCmd.aliases) commands.set(alias, commands.get(name));
@@ -117,7 +147,7 @@ export async function loadCommands() {
     }
   }
 
-  log.success(commands.size + " comandos (" + shinCount + " Shin, " + ginkoCount + " Ginko)");
+  log.success(commands.size + " comandos (" + shinCount + " Shin, " + ginkoCount + " Ginko)" + (dupeCount ? " · " + dupeCount + " duplicados" : ""));
   return commands;
 }
 

@@ -38,9 +38,13 @@ export function connectSocket(engine, opts) {
   let sock = null;
   let retries = 0;
   let isRestarting = false;
+  let restartStreak = 0;
+  let lastRestartAt = 0;
   const MAX_RETRIES = 15;
   const msgStore = new Map();
-  const msgLimit = 500;
+  // Tope ÚNICO del msgStore: envíos y recibidos comparten el mismo Map.
+  // (Antes: 500 en el lado recibido y 1000 en el enviado — el tamaño
+  // real dependía de qué lado truncara antes.)
   const SMAX = 1000;
   const SK = "__sent__:";
 
@@ -172,6 +176,8 @@ export function connectSocket(engine, opts) {
 
     // messages.upsert
     s.ev.on("messages.upsert", async ({ messages, type }) => {
+      // Señal de vida para el watchdog (la conexión fluye de verdad)
+      if (watchdog) watchdog.tick();
       if (engine.getState() < engine.LIFECYCLE.READY || type !== "notify") return;
       for (const msg of messages) {
         try {
@@ -180,7 +186,7 @@ export function connectSocket(engine, opts) {
           if (msg.message.ephemeralMessage) msg.message = msg.message.ephemeralMessage.message;
           if (msg?.key?.id) {
             msgStore.set(msg.key.remoteJid + ":" + msg.key.id, msg.message);
-            if (msgStore.size > msgLimit) msgStore.delete(msgStore.keys().next().value);
+            if (msgStore.size > SMAX) msgStore.delete(msgStore.keys().next().value);
           }
           if (onMessage) onMessage(s, msg).catch(e => log.error("onMessage: " + (e.message || e)));
         } catch (e) { log.error("msg.upsert: " + (e.message || e)); }
@@ -200,6 +206,7 @@ export function connectSocket(engine, opts) {
       if (connection === "open") {
         retries = 0;
         isRestarting = false;
+        if (Date.now() - lastRestartAt > 60000) restartStreak = 0;
 
         // FORZAR guardado inmediato de credenciales ANTES de que se cierre
         clearTimeout(saveTimer);
@@ -255,11 +262,27 @@ export function connectSocket(engine, opts) {
           return;
         }
 
-        // ── RestartRequired (515): normal después del pairing, reconectar YA ──
+        // ── RestartRequired (515): normal después del pairing ──
+        // Backoff escalonado si se encadena. Antes este bloque hacía
+        // return ANTES de retries++ con delay fijo de 1s: si el c0 se
+        // repetía (sesión corrupta) → bucle infinito de reconnects cada
+        // segundo, que es el patrón exacto que el servidor marca como
+        // anómalo. Ahora: 1s, 1s, 15s, 60s, 5min; 6+ seguidos en <1min
+        // cada uno → sesión corrupta, limpiar (como Ginko-MD).
         if (code === DisconnectReason.restartRequired || code === 0) {
-          log.gray("Reconectando con credenciales nuevas...");
+          const now = Date.now();
+          restartStreak = (now - lastRestartAt < 60000) ? restartStreak + 1 : 1;
+          lastRestartAt = now;
+          if (restartStreak >= 6) {
+            log.fatal("Demasiados restarts seguidos (c0) — limpiando sesión");
+            clearSession();
+            process.exit(1);
+          }
+          const rDelays = [1000, 1000, 15000, 60000, 300000];
+          const rDelay = rDelays[Math.min(restartStreak - 1, rDelays.length - 1)];
+          log.gray(`Reconectando con credenciales nuevas (streak ${restartStreak}) en ${Math.round(rDelay / 1000)}s...`);
           isRestarting = false;
-          setTimeout(start, 1000);
+          setTimeout(start, rDelay);
           return;
         }
 

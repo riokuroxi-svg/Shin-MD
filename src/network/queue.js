@@ -6,7 +6,23 @@
  */
 import log from "#logger";
 
-export function createSendQueue(throttler, health) {
+// Tope por envío: si Baileys cuelga una promesa de sendMessage (redes
+// inestables), la cola NO puede congelarse detrás de ese envío para todos
+// los chats. Tras este tiempo se trata como fallo y se sigue con el siguiente.
+// (La operación huérfina puede terminar más tarde en segundo plano; no es
+// cancelable, pero ya no bloquea nada.)
+const SEND_TIMEOUT_MS = 120000;
+
+function withTimeout(promise, ms, label) {
+  let t;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { t = setTimeout(() => reject(new Error(label + " superó " + ms + "ms")), ms); }),
+  ]).finally(() => clearTimeout(t));
+}
+
+export function createSendQueue(throttler, health, opts = {}) {
+  const timeoutMs = opts.timeoutMs || SEND_TIMEOUT_MS;
   const queue = [];
   let processing = false;
   let paused = false;
@@ -44,7 +60,7 @@ export function createSendQueue(throttler, health) {
       await new Promise(r => setTimeout(r, delay));
 
       try {
-        const result = await task.fn();
+        const result = await withTimeout(task.fn(), timeoutMs, "envío");
         if (throttler) throttler.recordSent();
         if (health) health.recordSend();
         task.resolve(result);
@@ -52,8 +68,13 @@ export function createSendQueue(throttler, health) {
         if (health) health.recordSendFail(err);
         log.error("Send failed: " + (err.message || err), err);
         try {
-          await new Promise(r => setTimeout(r, 3000));
-          const result2 = await task.fn();
+          // Reintento que RESPETA el throttler (nunca 3s fijos a tope de
+          // velocidad: esto es un bot anti-ban). Mínimo 2s.
+          const retryDelay = throttler
+            ? Math.max(2000, throttler.calcDelay({ messageLength: task.opts.messageLength || 0 }))
+            : 3000;
+          await new Promise(r => setTimeout(r, retryDelay));
+          const result2 = await withTimeout(task.fn(), timeoutMs, "reintento");
           if (throttler) throttler.recordSent();
           task.resolve(result2);
           if (health) health.recordSend();
