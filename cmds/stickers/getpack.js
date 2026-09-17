@@ -8,7 +8,10 @@ import fs from 'fs';
 import db from '../../src/services/ginko-db.js';
 
 export default {
-  command: ['getpack', 'pack', 'stickerpack'],
+  // spack/stickers heredados del antiguo stickers.js (sticker.ly), que no
+  // podía cargar: importaba axios (no está en package.json) y usaba
+  // global.APIs (indefinido en Shin-MD).
+  command: ['getpack', 'pack', 'stickerpack', 'spack', 'stickers'],
   category: 'stickers',
   description: 'Descargar un paquete de stickers.',
   run: async ({ msg, sock, args, usedPrefix, command }) => {
@@ -53,6 +56,7 @@ export default {
       const MAX_STICKERS = 50
       const selected = validStickers.slice(0, MAX_STICKERS)
       const cover = selected[0]
+      fs.mkdirSync('./tmp', { recursive: true })
       let packOwnerUser = null;
       try { packOwnerUser = db.getUser(packOwner); } catch {}
       const name = packOwnerUser?.name || packOwner.split('@')[0]

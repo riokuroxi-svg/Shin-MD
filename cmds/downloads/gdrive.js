@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import fetch from 'node-fetch'
-
+// fetch global de Node 22 (el bot requiere node >= 22.5; antes importaba
+// node-fetch, que no existe en package.json → el módulo no cargaba y
+// .drive caía en la versión con bug de deadlock).
 export default {
   command: ['drive', 'gdrive'],
   category: 'downloads',
