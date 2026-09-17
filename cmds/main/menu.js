@@ -76,7 +76,9 @@ const catEmoji = {
 
 export default {
   name: "menu",
-  aliases: ["help", "ayuda", "h"],
+  // help/ayuda/h (propios) + allmenu/menumanual (heredados del antiguo
+  // help.js, eliminado: dependía de stubs y mostraba menú vacío)
+  aliases: ["help", "ayuda", "h", "allmenu", "menumanual"],
   category: "info",
   description: "Muestra el menú del bot",
   usage: ".menu",

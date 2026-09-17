@@ -28,12 +28,13 @@ export default {
         "_Configura YT_API_URL en .env para tu propia API._";
     }
 
-    const sent = await engine.getSendQueue().enqueue(
-      () => sock.sendMessage(ctx.chatId, {
-        text: "⏳ *Buscando y descargando...*\n_" + ctx.arg.slice(0, 40) + "_"
-      }, { quoted: ctx.full }),
-      { messageLength: 30, isPriority: false }
-    );
+    // sock.sendMessage encola SOLO en la cola anti-ban del socket
+    // (encolar manualmente y lladar a sock.sendMessage dentro DEADLOCKEA
+    // la cola serial: la tarea exterior espera a la interior, que nunca
+    // se procesa mientras la exterior está "en uso").
+    const sent = await sock.sendMessage(ctx.chatId, {
+      text: "⏳ *Buscando y descargando...*\n_" + ctx.arg.slice(0, 40) + "_"
+    }, { quoted: ctx.full });
 
     let key;
     if (sent && sent.key) key = sent.key;
@@ -49,14 +50,11 @@ export default {
       }
 
       // Enviar el audio como documento con nombre personalizado (para que se vea el título)
-      const audioMsg = await engine.getSendQueue().enqueue(
-        () => sock.sendMessage(ctx.chatId, {
-          document: { url },
-          mimetype: "audio/mpeg",
-          fileName: fileName,
-        }, { quoted: ctx.full }),
-        { messageLength: 20, isNewContact: false }
-      );
+      const audioMsg = await sock.sendMessage(ctx.chatId, {
+        document: { url },
+        mimetype: "audio/mpeg",
+        fileName: fileName,
+      }, { quoted: ctx.full });
 
       // Editar mensaje de "buscando" a éxito
       if (key) {
@@ -64,10 +62,7 @@ export default {
         if (title) successText += "\n📌 " + title.slice(0, 60);
         if (provider) successText += "\n⚡ " + provider;
         try {
-          await engine.getSendQueue().enqueue(
-            () => sock.sendMessage(ctx.chatId, { text: successText, edit: key }, {}),
-            { messageLength: successText.length, isPriority: true }
-          );
+          await sock.sendMessage(ctx.chatId, { text: successText, edit: key }, {});
         } catch {}
       }
       return audioMsg ? null : "⚠️ No se pudo enviar el audio.";
@@ -77,10 +72,7 @@ export default {
         : "❌ Error al descargar. Prueba otro enlace o inténtalo más tarde.";
       if (key) {
         try {
-          await engine.getSendQueue().enqueue(
-            () => sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, {}),
-            { messageLength: errTxt.length, isPriority: true }
-          );
+          await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, {});
         } catch {}
         return null;
       }

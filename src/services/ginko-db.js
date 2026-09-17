@@ -108,12 +108,35 @@ const gdb = {
     let st = val; if (val === true) st = '1'; else if (Array.isArray(val) || typeof val == 'object') st = JSON.stringify(val);
     return r('UPDATE g_settings SET ' + field + ' = ? WHERE id = ?', st, id);
   },
+  // ── Packs de stickers (API de Ginko: newpack/addsticker/getpack/...) ──
+  // La tabla g_sticker_packs ya existía; SIN estos métodos toda la familia
+  // de comandos de packs crasheaba con TypeError (db.getStickersPack undefined).
+  getStickersPack(id) {
+    // Sin id = TODAS las filas (Ginko API; la usa getpack para packs públicos)
+    if (!id) {
+      return db().prepare('SELECT * FROM g_sticker_packs').all().map(p => ({ ...p, packs: pj(p.packs, []) }));
+    }
+    const key = ck('sp', id); const ca = gC(key); if (ca !== undefined) return ca;
+    let p = q('SELECT * FROM g_sticker_packs WHERE id = ?', id);
+    if (!p) { r('INSERT OR IGNORE INTO g_sticker_packs (id) VALUES (?)', id); p = q('SELECT * FROM g_sticker_packs WHERE id = ?', id); }
+    if (p) p.packs = pj(p.packs, []);
+    sC(key, p, 300000);
+    return p;
+  },
+  setStickersPack(id, field, val) {
+    if (!['packs', 'id'].includes(field)) return; // whitelist: solo campos conocidos
+    dC(ck('sp', id));
+    r('INSERT OR IGNORE INTO g_sticker_packs (id) VALUES (?)', id);
+    const st = (Array.isArray(val) || typeof val == 'object') ? JSON.stringify(val) : val;
+    return r('UPDATE g_sticker_packs SET ' + field + ' = ? WHERE id = ?', st, id);
+  },
   setCreate(tbl, identifier, field, value) {
     const methods = {
       g_users: { get: (i) => this.getUser(i), set: (i,f,v) => this.setUser(i,f,v) },
       g_chats: { get: (i) => this.getChat(i), set: (i,f,v) => this.setChat(i,f,v) },
       g_chat_users: { get: (i) => this.getChatUser(i[0], i[1]), set: (i,f,v) => this.setChatUser(i[0], i[1], f, v) },
       g_settings: { get: (i) => this.getSettings(i), set: (i,f,v) => this.setSettings(i,f,v) },
+      g_sticker_packs: { get: (i) => this.getStickersPack(i), set: (i,f,v) => this.setStickersPack(i,f,v) },
     };
     const m = methods[tbl]; if (!m) return value;
     m.set(identifier, field, value); return value;
