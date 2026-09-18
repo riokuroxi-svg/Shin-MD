@@ -10,8 +10,6 @@ import os from "os";
 
 export default {
   name: "runtime",
-  // status/estado quedan para status.js (stats de DB + servidor);
-  // aquí solo uptime para no pisar (antes había duplicado nombrado)
   aliases: ["uptime"],
   category: "info",
   description: "Estado y tiempo de actividad del bot",
