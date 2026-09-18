@@ -4,190 +4,191 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-// Menu — menú principal, Plantilla A (反魂 elegante) + banner + botones
-// Envía un mensaje interactivo con botones por categoría; si WhatsApp
-// no lo renderiza, hace fallback a texto plano (nunca rompe).
+// Menu — Menú principal de comandos de Shin-MD
+// Envía un mensaje rico y compatible con TODOS los clientes de WhatsApp (Android, iOS, Web, Desktop)
+// usando imagen de cabecera (banner) + texto estructurado por categorías.
 
-import { sendInteractive, quickReply } from "#interactive";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BANNER_URL = process.env.MENU_IMAGE || ""; // opcional, URL de imagen
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BANNER_PATHS = [
+  process.env.MENU_IMAGE,
+  path.resolve(__dirname, "../../assets/banner-default.png"),
+  path.resolve(__dirname, "../../assets/bocchi-banner.png"),
+  path.resolve(__dirname, "../../media/menu.jpg"),
+].filter(Boolean);
 
-// ─── Versión + aviso de desactualización ────────────────────────
-// Aviso transparente (no manda datos): solo compara la versión local
-// con la del repo oficial y, si hay una más nueva, la muestra en el
-// menú. Si no hay red, no pasa nada (el menú sale igual).
+let _bannerCache = null;
+function getBanner() {
+  if (_bannerCache) return _bannerCache;
+  for (const p of BANNER_PATHS) {
+    try {
+      if (typeof p === "string" && fs.existsSync(p)) {
+        _bannerCache = fs.readFileSync(p);
+        return _bannerCache;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// ─── Versión local ──────────────────────────────────────────────
 let __localVersion = null;
 function localVersion() {
   if (__localVersion) return __localVersion;
   try {
-    const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
-    __localVersion = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version || "0.0.0";
-  } catch { __localVersion = "0.0.0"; }
+    const pkgPath = path.join(__dirname, "..", "..", "package.json");
+    __localVersion = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version || "3.0.2";
+  } catch { __localVersion = "3.0.2"; }
   return __localVersion;
 }
 
-function versionIsNewer(a, b) {
-  const pa = String(a).split(".").map(n => parseInt(n, 10) || 0);
-  const pb = String(b).split(".").map(n => parseInt(n, 10) || 0);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
-  }
-  return false;
-}
-
-async function checkForUpdate() {
-  try {
-    const local = localVersion();
-    const res = await fetch(
-      "https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/package.json",
-      { signal: AbortSignal.timeout(2500) }
-    );
-    const remote = await res.json();
-    if (remote && remote.version && versionIsNewer(remote.version, local)) {
-      return (
-        "⚠️ Desactualizado: v" + local + " → v" + remote.version +
-        "\n📥 Oficial: github.com/riokuroxi-svg/Shin-MD"
-      );
-    }
-  } catch { /* sin red: el menú se muestra igual */ }
-  return "";
-}
-
-const catLabel = {
-  info: "✦ *INFORMACIÓN*",
-  utility: "✦ *UTILIDAD*",
-  admin: "✦ *ADMINISTRACIÓN*",
-  owner: "✦ *OWNER*",
-  games: "✦ *JUEGOS* 🎮",
-  otros: "✦ *OTROS*",
-};
-
-const catEmoji = {
-  info: "📋",
-  utility: "🛠️",
-  admin: "🛡️",
-  owner: "👑",
-  games: "🎮",
-  otros: "📦",
+const catMeta = {
+  info: { label: "✦ *INFORMACIÓN*", emoji: "📋" },
+  main: { label: "✦ *PRINCIPAL*", emoji: "🌸" },
+  utils: { label: "✦ *UTILIDADES*", emoji: "🛠️" },
+  utility: { label: "✦ *HERRAMIENTAS*", emoji: "⚙️" },
+  downloads: { label: "✦ *DESCARGAS*", emoji: "📥" },
+  anime: { label: "✦ *ANIME & REACCIONES*", emoji: "🍥" },
+  stickers: { label: "✦ *STICKERS*", emoji: "🎭" },
+  economy: { label: "✦ *ECONOMÍA*", emoji: "💰" },
+  games: { label: "✦ *JUEGOS*", emoji: "🎮" },
+  fun: { label: "✦ *DIVERSIÓN*", emoji: "🎲" },
+  gacha: { label: "✦ *GACHA & RPG*", emoji: "🎴" },
+  group: { label: "✦ *GRUPOS & ADMIN*", emoji: "🛡️" },
+  profile: { label: "✦ *PERFIL*", emoji: "👤" },
+  socket: { label: "✦ *SOCKETS & BOTS*", emoji: "🤖" },
+  nsfw: { label: "✦ *NSFW +18*", emoji: "🔞" },
+  owner: { label: "✦ *CREADOR / OWNER*", emoji: "👑" },
+  otros: { label: "✦ *OTROS*", emoji: "📦" },
 };
 
 export default {
   name: "menu",
-  // help/ayuda/h (propios) + allmenu/menumanual (heredados del antiguo
-  // help.js, eliminado: dependía de stubs y mostraba menú vacío)
   aliases: ["help", "ayuda", "h", "allmenu", "menumanual"],
   category: "info",
-  description: "Muestra el menú del bot",
-  usage: ".menu",
+  description: "Muestra el menú principal de comandos del bot",
+  usage: ".menu [categoría]",
   cooldown: 3,
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,
 
   async handler(sock, ctx, engine, commands) {
-    const uptime = engine.getUptime();
+    const uptime = engine ? engine.getUptime() : 0;
     const minutes = Math.floor(uptime / 60000);
     const hours = Math.floor(minutes / 60);
     const remMin = minutes % 60;
-    const risk = engine.getHealth().getRiskScore();
+    const timeStr = hours > 0 ? `${hours}h ${remMin}m` : `${minutes}m`;
 
-    // Submenú por categoría: .menu juegos
+    const health = engine?.getHealth?.();
+    const risk = health ? health.getRiskScore() : 0;
+    const riskEmoji = risk >= 80 ? "🔴" : risk >= 50 ? "🟠" : risk >= 20 ? "🟡" : "🟢";
+
     const sub = (ctx.arg || "").toLowerCase().trim();
+
+    // ─── Submenú por categoría específica: .menu descargas ──────
     if (sub) {
-      const wanted = Object.keys(catLabel).find(c => c === sub) || sub;
+      const matchedCat = Object.keys(catMeta).find(c => c === sub || sub.startsWith(c) || c.startsWith(sub));
+      const targetCat = matchedCat || sub;
+
       const inCat = [];
       const seen = new Set();
-      for (const [, cmd] of commands) {
-        if (seen.has(cmd.name) || cmd.name === "menu") continue;
-        seen.add(cmd.name);
-        const c = cmd.category || "otros";
-        if (c === wanted) inCat.push(cmd);
+      for (const [, cmd] of commands || []) {
+        if (!cmd || seen.has(cmd.name) || cmd.name === "menu") continue;
+        const c = (cmd.category || "otros").toLowerCase();
+        if (c === targetCat || (targetCat === "utilidades" && (c === "utils" || c === "utility")) || (targetCat === "descargas" && c === "downloads")) {
+          seen.add(cmd.name);
+          inCat.push(cmd);
+        }
       }
+
       if (inCat.length === 0) {
-        return "❌ Categoría *" + sub + "* no existe.\n\n" +
-          "Categorías: " + Object.keys(catLabel).join(", ");
+        const available = Object.keys(catMeta).filter(c => c !== "otros").join(", ");
+        return `❌ La categoría *${sub}* no existe.\n\n📂 *Categorías disponibles:*\n> ${available}\n\n💡 *Ejemplo:* \`.menu descargas\``;
       }
-      let subBody = "╭───「 ✨ *SHIN-MD* 」───\n│  " +
-        (catLabel[wanted] || "✦ *" + wanted.toUpperCase() + "*") + "\n" +
-        "╰───────────────────\n";
+
+      const meta = catMeta[targetCat] || { label: `✦ *${targetCat.toUpperCase()}*`, emoji: "📂" };
+      let subBody = `╭───「 ${meta.emoji} *SHIN-MD · ${meta.label.replace(/[✦*]/g, "").trim()}* 」───\n`;
+      subBody += `│  👤 Comandos disponibles: *${inCat.length}*\n`;
+      subBody += `╰──────────────────────────────────\n\n`;
+
       for (const c of inCat) {
-        subBody += "\n`." + c.name + "`" +
-          (c.aliases && c.aliases.length ? " *" + c.aliases.map(a => "." + a).join(" ") + "*" : "") + "\n";
-        if (c.description) subBody += "│  ⤷ " + c.description + "\n";
-        if (c.usage) subBody += "│  ▸ Uso: `" + c.usage + "`\n";
+        subBody += `● \`.${c.name}\``;
+        if (c.aliases && c.aliases.length > 0) {
+          subBody += ` _(${c.aliases.slice(0, 3).map(a => `.${a}`).join(", ")})_`;
+        }
+        subBody += `\n`;
+        if (c.description) subBody += `  ⤷ ${c.description}\n`;
+        if (c.usage) subBody += `  ▸ _Uso:_ \`${c.usage}\`\n`;
+        subBody += `\n`;
       }
-      subBody +=
-        "\n╭───────────────────\n" +
-        "│  _Basado en Shin-MD por riokuroxi-svg_\n" +
-        "│  _github.com/riokuroxi-svg/Shin-MD · AGPL-3.0_\n" +
-        "╰────「 反魂 」────";
-      return subBody;
+
+      subBody += `╭──────────────────────────────────\n`;
+      subBody += `│  _Para ver el menú completo escribe .menu_\n`;
+      subBody += `│  _Shin-MD v${localVersion()} · AGPL-3.0_\n`;
+      subBody += `╰────「 反魂 」────────────────────`;
+
+      const banner = getBanner();
+      if (banner) {
+        await sock.sendMessage(ctx.chatId, { image: banner, caption: subBody.trim() }, { quoted: ctx.full });
+        return null;
+      }
+      return subBody.trim();
     }
 
-    // Agrupar comandos únicos por categoría (ignorando aliases y menu)
+    // ─── Menú Principal Completo ─────────────────────────────────
     const cats = new Map();
     const seenNames = new Set();
-    for (const [, cmd] of commands) {
-      if (seenNames.has(cmd.name) || cmd.name === "menu") continue;
+    for (const [, cmd] of commands || []) {
+      if (!cmd || seenNames.has(cmd.name) || cmd.name === "menu") continue;
       seenNames.add(cmd.name);
-      const c = cmd.category || "otros";
+      const c = (cmd.category || "otros").toLowerCase();
       if (!cats.has(c)) cats.set(c, []);
       cats.get(c).push(cmd);
     }
 
-    let body = "";
-    for (const [cat, cmds] of cats) {
-      body += "\n" + (catLabel[cat] || "✦ *" + cat.toUpperCase() + "*") + "\n";
-      for (const c of cmds) {
-        body += "│   " + "`." + c.name + "`" +
-          (c.aliases && c.aliases.length ? " *" + c.aliases.map(a => "." + a).join(" ") + "*" : "") + "\n";
-        if (c.description) body += "│   ⤷ " + c.description + "\n";
-      }
+    let categoriesBody = "";
+    // Orden de visualización prioritario
+    const catOrder = ["info", "main", "downloads", "stickers", "anime", "utils", "utility", "economy", "gacha", "games", "fun", "group", "profile", "socket", "nsfw", "owner", "otros"];
+
+    for (const catKey of catOrder) {
+      const list = cats.get(catKey);
+      if (!list || list.length === 0) continue;
+      const meta = catMeta[catKey] || { label: `✦ *${catKey.toUpperCase()}*`, emoji: "📦" };
+      categoriesBody += `\n${meta.emoji} ${meta.label} (${list.length})\n`;
+      const cmdList = list.map(c => `\`${c.name}\``).join(" • ");
+      categoriesBody += `> ${cmdList}\n`;
     }
 
-    const timeStr = hours > 0 ? hours + "h " + remMin + "m" : minutes + "m";
-    const riskEmoji = risk >= 80 ? "🔴" : risk >= 50 ? "🟠" : risk >= 20 ? "🟡" : "🟢";
-    const total = seenNames.size;
+    const stateName = engine?.getStateName ? engine.getStateName() : "RUNNING";
+    const totalCommands = seenNames.size;
 
-    // Aviso de desactualización (transparente, nunca bloquea) + crédito
-    // fijo requerido por AGPL §7 / NOTICE.
-    const upd = await checkForUpdate();
-    let footer =
-      "╭───────────────────\n" +
-      "│  Escribe `menu <categoría>` para detalle\n" +
-      "│  _Basado en Shin-MD por riokuroxi-svg_\n" +
-      "│  _github.com/riokuroxi-svg/Shin-MD · AGPL-3.0_\n";
-    if (upd) footer = "╭───────────────────\n" + upd.replace(/\n/g, "\n│  ") + "\n" + footer;
+    const fullMenuText =
+      `╭───「 ✨ *SHIN-MD ${localVersion()}* 」───\n` +
+      `│  反魂 · Bot WhatsApp Superior\n` +
+      `│  🏷️ *Estado:* ${stateName} · *Uptime:* ${timeStr}\n` +
+      `│  🛡️ *Riesgo:* ${riskEmoji} ${risk}%\n` +
+      `│  👤 *Comandos:* ${totalCommands} únicos\n` +
+      `│  ⚡ *Prefijo:* \`.\`\n` +
+      `╰────────────────────────────\n` +
+      categoriesBody +
+      `\n╭────────────────────────────\n` +
+      `│ 💡 _Escribe .menu <categoría> para detalle_\n` +
+      `│ 📌 _Ejemplo: .menu descargas_\n` +
+      `│ _Basado en Shin-MD por riokuroxi-svg_\n` +
+      `│ _github.com/riokuroxi-svg/Shin-MD · AGPL-3.0_\n` +
+      `╰────「 反魂 」─────────────`;
 
-    const text = "╭───「 ✨ *SHIN-MD* 」───\n" +
-      "│  反魂 · Bot WhatsApp superior\n" +
-      "│  🏷️ *" + engine.getStateName() + "* · " + timeStr + " de actividad\n" +
-      "│  🛡️ Riesgo: " + riskEmoji + " " + risk + "%\n" +
-      "│  👤 " + total + " comandos · prefijo `.`\n" +
-      "╰───────────────────\n" +
-      body +
-      "\n" + footer +
-      "╰────「 反魂 」────";
-
-    // Botones por categoría
-    const buttons = [...cats.keys()].map(cat => quickReply(catEmoji[cat] + " " + (catLabel[cat] || cat).replace(/[✦*]/g, "").trim(), "menu " + cat));
-
-    // Enviar interactivo con banner (si hay) o texto
-    try {
-      const sent = await sendInteractive(sock, ctx.chatId, {
-        body: text,
-        footer: "反魂 Shin-MD · AGPL-3.0",
-        image: BANNER_URL || undefined,
-        buttons: buttons.slice(0, 4),
-        quoted: ctx.full,
-      });
-      // Si envió interactivo, el botón "menu <cat>" será capturado por el router
-      return sent ? null : text;
-    } catch {
-      return text; // fallback texto plano
+    const banner = getBanner();
+    if (banner) {
+      await sock.sendMessage(ctx.chatId, { image: banner, caption: fullMenuText }, { quoted: ctx.full });
+      return null;
+    } else {
+      await sock.sendMessage(ctx.chatId, { text: fullMenuText }, { quoted: ctx.full });
+      return null;
     }
   },
 };

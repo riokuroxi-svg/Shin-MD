@@ -7,6 +7,7 @@
 // Play2 — descarga y envía video de YouTube (mp4)
 // Misma lógica que .play pero para video. Usa ytdl-core o APIs externas.
 
+import { getAudioUrl } from "#downloader";
 import ytdl from "ytdl-core";
 
 export default {
@@ -30,11 +31,12 @@ export default {
       return "❌ Por favor ingresa un enlace válido de YouTube.";
     }
 
-    // sock.sendMessage ya encola en la cola anti-ban (encolarlo a mano
-    // desde aquí deadlockearía la cola serial).
-    const sent = await sock.sendMessage(ctx.chatId, {
-      text: "⏳ *Descargando video...*\n_" + query.slice(0, 40) + "_"
-    }, { quoted: ctx.full });
+    const sent = await engine.getSendQueue().enqueue(
+      () => sock.sendMessage(ctx.chatId, {
+        text: "⏳ *Descargando video...*\n_" + query.slice(0, 40) + "_"
+      }, { quoted: ctx.full }),
+      { messageLength: 30 }
+    );
 
     let key;
     if (sent && sent.key) key = sent.key;
@@ -57,18 +59,24 @@ export default {
       const fileName = title ? title.replace(/[/\\?*:<>|"]/g, '').slice(0, 80) + ".mp4" : "video.mp4";
 
       // Enviar video
-      await sock.sendMessage(ctx.chatId, {
-        video: { url: format.url },
-        mimetype: 'video/mp4',
-        fileName,
-      }, { quoted: ctx.full });
+      await engine.getSendQueue().enqueue(
+        () => sock.sendMessage(ctx.chatId, {
+          video: { url: format.url },
+          mimetype: 'video/mp4',
+          fileName,
+        }, { quoted: ctx.full }),
+        { messageLength: 20, isNewContact: false }
+      );
 
       if (key) {
         try {
-          await sock.sendMessage(ctx.chatId, {
-            text: `✅ *Video listo!*${title ? `\n📌 ${title.slice(0, 60)}` : ''}`,
-            edit: key,
-          }, {});
+          await engine.getSendQueue().enqueue(
+            () => sock.sendMessage(ctx.chatId, {
+              text: `✅ *Video listo!*${title ? `\n📌 ${title.slice(0, 60)}` : ''}`,
+              edit: key,
+            }, {}),
+            { messageLength: 50, isPriority: true }
+          );
         } catch {}
       }
       return null;
@@ -76,7 +84,10 @@ export default {
       const errTxt = err.message?.length < 400 ? err.message : "❌ Error al descargar el video.";
       if (key) {
         try {
-          await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, {});
+          await engine.getSendQueue().enqueue(
+            () => sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, {}),
+            { messageLength: errTxt.length, isPriority: true }
+          );
         } catch {}
         return null;
       }

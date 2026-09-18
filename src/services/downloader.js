@@ -5,10 +5,10 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // downloader.js — Descarga de YouTube multifuente
-// Metadata via ytsr + ytdl-core (puro JS). Descarga via API configurable.
+// Búsqueda directa sin keys (vía searchYouTube) + fallback a APIs externas configurables.
 
 import log from "#logger";
-import ytsr from "ytsr";
+import { searchYouTube, getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
 import ytdl from "ytdl-core";
 
 const FETCH_TIMEOUT = 20000;
@@ -59,9 +59,9 @@ export async function getAudioUrl(query) {
   }
 
   const msg =
-    "❌ No hay fuente de descarga disponible.\n" +
-    "· Configura *YT_API_URL* en .env con tu API\n" +
-    "· O activa *YTDL_ENABLED=1* para usar ytdl-core\n\n" +
+    "❌ No hay fuente de descarga disponible actualmente.\n" +
+    "· Configura *YT_API_URL* en .env con tu API personalizada\n" +
+    "· O activa *YTDL_ENABLED=1* en .env para descarga directa\n\n" +
     "_" + errors.join(" · ") + "_";
   throw new Error(msg);
 }
@@ -93,27 +93,33 @@ async function resolveVideo(query) {
   query = (query || "").trim();
   if (!query) throw new Error("Indica un nombre o enlace de YouTube.");
 
-  if (ytdl.validateURL(query)) {
-    let title = null;
-    let duration = null;
+  const directId = getYouTubeVideoId(query);
+  if (directId) {
+    const videoUrl = `https://youtu.be/${directId}`;
     try {
-      const info = await ytdl.getBasicInfo(query, { timeout: 10000 });
-      title = info.videoDetails?.title || null;
-      duration = info.videoDetails?.lengthSeconds || null;
-    } catch {}
-    return { videoUrl: query, metadata: { title, duration } };
+      const info = await getVideoInfoById(directId);
+      return {
+        videoUrl,
+        metadata: {
+          title: info?.title || "Audio YouTube",
+          duration: info?.timestamp || null,
+        },
+      };
+    } catch {
+      return { videoUrl, metadata: { title: "Audio YouTube", duration: null } };
+    }
   }
 
   try {
-    const results = await ytsr(query, { limit: 1 });
-    const video = results.items.find(i => i.type === "video");
+    const searchRes = await searchYouTube(query, { limit: 1 });
+    const video = searchRes.videos?.[0];
     if (!video || !video.url) throw new Error("No se encontraron videos para: " + query);
 
     return {
       videoUrl: video.url,
       metadata: {
         title: video.title || null,
-        duration: video.duration || null,
+        duration: video.timestamp || null,
       },
     };
   } catch (e) {
