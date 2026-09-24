@@ -47,6 +47,7 @@ export function createWebServer(engine, opts) {
       uptimeSec: Math.round(engine.getUptime() / 1000),
       risk: h,
       queue: q ? q.length() : -1,
+      groups: typeof engine.getGroupCount === "function" ? engine.getGroupCount() : 0,
       memoryMB: Math.round(process.memoryUsage().rss / 1048576),
     });
   });

@@ -224,6 +224,18 @@ export function connectSocket(engine, opts) {
         engine.emit("connected", s.user);
         log.success("[ ✿ ] Conectado a: " + (s.user?.name || s.user?.id || "?"));
         if (onReady) onReady(s);
+
+        // B2.2: log estilo Ginko — "Grupos: X" al conectar, y el dato queda
+        // disponible para el panel /health. Con setTimeout para no frenar la
+        // transición READY; si falla no pasa nada (el contador queda en 0).
+        setTimeout(async () => {
+          try {
+            const groups = await s.groupFetchAllParticipating();
+            const n = Object.keys(groups || {}).length;
+            if (typeof engine.setGroupCount === "function") engine.setGroupCount(n);
+            log.info("Grupos: " + n);
+          } catch {}
+        }, 1500);
         if (engine.getState() < engine.LIFECYCLE.RUNNING) engine.transit(engine.LIFECYCLE.RUNNING);
         if (watchdog) watchdog.tick();
       }

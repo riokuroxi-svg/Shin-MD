@@ -11,13 +11,17 @@ import { createThrottler } from "#throttler";
 
 const LIFECYCLE = { BOOT: 0, INIT: 1, CONNECT: 2, READY: 3, RUNNING: 4, SHUTDOWN: 5 };
 
-export function createEngine() {
+export function createEngine(opts) {
+  opts = opts || {};
   let state = LIFECYCLE.BOOT;
   let sock = null;
   let bootTime = Date.now();
   let ownerJid = null;
+  let groupCount = 0;
   const health = createHealthMonitor();
-  const throttler = createThrottler();
+  // opts.throttler: perfil del número (B2.1) — el boot decide si el
+  // número es nuevo (1500ms + warm-up 7d) o aclimatado (700ms + 2d).
+  const throttler = createThrottler(opts.throttler);
   const sendQueue = createSendQueue(throttler, health);
   const listeners = {};
 
@@ -27,6 +31,8 @@ export function createEngine() {
   function setSock(s) { sock = s; }
   function setOwnerJid(j) { ownerJid = j; }
   function getOwnerJid() { return ownerJid; }
+  function setGroupCount(n) { groupCount = n; }
+  function getGroupCount() { return groupCount; }
   function getHealth() { return health; }
   function getThrottler() { return throttler; }
   function getSendQueue() { return sendQueue; }
@@ -77,6 +83,7 @@ export function createEngine() {
   return {
     getState, getStateName, getSock, setSock,
     setOwnerJid, getOwnerJid,
+    setGroupCount, getGroupCount,
     getHealth, getThrottler, getSendQueue, getUptime,
     transit, emit, on, once, shutdown, LIFECYCLE,
     bootTime,
