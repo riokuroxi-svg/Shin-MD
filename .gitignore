@@ -36,4 +36,8 @@ npm-debug.log*
 
 # Private config
 config.private.js
+
+# Credenciales / cookies de sesión (NUNCA subir)
+cookies.txt
+*.cookies.txt
 audit/

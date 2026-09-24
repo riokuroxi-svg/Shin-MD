@@ -63,11 +63,20 @@ ruta 401 (sesión inválida real) sigue limpiando correctamente ✅
 - [x] Estética: logger con iconos ◐ ◑ ✓ ✕ en vez de INFO/SUCCESS en mayúsculas.
 - [x] README: aviso estricto de usar número secundario (ningún bot es 100% inmune).
 
-### BLOQUE 3 — Descargas y herramientas de owner
-- [ ] `.subir` (solo owner, con candado anti-`..` para no salir del repo).
-- [ ] `.subircookies`: el bot pide el documento cookies.txt y lo guarda.
-- [ ] `.play` con soporte opcional de `cookies.txt` + fallback `@distube/ytdl-core`.
-- [ ] Evaluar `soundcloud-scraper` si existe comando de SoundCloud.
+### BLOQUE 3 — Descargas y herramientas de owner ✅ COMPLETADO (2026-09-24)
+- [x] `.subir` (solo owner): escribe/actualiza archivos desde WhatsApp.
+      Candado: la ruta resuelta debe quedar dentro del repo, `.git/`
+      protegido, máx 200k chars, aviso de `.reload` si es un comando.
+- [x] `.subircookies`: envías el cookies.txt como documento (directo con
+      caption o respondiendo) y el bot lo guarda en ./cookies.txt.
+      cookies.txt bloqueado en .gitignore (son credenciales).
+- [x] `ytdl-core` → `@distube/ytdl-core` (fork mantenido). Verificado en
+      vivo: el original devuelve HTTP 410 (endpoint muerto). El fork
+      funciona; el 429 que da desde IPs de datacenter es justo lo que las
+      cookies resuelven (.play/.play2 las inyectan vía requestOptions).
+- [x] soundcloud-scraper: DESCARTADO — Shin-MD no tiene comando de
+      SoundCloud; instalar la dependencia sin comando sería peso muerto.
+      Se instalará cuando se cree el comando.
 
 ### BLOQUE 4 — UI premium (menús)
 - [ ] Validar EN TELÉFONO REAL qué renderiza Baileys 6.7.24 hoy (lo de

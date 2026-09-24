@@ -8,7 +8,10 @@
 // Misma lógica que .play pero para video. Usa ytdl-core o APIs externas.
 
 import { getAudioUrl } from "#downloader";
-import ytdl from "ytdl-core";
+// B3: @distube/ytdl-core (fork mantenido; el ytdl-core original murió → 410).
+// Cookies del owner (.subircookies) para IPs de servidor bloqueadas.
+import ytdl from "@distube/ytdl-core";
+import { loadYtCookies } from "#downloader";
 
 export default {
   name: "play2",
@@ -42,16 +45,23 @@ export default {
     if (sent && sent.key) key = sent.key;
 
     try {
+      // B3: si hay cookies.txt del owner, se envían para que YouTube no
+      // trate la IP del servidor como bot (error 429/403 sin sesión).
+      const cookies = loadYtCookies();
+      const requestOptions = cookies
+        ? { headers: { Cookie: cookies, "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36" } }
+        : undefined;
+
       // Obtener info del video para metadata
       let info = null;
       let title = null;
       try {
-        info = await ytdl.getBasicInfo(query, { timeout: 10000 });
+        info = await ytdl.getBasicInfo(query, { timeout: 10000, requestOptions });
         title = info.videoDetails?.title || null;
       } catch {}
 
       // Elegir formato de video (mp4, calidad media)
-      const infoFull = await ytdl.getInfo(query, { quality: "lowest" });
+      const infoFull = await ytdl.getInfo(query, { quality: "lowest", requestOptions });
       const format = ytdl.chooseFormat(infoFull.formats, { quality: "lowest" });
 
       if (!format?.url) throw new Error("No se encontró formato de video.");

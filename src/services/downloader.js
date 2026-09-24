@@ -8,10 +8,44 @@
 // Búsqueda directa sin keys (vía searchYouTube) + fallback a APIs externas configurables.
 
 import log from "#logger";
+import fs from "node:fs";
+import path from "node:path";
 import { searchYouTube, getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
-import ytdl from "ytdl-core";
+// @distube/ytdl-core: fork mantenido de ytdl-core. El original murió en
+// 2024 (YouTube le tumbó el endpoint → HTTP 410, verificado en vivo).
+// Misma API (getInfo/chooseFormat), recibe cookies vía requestOptions.
+import ytdl from "@distube/ytdl-core";
 
 const FETCH_TIMEOUT = 20000;
+const YT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+// ── B3: cookies de YouTube (Netscape cookies.txt) ──────────────────
+// El owner las sube con .subircookies → ./cookies.txt (o COOKIES_FILE).
+// Sirven cuando la IP del servidor está marcada como bot por YouTube:
+// con sesión válida deja descargar. Solo aplican al modo YTDL_ENABLED=1.
+let cookiesWarned = false;
+export function loadYtCookies() {
+  try {
+    const file = process.env.COOKIES_FILE || path.resolve("cookies.txt");
+    if (!fs.existsSync(file)) return "";
+    const raw = fs.readFileSync(file, "utf8");
+    const pairs = [];
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const f = t.split("\t");
+      if (f.length < 7) continue;
+      const domain = f[0], name = f[5], value = f[6];
+      if (!/youtube\.com|google\.com|googlevideo\.com/i.test(domain)) continue;
+      if (name) pairs.push(name + "=" + value);
+    }
+    if (pairs.length && !cookiesWarned) {
+      cookiesWarned = true;
+      log.info("Cookies de YouTube cargadas (" + pairs.length + " entradas)");
+    }
+    return pairs.join("; ");
+  } catch { return ""; }
+}
 
 const DEFAULT_PROVIDERS = [
   {
@@ -36,7 +70,11 @@ export async function getAudioUrl(query) {
   for (const p of providers) {
     try {
       if (p.isYtdlDirect) {
-        const info = await ytdl.getInfo(videoUrl, { quality: "lowestaudio" });
+        const cookies = loadYtCookies();
+        const requestOptions = cookies
+          ? { headers: { Cookie: cookies, "User-Agent": YT_UA } }
+          : { headers: { "User-Agent": YT_UA } };
+        const info = await ytdl.getInfo(videoUrl, { quality: "lowestaudio", requestOptions });
         const format = ytdl.chooseFormat(info.formats, { quality: "lowestaudio" });
         if (format?.url) {
           log.success("Downloader: ytdl-core direct → ok");
