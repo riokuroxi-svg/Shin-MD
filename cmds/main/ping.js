@@ -15,6 +15,7 @@ export default {
   description: "Mide la latencia y muestra el estado del bot",
   usage: ".ping",
   cooldown: 10,
+  priority: true, // B1.4: el ping debe responder al instante, sin delay del throttler
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,

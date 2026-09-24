@@ -72,6 +72,7 @@ export default {
   description: "Muestra el menú principal de comandos del bot",
   usage: ".menu [categoría]",
   cooldown: 3,
+  priority: true, // B1.4: respuesta inmediata, salta el delay largo del throttler
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,

@@ -26,6 +26,15 @@ export function createSendQueue(throttler, health, opts = {}) {
   const queue = [];
   let processing = false;
   let paused = false;
+  // B1.4: ventana de prioridad. El router la abre alrededor de comandos
+  // marcados `priority: true` (.menu/.ping/.owner); todo envío hecho
+  // dentro de la ventana sale con delay mínimo y no lo frena el tope
+  // diario del warm-up (son respuestas directas a quien escribe: lo
+  // menos baneable que hay).
+  let priorityDepth = 0;
+  function enterPriority() { priorityDepth++; }
+  function exitPriority() { priorityDepth = Math.max(0, priorityDepth - 1); }
+  function inPriority() { return priorityDepth > 0; }
 
   function enqueue(fn, opts) {
     opts = opts || {};
@@ -42,13 +51,20 @@ export function createSendQueue(throttler, health, opts = {}) {
     while (queue.length > 0) {
       if (paused) { processing = false; return; }
 
-      const task = queue.shift();
-
+      // B1.4: con el tope diario del warm-up alcanzado, las tareas
+      // normales esperan; si hay una tarea de prioridad en la cola,
+      // se adelanta y pasa (nunca se queda 60s detrás del bloqueo).
+      let task;
       if (throttler && !throttler.canSend()) {
-        log.warn("Warm-up limit reached, waiting 60s...");
-        await new Promise(r => setTimeout(r, 60000));
-        queue.unshift(task);
-        continue;
+        const pIdx = queue.findIndex(t => t.opts && t.opts.isPriority);
+        if (pIdx === -1) {
+          log.warn("Warm-up limit reached, waiting 60s...");
+          await new Promise(r => setTimeout(r, 60000));
+          continue;
+        }
+        task = queue.splice(pIdx, 1)[0];
+      } else {
+        task = queue.shift();
       }
 
       const delay = throttler ? throttler.calcDelay({
@@ -92,7 +108,7 @@ export function createSendQueue(throttler, health, opts = {}) {
   function length() { return queue.length; }
   function isPaused() { return paused; }
 
-  return { enqueue, pause, resume, clear, length, isPaused };
+  return { enqueue, pause, resume, clear, length, isPaused, enterPriority, exitPriority, inPriority };
 }
 
 export default createSendQueue;

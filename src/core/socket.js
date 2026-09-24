@@ -40,6 +40,7 @@ export function connectSocket(engine, opts) {
   let isRestarting = false;
   let restartStreak = 0;
   let lastRestartAt = 0;
+  let patientWarned = false;
   const MAX_RETRIES = 15;
   const msgStore = new Map();
   // Tope ÚNICO del msgStore: envíos y recibidos comparten el mismo Map.
@@ -140,7 +141,9 @@ export function connectSocket(engine, opts) {
     s.sendMessage = async (j, c, o) => {
       const qo = {
         messageLength: c?.text?.length || 0,
-        isPriority: !!(o && o._priority),
+        // B1.4: prioridad por flag explícito (_priority) o por ventana de
+        // prioridad activa (comandos priority: .menu/.ping/.owner).
+        isPriority: !!(o && o._priority) || sendQueue.inPriority(),
       };
       if (o) { delete o._priority; } // no fugarse a Baileys
       const r = await sendQueue.enqueue(() => origSM(j, c, o), qo);
@@ -162,7 +165,10 @@ export function connectSocket(engine, opts) {
     const origRelay = s.relayMessage.bind(s);
     s.relayMessage = async (j, m, o) => {
       const text = m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || "";
-      return sendQueue.enqueue(() => origRelay(j, m, o), { messageLength: String(text).length });
+      return sendQueue.enqueue(() => origRelay(j, m, o), {
+        messageLength: String(text).length,
+        isPriority: sendQueue.inPriority(), // B1.4: tarjetas interactivas de comandos priority
+      });
     };
 
     s.decodeJid = (jid) => {
@@ -206,6 +212,7 @@ export function connectSocket(engine, opts) {
       if (connection === "open") {
         retries = 0;
         isRestarting = false;
+        patientWarned = false;
         if (Date.now() - lastRestartAt > 60000) restartStreak = 0;
 
         // FORZAR guardado inmediato de credenciales ANTES de que se cierre
@@ -231,9 +238,14 @@ export function connectSocket(engine, opts) {
 
       if (connection === "close") {
         remove(s);
-        health.recordDisconnect();
 
         const code = lastDisconnect?.error?.output?.statusCode || 0;
+        const registered = !!state.creds.registered;
+
+        // B1.2: el riesgo solo cuenta con sesión YA válida. Durante el
+        // pairing las desconexiones son normales (bloqueo de pantalla en
+        // Android, datos móviles) y NO son señal de ban.
+        if (registered) health.recordDisconnect();
 
         // DEBUG: mostrar codigo exacto
         const reasonName = Object.keys(DisconnectReason).find(k => DisconnectReason[k] === code) || "unknown";
@@ -274,6 +286,15 @@ export function connectSocket(engine, opts) {
           restartStreak = (now - lastRestartAt < 60000) ? restartStreak + 1 : 1;
           lastRestartAt = now;
           if (restartStreak >= 6) {
+            if (registered) {
+              // B1.1: NUNCA borrar una sesión válida. Tormenta de c0 =
+              // sesión corrupta o problema del servidor; se sale con el
+              // auth.db intacto. Si el fallo sigue al re-arrancar, el
+              // usuario borra Sessions/Owner a mano para re-vincular.
+              log.fatal("Demasiados restarts seguidos (c0) — saliendo SIN borrar la sesión");
+              log.warn("Si el fallo persiste al reiniciar, borra la carpeta Sessions/Owner para vincular de nuevo.");
+              process.exit(1);
+            }
             log.fatal("Demasiados restarts seguidos (c0) — limpiando sesión");
             clearSession();
             process.exit(1);
@@ -286,11 +307,35 @@ export function connectSocket(engine, opts) {
           return;
         }
 
+        if (!registered) {
+          // B1.2: pairing paciente — aquí los reintentos NO cuentan.
+          // No hay sesión válida que proteger y el usuario necesita tiempo
+          // para teclear el código: reconexión con backoff sin límite,
+          // como Ginko-MD. (Antes: 15 cortes de red durante el pairing
+          // borraban auth.db y había que empezar de cero.)
+          const pd = backoffDelay();
+          log.gray(`Pairing: desconexión (${code}), reintentando en ${Math.round(pd / 1000)}s...`);
+          isRestarting = false;
+          setTimeout(start, pd);
+          return;
+        }
+
         retries++;
         if (retries > MAX_RETRIES) {
-          log.fatal("Demasiados reintentos — limpiando sesión");
-          clearSession();
-          process.exit(1);
+          // B1.1 (FIX CRÍTICO): antes esto borraba auth.db tras 15
+          // desconexiones de CUALQUIER tipo — incluidos cortes de red
+          // 408/428, fatales en Termux con datos móviles (15 cortes se
+          // alcanzan en ~2 min y perdías la vinculación). Una sesión
+          // válida NUNCA se borra por cortes de red: se pasa a modo
+          // paciente (reintento cada ~5 min) hasta que vuelva la señal.
+          if (!patientWarned) {
+            log.warn("Muchos reintentos seguidos — modo paciente: reintento cada ~5 min, sesión intacta");
+            patientWarned = true;
+          }
+          const pd = 300000 + Math.floor(Math.random() * 30000);
+          isRestarting = false;
+          setTimeout(start, pd);
+          return;
         }
 
         const reasonMessages = {

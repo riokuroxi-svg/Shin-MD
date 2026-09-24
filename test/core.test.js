@@ -112,3 +112,53 @@ test("cache set/get/delete/ttl", async () => {
   await new Promise(r => setTimeout(r, 80));
   assert.equal(c.get("b"), undefined);
 });
+
+// ── B1.4: prioridad en la cola (.menu/.ping/.owner) ──────────────
+
+test("queue: tarea de prioridad pasa aunque el warm-up esté al tope", async () => {
+  // Throttler falso con el límite diario YA alcanzado (canSend=false).
+  // Sin el fix de prioridad, esta tarea esperaría 60s; con él, pasa.
+  const throttler = {
+    canSend: () => false,
+    calcDelay: () => 5,
+    recordSent: () => {},
+  };
+  const q = createSendQueue(throttler, null);
+  const started = Date.now();
+  const r = await q.enqueue(async () => "ok", { isPriority: true });
+  assert.equal(r, "ok");
+  assert.ok(Date.now() - started < 5000, "la prioridad no saltó el tope del warm-up");
+});
+
+test("queue: ventana de prioridad enter/exit anidada", () => {
+  const q = createSendQueue(null, null);
+  assert.equal(q.inPriority(), false);
+  q.enterPriority();
+  assert.equal(q.inPriority(), true);
+  q.enterPriority(); // anidado (router + handler)
+  q.exitPriority();
+  assert.equal(q.inPriority(), true);
+  q.exitPriority();
+  assert.equal(q.inPriority(), false);
+  q.exitPriority(); // nunca baja de 0
+  assert.equal(q.inPriority(), false);
+});
+
+test("queue: prioridad se adelanta a tarea normal con el tope alcanzado", async () => {
+  // canSend() es false hasta que la tarea de prioridad ya se procesó:
+  // fuerza la ruta de selección por prioridad sin esperar los 60s del
+  // bloqueo de warm-up. Orden esperado: primero la prioridad, luego la normal.
+  const order = [];
+  const throttler = {
+    canSend: () => order.includes("prio"),
+    calcDelay: () => 1,
+    recordSent: () => {},
+  };
+  const q = createSendQueue(throttler, null);
+  q.pause();
+  const pNormal = q.enqueue(async () => { order.push("normal"); }, {});
+  const pPrio = q.enqueue(async () => { order.push("prio"); }, { isPriority: true });
+  q.resume();
+  await Promise.all([pNormal, pPrio]);
+  assert.deepEqual(order, ["prio", "normal"]);
+});

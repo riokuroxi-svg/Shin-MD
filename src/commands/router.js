@@ -128,21 +128,34 @@ export function createRouter(engine, opts) {
       }
 
       // Ejecutar
+      // B1.4: comandos con `priority: true` (.menu/.ping/.owner) abren la
+      // ventana de prioridad de la cola: sus envíos salen con delay mínimo
+      // y saltan el tope del warm-up. Antes, .menu recién conectado tardaba
+      // 3-5s (delay base 1200ms + 25ms/char del texto largo) y parecía muerto.
       const start = Date.now();
-      const result = await cmd.handler(sock, ctx, engine, commands);
-      const ms = Date.now() - start;
+      const sendQueue = engine?.getSendQueue?.();
+      // Defensivo: la API de prioridad puede no existir en stubs/colas viejas.
+      const usePriority = !!(cmd.priority && sendQueue && typeof sendQueue.enterPriority === "function");
+      if (usePriority) sendQueue.enterPriority();
+      try {
+        const result = await cmd.handler(sock, ctx, engine, commands);
+        const ms = Date.now() - start;
 
-      // Log estilo Ginko-MD si hay callback
-      if (typeof opts.onCommand === "function") {
-        try { opts.onCommand(ctx, cmd.name, ms); } catch {}
-      } else if (ms > 1000) {
-        log.gray("Comando " + cmd.name + " tardó " + ms + "ms");
-      }
+        // Log estilo Ginko-MD si hay callback
+        if (typeof opts.onCommand === "function") {
+          try { opts.onCommand(ctx, cmd.name, ms); } catch {}
+        } else if (ms > 1000) {
+          log.gray("Comando " + cmd.name + " tardó " + ms + "ms");
+        }
 
-      // Si el handler devolvió texto, enviarlo (conveniencia).
-      // La cola se aplica dentro de sock.sendMessage (punto único).
-      if (typeof result === "string" && result.length > 0) {
-        await sock.sendMessage(ctx.chatId, { text: result }, { quoted: msg });
+        // Si el handler devolvió texto, enviarlo (conveniencia).
+        // La cola se aplica dentro de sock.sendMessage (punto único).
+        // Se envía DENTRO de la ventana para que también sea prioridad.
+        if (typeof result === "string" && result.length > 0) {
+          await sock.sendMessage(ctx.chatId, { text: result }, { quoted: msg });
+        }
+      } finally {
+        if (usePriority) sendQueue.exitPriority();
       }
     } catch (err) {
       log.error("Router: " + (err.message || err), err);
