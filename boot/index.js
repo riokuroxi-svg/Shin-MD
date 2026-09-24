@@ -156,11 +156,25 @@ if (args.menu) {
   opcion = "1";
 } else if (args.code) {
   opcion = "2";
-  phoneNumber = args.phone || normalizePhone(readlineSync.question(
-    chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp.\n") +
-    chalk.bold.yellowBright("Ejemplo: +57301******\n") +
-    chalk.bold.magentaBright("---> ")
-  ));
+  // Prioridad: número por CLI > PAIRING_NUMBER de .env > preguntar.
+  // (Antes: siempre preguntaba con readline-sync y crasheaba en hosts
+  //  sin terminal interactiva — BoxMine, Docker, paneles, etc.)
+  phoneNumber = args.phone || normalizePhone(envNumber);
+  if (!phoneNumber) {
+    if (!process.stdin.isTTY) {
+      console.error(chalk.red("[Shin-MD] --code sin número y sin consola interactiva."));
+      console.error(chalk.yellow("[Shin-MD] Usa: node index.js --code +521XXXXXXXXXX"));
+      console.error(chalk.yellow("[Shin-MD] o define PAIRING_NUMBER en tu archivo .env"));
+      process.exit(1);
+    }
+    phoneNumber = normalizePhone(readlineSync.question(
+      chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp.\n") +
+      chalk.bold.yellowBright("Ejemplo: +57301******\n") +
+      chalk.bold.magentaBright("---> ")
+    ));
+  } else {
+    console.log(chalk.gray(`[ ✿ ] Vinculación por código (número: ${phoneNumber})\n`));
+  }
 } else if (sessionValida) {
   opcion = "0";
   console.log(chalk.gray("[ ✿ ] Sesión existente detectada, cargando...\n"));
@@ -172,7 +186,7 @@ if (args.menu) {
 
 // Menú interactivo si no se decidió antes
 if (!opcion) {
-  const isInteractive = process.stdin.isTTY !== false;
+  const isInteractive = !!process.stdin.isTTY;
   if (!isInteractive) {
     log.warn("No hay consola interactiva. Usa --qr, --code o configura .env");
     opcion = "1";
@@ -237,8 +251,15 @@ async function main() {
     const u = user?.id?.split(":")[0] || "?";
     const jid = u + "@s.whatsapp.net";
     process.env.BOT_JID = jid;
-    db.settings.set("owner_jid", jid);
-    engine.setOwnerJid(jid);
+    // ⚠️ s.user es la cuenta VINCULADA (el propio bot), no el dueño.
+    // owner_jid solo como fallback: si .env no definió OWNER_NUMBER,
+    // asumimos que quien vinculó la cuenta es el dueño. Si el owner ya
+    // está definido NO se sobreescribe — antes el handler lo pisaba con
+    // el JID del bot y el dueño real perdía sus permisos de owner.
+    if (!engine.getOwnerJid()) {
+      db.settings.set("owner_jid", jid);
+      engine.setOwnerJid(jid);
+    }
   });
 
   const router = createRouter(engine, { onCommand: logCommand });
