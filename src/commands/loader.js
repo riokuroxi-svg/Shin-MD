@@ -147,7 +147,12 @@ export async function loadCommands() {
     }
   }
 
-  log.success(commands.size + " comandos (" + shinCount + " Shin, " + ginkoCount + " Ginko)" + (dupeCount ? " · " + dupeCount + " duplicados" : ""));
+  // B2.3: el Map guarda cada comando + todos sus aliases como entradas,
+  // así que commands.size NO es el número de comandos (195 únicos vs 667
+  // entradas con aliases). El log viejo mostraba el tamaño del Map y
+  // parecía que hubiera cientos de comandos duplicados.
+  const unique = shinCount + ginkoCount - dupeCount;
+  log.success(unique + " comandos únicos (" + shinCount + " Shin, " + ginkoCount + " Ginko) · " + commands.size + " entradas con aliases" + (dupeCount ? " · " + dupeCount + " duplicados" : ""));
   return commands;
 }
 

@@ -5,22 +5,22 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  logger.js — Logging EXACTO de Ginko-MD
-//  chalk puro, sin pino, sin timestamps (como Ginko-MD)
+//  logger.js — Logging estilo Ginko-MD (B2.4: iconos ◐ ◑ ✓ ✕ en vez de
+//  etiquetas INFO/SUCCESS en mayúsculas; colores suaves, chalk puro)
 // ═══════════════════════════════════════════════════════════════════
 
 import chalk from "chalk";
 
 const log = {
-  info: (msg) => console.log(chalk.bgBlue.white.bold(" INFO "), chalk.white(msg)),
-  success: (msg) => console.log(chalk.bgGreen.white.bold(" SUCCESS "), chalk.greenBright(msg)),
-  warn: (msg) => console.log(chalk.bgHex("#FFA500").white.bold(" WARNING "), chalk.yellow(msg)),
+  info: (msg) => console.log(chalk.cyan(" ◐ "), chalk.white(msg)),
+  success: (msg) => console.log(chalk.green(" ✓ "), chalk.greenBright(msg)),
+  warn: (msg) => console.log(chalk.yellow(" ◑ "), chalk.yellow(msg)),
   error: (msg, err) => {
-    console.log(chalk.bgRed.white.bold(" ERROR "), chalk.redBright(msg));
+    console.log(chalk.red(" ✕ "), chalk.redBright(msg));
     if (err?.stack) console.log(chalk.red(err.stack.split("\n").slice(1, 3).join("\n")));
   },
   fatal: (msg, err) => {
-    console.log(chalk.bgRed.white.bold(" FATAL "), chalk.redBright.bold(msg));
+    console.log(chalk.bgRed.white.bold(" ✕✕ "), chalk.redBright.bold(msg));
     if (err?.stack) console.log(chalk.red(err.stack));
   },
   gray: (msg) => console.log(chalk.gray(msg)),

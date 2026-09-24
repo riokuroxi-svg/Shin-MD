@@ -51,13 +51,17 @@ Verificado uno por uno contra el código real:
 **Verificación:** 30/30 tests ✅ · arranque real con .env carga 195 comandos ✅ ·
 ruta 401 (sesión inválida real) sigue limpiando correctamente ✅
 
-### BLOQUE 2 — UX y consola
-- [ ] `numberProfile` en config: número nuevo = 1500ms + warm-up 7d; número
-      aclimatado = 700ms + warm-up 2d.
-- [ ] Log de arranque "Grupos: X" (como Ginko) + grupos visibles en `/health`.
-- [ ] Limpieza de alias duplicados tras el Bloque 0.
-- [ ] Estética: iconos ✓ ✕ ◐ en vez de INFO/SUCCESS gritones (sin romper Pino).
-- [ ] README: aviso estricto "usa número secundario, ningún bot es 100% inmune".
+### BLOQUE 2 — UX y consola ✅ COMPLETADO (2026-09-24)
+- [x] `numberProfile`: NUMBER_PROFILE=auto|nuevo|veterano en .env. Nuevo =
+      1500ms + warm-up 7d; veterano = 700ms + warm-up 2d. La fecha de warm-up
+      YA se persiste en settings (antes se reiniciaba en cada arranque y un
+      número viejo nunca se sentía ágil). Auto: >=7 días de antigüedad → veterano.
+- [x] Log "Grupos: X" al conectar (estilo Ginko) + campo `groups` en `/health`.
+- [x] Misterio "667 vs 195" resuelto: el Map cuenta nombres + aliases; NO hay
+      comandos duplicados (Batch I ya los limpió). El log ahora muestra el
+      número real: "195 comandos únicos · 667 entradas con aliases".
+- [x] Estética: logger con iconos ◐ ◑ ✓ ✕ en vez de INFO/SUCCESS en mayúsculas.
+- [x] README: aviso estricto de usar número secundario (ningún bot es 100% inmune).
 
 ### BLOQUE 3 — Descargas y herramientas de owner
 - [ ] `.subir` (solo owner, con candado anti-`..` para no salir del repo).

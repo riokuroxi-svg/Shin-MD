@@ -20,6 +20,15 @@
 
 </div>
 
+> ## ⚠️ AVISO IMPORTANTE — LEE ESTO ANTES DE USAR EL BOT
+>
+> **Usa un número secundario o virtual.** WhatsApp puede banear cuentas que
+> automatizan mensajes. Shin-MD tiene el sistema anti-ban más serio de su
+> clase (jitter gaussiano, warm-up, monitor de riesgo), pero **ningún bot es
+> 100% inmune**. Si usas tu número principal y lo banean, es tu
+> responsabilidad. El equipo de Shin-MD no se hace cargo de cuentas
+> suspendidas. Número secundario barato > número de tu vida.
+
 ## 🏆 ¿Qué hace a Shin-MD superior?
 
 | Característica | Shin-MD | Otros bots |

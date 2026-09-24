@@ -220,7 +220,30 @@ async function main() {
   try { db = getDatabase(); }
   catch (err) { log.fatal("DB: " + err.message); process.exit(1); }
 
-  const engine = createEngine();
+  // ── B2.1: perfil del número (nuevo vs aclimatado) ──────────────
+  // Número nuevo:    delay base 1500ms + warm-up de 7 días (20→500 msg/día)
+  // Número aclimatado: delay base 700ms + warm-up de 2 días
+  // Detección auto: antigüedad de la primera fecha de warm-up guardada
+  // en settings (>= 7 días → aclimatado). NUMBER_PROFILE=nuevo|veterano
+  // fuerza el perfil. La fecha se persiste: antes el warm-up se reiniciaba
+  // en cada arranque y un número viejo NUNCA se sentía ágil.
+  const today = new Date().toISOString().slice(0, 10);
+  let warmupStart = db.settings.get("warmup_start_date");
+  if (!warmupStart) {
+    db.settings.set("warmup_start_date", today);
+    warmupStart = today;
+  }
+  const ageDays = Math.max(0, Math.floor((Date.now() - new Date(warmupStart).getTime()) / 86400000));
+  let numberProfile = (process.env.NUMBER_PROFILE || "auto").trim().toLowerCase();
+  if (numberProfile !== "nuevo" && numberProfile !== "veterano") {
+    numberProfile = ageDays >= 7 ? "veterano" : "nuevo";
+  }
+  const throttlerOpts = numberProfile === "veterano"
+    ? { baseDelayMs: 700, warmUpDays: 2, warmUpStartDate: warmupStart }
+    : { baseDelayMs: 1500, warmUpDays: 7, warmUpStartDate: warmupStart };
+  log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días");
+
+  const engine = createEngine({ throttler: throttlerOpts });
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
   createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
