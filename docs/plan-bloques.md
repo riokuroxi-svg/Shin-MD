@@ -1,6 +1,6 @@
 # 🗺️ Shin-MD — Plan por bloques (desde la lluvia de ideas)
 
-_Fecha: 2026-09-24 · Estado: BLOQUES 0 y 1 COMPLETADOS ✅_
+_Fecha: 2026-09-24 · Estado: BLOQUES 0, 1, 2, 3 y 4 COMPLETADOS ✅ (falta prueba visual del menú en teléfono real)_
 
 Este plan organiza la lluvia de ideas (chat con "Ginko") en bloques de trabajo.
 **Regla de oro:** nada entra al bot sin estar verificado contra el código real y
@@ -78,14 +78,22 @@ ruta 401 (sesión inválida real) sigue limpiando correctamente ✅
       SoundCloud; instalar la dependencia sin comando sería peso muerto.
       Se instalará cuando se cree el comando.
 
-### BLOQUE 4 — UI premium (menús)
-- [ ] Validar EN TELÉFONO REAL qué renderiza Baileys 6.7.24 hoy (lo de
-      `docs/investigacion.md` fue verificado en código, falta la prueba visual).
-- [ ] Tag verde vía `externalAdReply` + `MENU_IMAGE`.
-- [ ] `single_select` por categorías + carrusel `.demo`.
-- [ ] Ver decisión D1 (¿inyector biz propio o fork?).
-- [ ] ⚠️ Trucos de riesgo (`forwardingScore: 9999` + newsletter falso) quedan
-      **OFF por defecto** detrás de una env var: son señal de ban.
+### BLOQUE 4 — UI premium (menús) ✅ CÓDIGO COMPLETADO (2026-09-24)
+- [x] Helpers nuevos en interactive.js: `singleSelect` (lista desplegable
+      nativa), `sendAdReply` (tag verde vía externalAdReply con thumbnail)
+      y `fallbackText` (el fallback puede llevar un texto más completo).
+- [x] `.menu` premium: tarjeta nativa con banner + estadísticas + lista
+      desplegable por categorías (cada fila ejecuta `.menu <cat>`) +
+      botones Ping/Owner/GitHub. Fallback en cadena: tarjeta → menú
+      clásico completo → texto simple. MENU_STYLE=text fuerza el clásico.
+- [x] El router YA convierte los ids de botón/lista en comandos
+      ("menu:games" → ".menu games") — nada que tocar ahí.
+- [x] ⚠️ RICH_EXTRA=0 por defecto: los trucos forwardingScore/newsletter
+      quedan detrás de env var y documentados como riesgo de ban.
+- [x] D1 aplicada: seguimos en Baileys oficial 6.7.24, sin forks.
+- [ ] ⏳ PENDIENTE DE USUARIO: prueba visual en teléfono real (Android y
+      iPhone): enviar .menu y confirmar que la tarjeta y la lista se ven.
+      Si algún cliente no la renderiza, MENU_STYLE=text como salida rápida.
 
 ### BLOQUE 5 — Seguridad
 - [ ] `chmod 600` automático para `auth.db` / sesiones (SQLCipher solo si se

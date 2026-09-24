@@ -64,6 +64,70 @@ export function ctaCopy(label, code) {
 }
 
 /**
+ * Botón de lista desplegable nativa (single_select). Se abre como lista
+ * del sistema con secciones — el estándar de los menús premium 2026.
+ * @param {string} title - texto visible del botón que abre la lista
+ * @param {Array} sections - [{ title, rows: [{ id, title, description? }] }]
+ *   El id de cada row sigue el formato del router: "comando" o "comando:arg".
+ */
+export function singleSelect(title, sections) {
+  const clean = (sections || []).map(s => ({
+    title: s.title || "",
+    highlight_label: s.highlight_label || "",
+    rows: (s.rows || []).map(r => ({
+      id: r.id,
+      title: r.title,
+      description: r.description || "",
+    })),
+  }));
+  return {
+    name: "single_select",
+    buttonParamsJson: JSON.stringify({ title, sections: clean }),
+  };
+}
+
+/**
+ * Mensaje con externalAdReply: el "tag verde chiquito" + link preview.
+ * Opcionalmente lleva imagen (thumbnailUrl) y título/descripción.
+ * ⚠️ B4: si RICH_EXTRA=1 añade forwardingScore/newsletter fake (riesgo de
+ * ban — por defecto APAGADO).
+ */
+export async function sendAdReply(sock, jid, opts = {}) {
+  const contextInfo = {
+    externalAdReply: {
+      title: opts.title || "Shin-MD",
+      body: opts.body || "",
+      mediaType: 1,
+      previewType: 0,
+      ...(opts.thumbnailUrl ? { thumbnailUrl: opts.thumbnailUrl, mediaUrl: opts.sourceUrl || opts.thumbnailUrl } : {}),
+      sourceUrl: opts.sourceUrl || "https://github.com/riokuroxi-svg/Shin-MD",
+      renderLargerThumbnail: !!opts.thumbnailUrl,
+      showAdAttribution: false,
+    },
+  };
+  if (process.env.RICH_EXTRA === "1") {
+    contextInfo.forwardingScore = 9999;
+    contextInfo.isForwarded = true;
+    contextInfo.forwardedNewsletterMessageInfo = {
+      newsletterJid: opts.newsletterJid || "120363000000000000@newsletter",
+      newsletterName: opts.newsletterName || "Shin-MD",
+      serverMessageId: -1,
+    };
+  }
+  try {
+    return await sock.sendMessage(jid, {
+      text: opts.text || "",
+      contextInfo,
+    }, opts.quoted && opts.quoted.message ? { quoted: opts.quoted } : {});
+  } catch (err) {
+    log.warn("adReply: fallback simple (" + (err.message || err) + ")");
+    try {
+      return await sock.sendMessage(jid, { text: opts.text || "" }, opts.quoted && opts.quoted.message ? { quoted: opts.quoted } : {});
+    } catch { return null; }
+  }
+}
+
+/**
  * Envía un mensaje interactivo con botones.
  * @param {object} sock - socket Baileys
  * @param {string} jid - chat destino
@@ -125,9 +189,13 @@ export async function sendInteractive(sock, jid, opts = {}) {
     // Fallback: texto plano. Usa el MISMO filtro que el intento principal:
     // si el fallo fue por quoted inválido (key sin message), reenviar con
     // el quoted crudo re-lanzaba el error DENTRO del catch.
+    // opts.fallbackText: el llamador puede dar un texto más completo que
+    // body+footer (el menú lo usa para caer al menú clásico con la lista
+    // entera de comandos si la tarjeta no se pudo enviar).
     try {
       const safeQuoted = (opts.quoted && opts.quoted.message) ? opts.quoted : undefined;
-      const sent = await sock.sendMessage(jid, { text: body + (footer ? "\n\n" + footer : "") }, safeQuoted ? { quoted: safeQuoted } : {});
+      const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : ""));
+      const sent = await sock.sendMessage(jid, { text: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
       return sent;
     } catch (err2) {
       log.error("interactive: el fallback de texto también falló: " + (err2.message || err2));
@@ -245,4 +313,4 @@ export function isButtonResponse(msg) {
   return parseButtonResponse(msg) !== null;
 }
 
-export default { sendInteractive, sendCarousel, parseButtonResponse, isButtonResponse, quickReply, ctaUrl, ctaCopy };
+export default { sendInteractive, sendCarousel, parseButtonResponse, isButtonResponse, quickReply, ctaUrl, ctaCopy, singleSelect, sendAdReply };

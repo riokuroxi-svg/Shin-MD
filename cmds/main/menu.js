@@ -11,6 +11,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+// B4: menú premium — tarjeta nativa con lista desplegable y botones.
+// Si WhatsApp no lo renderiza, sendInteractive cae a texto solo.
+import { sendInteractive, singleSelect, quickReply, ctaUrl } from "#interactive";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BANNER_PATHS = [
@@ -184,6 +187,49 @@ export default {
       `╰────「 反魂 」─────────────`;
 
     const banner = getBanner();
+
+    // ─── B4: Menú premium (tarjeta nativa + lista desplegable) ─────
+    // MENU_STYLE=text fuerza el menú clásico para quien lo prefiera.
+    const menuStyle = (process.env.MENU_STYLE || "auto").trim().toLowerCase();
+    if (menuStyle !== "text") {
+      const rows = [];
+      for (const catKey of catOrder) {
+        const list = cats.get(catKey);
+        if (!list || list.length === 0) continue;
+        const meta = catMeta[catKey] || { emoji: "📦", label: `✦ *${catKey.toUpperCase()}*` };
+        const clean = meta.label.replace(/[✦*]/g, "").trim();
+        rows.push({
+          id: "menu:" + catKey,
+          title: meta.emoji + " " + clean,
+          description: list.length + " comandos",
+        });
+      }
+      const body =
+        "🏷️ *Estado:* " + stateName + " · *Uptime:* " + timeStr + "\n" +
+        "🛡️ *Riesgo:* " + riskEmoji + " " + risk + "% · 👤 *" + totalCommands + "* comandos\n" +
+        "⚡ *Prefijo:* `.`\n\n" +
+        "Toca 📂 para explorar por categoría, o escribe `.menu <categoría>`.";
+      const sent = await sendInteractive(sock, ctx.chatId, {
+        title: "✨ SHIN-MD " + localVersion(),
+        body,
+        footer: "Basado en Shin-MD por riokuroxi-svg · AGPL-3.0\ngithub.com/riokuroxi-svg/Shin-MD",
+        image: banner,
+        buttons: [
+          singleSelect("📂 Menú por categorías", [{ title: "反魂 · Categorías", rows }]),
+          quickReply("🏓 Ping", "ping"),
+          quickReply("👑 Owner", "owner"),
+          ctaUrl("🌐 GitHub", "https://github.com/riokuroxi-svg/Shin-MD"),
+        ],
+        quoted: ctx.full,
+        // Si la tarjeta no sale, caer al menú clásico COMPLETO (con la
+        // lista entera de comandos), no al body compacto de la tarjeta.
+        fallbackText: fullMenuText,
+      });
+      if (sent) return null;
+      // sent === null → hasta el fallback interno falló; seguimos abajo.
+    }
+
+    // ─── Fallback clásico: banner + texto completo ────────────────
     if (banner) {
       await sock.sendMessage(ctx.chatId, { image: banner, caption: fullMenuText }, { quoted: ctx.full });
       return null;
