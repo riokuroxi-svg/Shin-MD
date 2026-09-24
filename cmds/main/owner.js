@@ -15,6 +15,7 @@ export default {
   description: "Muestra al owner del bot",
   usage: ".owner",
   cooldown: 5,
+  priority: true, // B1.4: respuesta inmediata
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,

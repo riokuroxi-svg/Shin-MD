@@ -33,6 +33,11 @@ export async function useSQLiteAuthState(sessionDir) {
   db.exec("PRAGMA synchronous = NORMAL");
   db.exec("PRAGMA busy_timeout = 5000");
 
+  // B1.3: checkpoint WAL al abrir. Tras un corte brusco (batería, kill)
+  // puede quedar un -wal huérfano; el checkpoint lo pliega a la DB
+  // principal para que creds/keys se lean siempre completos y frescos.
+  try { db.exec("PRAGMA wal_checkpoint(TRUNCATE)"); } catch {}
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS creds (
       id INTEGER PRIMARY KEY CHECK (id = 1),
