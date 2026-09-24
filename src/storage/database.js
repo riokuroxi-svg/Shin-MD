@@ -32,6 +32,11 @@ export function createDatabase(dbPath) {
 
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
+  // Complemento de B1.3: el checkpoint del commit a68059b solo cubre
+  // auth.js. La DB principal (usuarios, economía, settings) también usa
+  // WAL: consolidarla al abrir evita arrastrar un WAL huérfano tras un
+  // apagón que deje los datos "invisibles" aunque estén escritos.
+  try { db.exec("PRAGMA wal_checkpoint(TRUNCATE);"); } catch {}
 
   // Tabla de migraciones
   db.exec(`
