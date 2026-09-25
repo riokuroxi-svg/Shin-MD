@@ -25,6 +25,9 @@ export function createWebServer(engine, opts) {
   // Failsafe: sin PANEL_PASSWORD el panel vuelve a loopback aunque pidas
   // exponerlo — antes, LOOPBACK=0 dejaba riesgo/cola/memoria a la vista
   // de cualquiera en tu red. Usuario fijo: "admin".
+  // Auditoría 2026-09-25: ahora también se valida el usuario (antes
+  // cualquier usuario con la contraseña pasaba) y hay candado anti
+  // fuerza bruta: 10 intentos fallidos por IP ⇒ 429 por 5 minutos.
   const panelPass = process.env.PANEL_PASSWORD || "";
   if (host === "0.0.0.0" && !panelPass) {
     log.warn("Panel: LOOPBACK=0 sin PANEL_PASSWORD — por seguridad solo escuchará en 127.0.0.1");
@@ -32,27 +35,62 @@ export function createWebServer(engine, opts) {
   }
   const authEnabled = host === "0.0.0.0" && !!panelPass;
 
+  const PANEL_USER = "admin";
+  const MAX_FAILS = 10;
+  const WINDOW_MS = 5 * 60 * 1000;
+  const failsByIp = new Map(); // ip → { count, firstTs }
+
+  // Comparación en tiempo constante y sin filtrar longitud:
+  // se comparan los SHA-256 (siempre miden igual).
+  function safeEq(a, b) {
+    const ha = crypto.createHash("sha256").update(String(a)).digest();
+    const hb = crypto.createHash("sha256").update(String(b)).digest();
+    return crypto.timingSafeEqual(ha, hb);
+  }
+  function isLockedOut(ip) {
+    const e = failsByIp.get(ip);
+    if (!e) return false;
+    if (Date.now() - e.firstTs > WINDOW_MS) { failsByIp.delete(ip); return false; }
+    return e.count >= MAX_FAILS;
+  }
+  function recordFail(ip) {
+    const e = failsByIp.get(ip);
+    if (!e || Date.now() - e.firstTs > WINDOW_MS) {
+      failsByIp.set(ip, { count: 1, firstTs: Date.now() });
+    } else {
+      e.count++;
+    }
+  }
+
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "1mb" }));
 
   if (authEnabled) {
     app.use((req, res, next) => {
+      const ip = req.ip || (req.socket && req.socket.remoteAddress) || "?";
+      if (isLockedOut(ip)) {
+        res.set("Retry-After", "300");
+        return res.status(429).json({ ok: false, error: "Demasiados intentos fallidos. Espera 5 minutos." });
+      }
       const hdr = req.headers.authorization || "";
       const [scheme, b64] = hdr.split(" ");
       let ok = false;
       if (/^Basic$/i.test(scheme || "") && b64) {
         try {
-          const pass = Buffer.from(b64, "base64").toString("utf8").split(":").slice(1).join(":");
-          const a = Buffer.from(pass || "");
-          const b = Buffer.from(panelPass);
-          ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+          const dec = Buffer.from(b64, "base64").toString("utf8");
+          const idx = dec.indexOf(":");
+          const user = idx >= 0 ? dec.slice(0, idx) : dec;
+          const pass = idx >= 0 ? dec.slice(idx + 1) : "";
+          ok = safeEq(user, PANEL_USER) && safeEq(pass, panelPass);
         } catch {}
       }
       if (!ok) {
+        recordFail(ip);
         res.set("WWW-Authenticate", 'Basic realm="Shin-MD"');
         return res.status(401).json({ ok: false, error: "Requiere PANEL_PASSWORD (usuario: admin)" });
       }
+      failsByIp.delete(ip);
       next();
     });
   }
