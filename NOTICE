@@ -34,4 +34,12 @@ Se aplican términos adicionales permitidos por la Sección 7 de AGPL-3.0:
    derivada de Shin-MD y está sujeto a todos los términos de este
    archivo, la licencia AGPL-3.0-only y el copyright de arriba.
 
+4. Plugins y extensiones
+   Los plugins que interactúen con Shin-MD EXCLUSIVAMENTE a través de la
+   API pública de plugins (name + execute({ args, api }), vía plugin
+   store) pueden distribuirse bajo una licencia distinta, incluida una
+   comercial. Cualquier plugin que importe, copie o incruste código de
+   este proyecto es una obra derivada y queda sujeto a AGPL-3.0-only y
+   a los términos de este NOTICE.
+
 SPDX-License-Identifier: AGPL-3.0-only
