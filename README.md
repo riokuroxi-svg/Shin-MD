@@ -7,8 +7,9 @@
 [![WhatsApp Bot](https://img.shields.io/badge/WhatsApp-Bot-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://github.com/riokuroxi-svg/Shin-MD)
 [![Node.js](https://img.shields.io/badge/Node.js-22.5%2B-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![Baileys](https://img.shields.io/badge/Baileys-6.7.24-25D366?style=for-the-badge)](https://github.com/WhiskeySockets/Baileys)
-[![Tests](https://img.shields.io/badge/Tests-32%2F32%20✅-4ADE80?style=for-the-badge)](https://github.com/riokuroxi-svg/Shin-MD/actions)
+[![Tests](https://img.shields.io/badge/Tests-34%2F34%20✅-4ADE80?style=for-the-badge)](https://github.com/riokuroxi-svg/Shin-MD/actions)
 [![CI](https://img.shields.io/github/actions/workflow/status/riokuroxi-svg/Shin-MD/test.yml?style=for-the-badge&label=CI)](https://github.com/riokuroxi-svg/Shin-MD/actions)
+[![Audit](https://img.shields.io/badge/Auditoría-Atacado%20y%20endurecido%20✅-F59E0B?style=for-the-badge)](#-auditoría-y-ataques-2026-09-25)
 [![License](https://img.shields.io/badge/License-AGPLv3-red?style=for-the-badge)](LICENSE)
 [![Termux](https://img.shields.io/badge/Termux-Compatible-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://termux.com)
 
@@ -60,8 +61,8 @@
 | **Menú** | Tarjeta nativa + lista desplegable + botones, con fallback | Texto plano o botones muertos en iOS |
 | **Logging** | Consola con iconos + archivo rotativo 7 días | console.log espartano |
 | **Backoff** | Exponencial con jitter + modo paciente | Lineal o inexistente |
-| **Seguridad** | DB con chmod 600 + panel con contraseña | Panel abierto en tu red |
-| **Tests** | Suite de 32 tests + CI en cada push | Cero tests |
+| **Seguridad** | DB con chmod 600 + panel con usuario verificado y bloqueo anti fuerza bruta | Panel abierto en tu red |
+| **Tests** | Suite de 34 tests + CI en cada push | Cero tests |
 | **Licencia** | AGPL-3.0 (protección real anti-comercial) | MIT sin restricciones |
 
 ## ✨ Características interactivas
@@ -252,7 +253,29 @@ Con el bot corriendo:
 - `http://127.0.0.1:3000/metrics` — métricas de proceso
 
 Si lo expones en red (`LOOPBACK=0`) necesitas `PANEL_PASSWORD`; sin ella el
-panel vuelve solo a localhost por seguridad.
+panel vuelve solo a localhost por seguridad. El usuario es siempre `admin`
+(se valida, no basta con la contraseña) y hay **bloqueo anti fuerza bruta**:
+10 intentos fallidos por IP ⇒ HTTP 429 durante 5 minutos (ni acertando la
+contraseña se desbloquea antes).
+
+## 🛡️ Auditoría y ataques (2026-09-25)
+
+Antes de su primer arranque real, el bot fue **clonado desde cero y atacado**:
+
+| Ataque / verificación | Resultado |
+|---|---|
+| Clon fresco + `npm install` + arranque | ✅ 197 comandos, cero errores |
+| Suite de tests desde clon limpio | ✅ 34/34 |
+| Panel sin auth / contraseña mala / usuario malo | ✅ 401 en los tres |
+| Path traversal (`../`, `%2e%2e`) y rutas sensibles (`.env`, logs, código) | ✅ 404 sin fuga de información |
+| Verbos HTTP raros, headers basura y gigantes | ✅ bloqueados, sin crash |
+| Fuerza bruta (11 intentos seguidos) | ✅ 429 a partir del intento 11 |
+| Inyección SQL/FTS5 y entradas gigantes | ✅ resistidas |
+| Secretos (tokens, contraseñas) en código e historial git | ✅ ninguno |
+| `npm audit --omit=dev` | ✅ 0 vulnerabilidades (qs parcheado a 6.16.0) |
+
+Hallazgos corregidos en esa misma auditoría (commit `0b01510`): el panel
+ahora valida el usuario además de la contraseña y aplica el bloqueo 429.
 
 ## 🧪 Shin-Lab — el laboratorio
 
