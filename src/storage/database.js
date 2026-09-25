@@ -30,6 +30,9 @@ export function createDatabase(dbPath) {
     throw err;
   }
 
+  // B5.1: la DB guarda economía/perfil/settings de los usuarios — 600.
+  try { fs.chmodSync(resolved, 0o600); } catch {}
+
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
   // Complemento de B1.3: el checkpoint del commit a68059b solo cubre
