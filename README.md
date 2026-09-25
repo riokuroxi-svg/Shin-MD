@@ -283,17 +283,38 @@ Todo lo experimental vive en [**riokuroxi-svg/Shin-Lab**](https://github.com/rio
 brain local anti-spam, memoria RAG, sub-bots aislados por proceso y
 migraciones desde otros bots. **Nada migra aquí sin estar probado.**
 
-## 📜 Licencia
+## 📜 Modelo de licencia
 
-**Shin-MD** está protegido bajo **GNU Affero General Public License v3.0**.
+Este proyecto separa claramente qué es libre, qué es comercial y qué va por
+contrato. Sin ambigüedad:
 
-Esto significa que:
-- ✅ Puedes usar, modificar y compartir el código
-- ❌ **No puedes** usarlo en servicios comerciales cerrados
-- ❌ **No puedes** vender este bot o una versión modificada
-- ✅ Si haces mejoras, debes compartirlas bajo la misma licencia
+| Capa | Licencia | Qué significa |
+|---|---|---|
+| **Núcleo (Shin-MD)** | AGPL-3.0-only | Libre: se usa, modifica y redistribuye. Todo derivado **debe** seguir siendo AGPL y publicar su código. |
+| **Extensiones / plugins** | Licencia comercial propia | Se pueden vender y comprar. Su código **no** es AGPL. |
+| **Soporte / servicios** | Contrato aparte | Instalación, hosting, mantenimiento y desarrollo a medida se negocian por separado. |
 
-El objetivo es claro: que nadie lucre con este trabajo. Es y será siempre libre.
+### Reglas de frontera (lo que mantiene válido el modelo)
+
+1. **El núcleo es y será libre.** Nadie puede vender el bot ni un fork
+   como software cerrado: la AGPL obliga a entregar el código fuente y
+   quien lo recibe puede redistribuirlo. Cobrar por dar el código no lo
+   hace privativo.
+2. **Las extensiones comerciales deben interactuar SOLO por la API de
+   plugins** (`name` + `execute({ args, api })`, vía plugin store). Una
+   extensión que importe o incruste código del núcleo se convierte en
+   obra derivada y queda automáticamente bajo AGPL — perdería su
+   licencia comercial. Por eso el plugin store valida hash y corre en
+   sandbox: es la frontera técnica que sostiene la frontera legal.
+3. **La marca no se vende ni se hereda.** Forks y derivados (aunque sean
+   AGPL legítimos) no pueden llamarse *Shin-MD* ni usar 反魂 (ver NOTICE,
+   Sección 7). El nombre solo cubre al original.
+4. **Atribución obligatoria.** Todo derivado debe conservar `LICENSE`,
+   `NOTICE` y los headers SPDX, y mostrar el crédito en `.menu`/`.owner`.
+
+> 💡 ¿Quieres vender un plugin o contratar soporte? Contacta con
+> [riokuroxi-svg](https://github.com/riokuroxi-svg). Si quieres usar o
+> modificar el bot: adelante — respeta la AGPL y el NOTICE.
 
 ### 🏷️ Marca y atribución (AGPL, Sección 7)
 
