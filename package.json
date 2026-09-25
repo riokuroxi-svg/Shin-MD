@@ -81,7 +81,8 @@
     "ytsr": "^3.8.4"
   },
   "overrides": {
-    "libsignal": "npm:libsignal@6.0.0"
+    "libsignal": "npm:libsignal@6.0.0",
+    "qs": "^6.16.0"
   },
   "repository": {
     "type": "git",
