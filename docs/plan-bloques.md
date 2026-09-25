@@ -1,6 +1,6 @@
 # 🗺️ Shin-MD — Plan por bloques (desde la lluvia de ideas)
 
-_Fecha: 2026-09-24 · Estado: BLOQUES 0, 1, 2, 3 y 4 COMPLETADOS ✅ (falta prueba visual del menú en teléfono real)_
+_Fecha: 2026-09-25 · Estado: BLOQUES 0, 1, 2, 3, 4 y 5 COMPLETADOS ✅ (falta prueba visual del menú en teléfono real)_
 
 Este plan organiza la lluvia de ideas (chat con "Ginko") en bloques de trabajo.
 **Regla de oro:** nada entra al bot sin estar verificado contra el código real y
@@ -95,12 +95,21 @@ ruta 401 (sesión inválida real) sigue limpiando correctamente ✅
       iPhone): enviar .menu y confirmar que la tarjeta y la lista se ven.
       Si algún cliente no la renderiza, MENU_STYLE=text como salida rápida.
 
-### BLOQUE 5 — Seguridad
-- [ ] `chmod 600` automático para `auth.db` / sesiones (SQLCipher solo si se
-      justifica después — añade peso y complejidad).
-- [ ] Auth básica en el panel web cuando `LOOPBACK=0`.
-- [ ] Logs Pino a archivo rotativo (para debuggear bans).
-- [ ] `.env.example` completo con todas las variables documentadas.
+### BLOQUE 5 — Seguridad ✅ COMPLETADO (2026-09-25)
+- [x] `chmod 600` automático para `auth.db` (credenciales) y la DB principal
+      (economía/perfil). SQLCipher descartado: añade peso y complejidad sin
+      justificación; 600 cubre el vector real (lectura local).
+- [x] Auth básica en el panel web cuando `LOOPBACK=0`: exige
+      `PANEL_PASSWORD` (usuario fijo `admin`). Failsafe: sin contraseña el
+      panel vuelve a 127.0.0.1 aunque pidas exponerlo. Comparación con
+      timingSafeEqual. 2 tests nuevos cubren failsafe + auth (32/32).
+- [x] Logs a archivo rotativo `logs/shin-YYYY-MM-DD.log` (diario, retención
+      7 días) para debuggear bans. Se apaga con `LOG_FILE=0`. Nunca tumba
+      al bot si el fs falla. (No era Pino: el logger es chalk.)
+- [x] `.env.example` completo: PANEL_PASSWORD, LOG_FILE, MENU_STYLE,
+      RICH_EXTRA, NUMBER_PROFILE, COOKIES_FILE documentadas.
+- [x] CI: `.github/workflows/test.yml` corre `npm test` en cada push — red
+      de seguridad contra commits rotos.
 
 ### BLOQUE 6 — Laboratorio (repo aparte: Shin-Lab)
 Nada de esto toca el bot principal hasta estar probado:

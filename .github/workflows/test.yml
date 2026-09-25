@@ -1,0 +1,21 @@
+# Shin-MD — CI: cada push debe pasar la suite de tests.
+# Red de seguridad: un commit roto queda marcado aquí aunque se cuele a main.
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependencias (incluye parche de Baileys)
+        run: npm ci --no-audit --no-fund
+      - name: Suite de tests
+        run: npm test

@@ -28,6 +28,10 @@ export async function useSQLiteAuthState(sessionDir) {
     throw err;
   }
 
+  // B5.1: auth.db guarda las credenciales de la sesión — solo el dueño del
+  // proceso debe poder leerla. try/catch: en Windows chmod no aplica igual.
+  try { fs.chmodSync(dbPath, 0o600); } catch {}
+
   // ── PRAGMAs estilo Ginko-MD: evitan locks durante pairing ──
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA synchronous = NORMAL");

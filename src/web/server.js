@@ -11,6 +11,7 @@
 
 import express from "express";
 import os from "os";
+import crypto from "node:crypto";
 import log from "#logger";
 
 export function createWebServer(engine, opts) {
@@ -18,11 +19,43 @@ export function createWebServer(engine, opts) {
   const port = opts.port !== undefined
     ? opts.port
     : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
-  const host = opts.host || (process.env.LOOPBACK === "0" ? "0.0.0.0" : "127.0.0.1");
+  let host = opts.host || (process.env.LOOPBACK === "0" ? "0.0.0.0" : "127.0.0.1");
+
+  // B5.2: panel expuesto en red (LOOPBACK=0) ⇒ contraseña obligatoria.
+  // Failsafe: sin PANEL_PASSWORD el panel vuelve a loopback aunque pidas
+  // exponerlo — antes, LOOPBACK=0 dejaba riesgo/cola/memoria a la vista
+  // de cualquiera en tu red. Usuario fijo: "admin".
+  const panelPass = process.env.PANEL_PASSWORD || "";
+  if (host === "0.0.0.0" && !panelPass) {
+    log.warn("Panel: LOOPBACK=0 sin PANEL_PASSWORD — por seguridad solo escuchará en 127.0.0.1");
+    host = "127.0.0.1";
+  }
+  const authEnabled = host === "0.0.0.0" && !!panelPass;
 
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "1mb" }));
+
+  if (authEnabled) {
+    app.use((req, res, next) => {
+      const hdr = req.headers.authorization || "";
+      const [scheme, b64] = hdr.split(" ");
+      let ok = false;
+      if (/^Basic$/i.test(scheme || "") && b64) {
+        try {
+          const pass = Buffer.from(b64, "base64").toString("utf8").split(":").slice(1).join(":");
+          const a = Buffer.from(pass || "");
+          const b = Buffer.from(panelPass);
+          ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+        } catch {}
+      }
+      if (!ok) {
+        res.set("WWW-Authenticate", 'Basic realm="Shin-MD"');
+        return res.status(401).json({ ok: false, error: "Requiere PANEL_PASSWORD (usuario: admin)" });
+      }
+      next();
+    });
+  }
 
   function json(ok, data, code) {
     return res => res.status(code || 200).json({ ok, ...data });
