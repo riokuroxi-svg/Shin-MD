@@ -262,6 +262,10 @@ async function main() {
   // global.owner y global.mess. Sin definirlos, el primer uso lanza
   // TypeError en runtime (global.owner.map sobre undefined).
   globalThis.owner = ownerNum ? [ownerNum] : [];
+  globalThis.links = { channel: process.env.CHANNEL_LINK || "", support: "" };
+  globalThis.multiplier = 2;
+  globalThis.botname = "Shin-MD";
+  globalThis.conns = new Map();
   globalThis.mess = {
     default: "⚠️ Comando no disponible.",
     socket: "🚫 *Solo el dueño* puede usar este comando.",
@@ -293,7 +297,16 @@ async function main() {
     pairingMethod: opcion === "2" ? "code" : "qr",
     pairingNumber: phoneNumber,
     onMessage: (s, m) => router.handle(s, m),
-    onReady: s => log.success("Bot listo ✓"),
+    onReady: async s => {
+      globalThis.sock = s;
+      try {
+        const eventsMod = await import("#events");
+        if (typeof eventsMod.default === "function") eventsMod.default(s);
+      } catch (e) {
+        log.error("Events registration: " + (e.message || e));
+      }
+      log.success("Bot listo ✓");
+    },
     watchdog,
   });
 

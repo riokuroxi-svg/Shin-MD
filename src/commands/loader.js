@@ -7,11 +7,28 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { downloadContentFromMessage } from "baileys";
 import log from "#logger";
 import { isAdmin, userPart, getCachedMeta } from "#serialize";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CMDS_DIR = path.resolve(__dirname, "../../cmds");
+
+export async function downloadMediaFromObject(msgObject) {
+  if (!msgObject) return null;
+  const target = msgObject.message || msgObject;
+  const mediaKey = Object.keys(target).find(k =>
+    /imageMessage|videoMessage|stickerMessage|audioMessage|documentMessage/i.test(k)
+  );
+  if (!mediaKey) return null;
+  const rawType = mediaKey.replace(/Message$/i, "").toLowerCase();
+  const stream = await downloadContentFromMessage(target[mediaKey], rawType);
+  let buffer = Buffer.from([]);
+  for await (const chunk of stream) {
+    buffer = Buffer.concat([buffer, chunk]);
+  }
+  return buffer;
+}
 
 function scanFiles(dir) {
   const results = [];
@@ -39,8 +56,6 @@ function wrapGinkoCmd(gk) {
     cooldown: 3,
     handler: async (sock, ctx, engine) => {
       const full = ctx.full || {};
-      // ── Permisos REALES (antes: isAdmins/isBotAdmins/isOwner duros
-      //    en false → promote/demote/kick nunca funcionaban) ──
       let isAdmins = false, isBotAdmins = false, isOwner = false, groupMetadata = null;
       if (ctx.isGroup) {
         isAdmins = await isAdmin(sock, ctx.chatId, ctx.senderId);
@@ -54,6 +69,20 @@ function wrapGinkoCmd(gk) {
           || (await sock?.groupMetadata?.(ctx.chatId).catch(() => null))
           || null;
       }
+
+      if (!sock.reply) {
+        sock.reply = (jid, text, quoted, opts) => {
+          const content = typeof text === "string" ? { text } : (text || {});
+          const quote = quoted?.key ? quoted : (quoted?.full || quoted);
+          return sock.sendMessage(jid, { ...content, ...(opts || {}) }, { quoted: quote });
+        };
+      }
+
+      const directMediaType = Object.keys(full.message || {}).find(k =>
+        /imageMessage|videoMessage|stickerMessage|audioMessage|documentMessage/i.test(k)
+      );
+      const directInner = directMediaType ? full.message[directMediaType] : null;
+
       const msg = {
         chat: ctx.chatId,
         sender: ctx.senderId,
@@ -64,8 +93,11 @@ function wrapGinkoCmd(gk) {
         id: full.key?.id,
         fromMe: full.key?.fromMe,
         message: full.message || {},
+        msg: directInner || full.message || {},
+        mimetype: directInner?.mimetype || "",
         mentionedJid: full.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
         quoted: null,
+        download: () => downloadMediaFromObject(full.message),
         reply: async (content) => {
           if (typeof content === "string")
             return sock.sendMessage(ctx.chatId, { text: content }, { quoted: full });
@@ -73,14 +105,34 @@ function wrapGinkoCmd(gk) {
         },
         react: (emoji) => sock.sendMessage(ctx.chatId, { react: { text: emoji, key: full.key } }),
       };
+
       if (full.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
         const ci = full.message.extendedTextMessage.contextInfo;
+        const qMsg = ci.quotedMessage;
+        const qMediaType = Object.keys(qMsg).find(k =>
+          /imageMessage|videoMessage|stickerMessage|audioMessage|documentMessage/i.test(k)
+        );
+        const qInner = qMediaType ? qMsg[qMediaType] : null;
+
         msg.quoted = {
           id: ci.stanzaId,
+          stanzaId: ci.stanzaId,
           sender: ci.participant || "",
-          text: ci.quotedMessage?.conversation || ci.quotedMessage?.extendedTextMessage?.text || "",
+          text: qMsg?.conversation || qMsg?.extendedTextMessage?.text || qInner?.caption || "",
+          key: {
+            remoteJid: ctx.chatId,
+            fromMe: ci.participant ? ci.participant === sock?.user?.id : false,
+            id: ci.stanzaId || "",
+            participant: ci.participant || "",
+          },
+          message: qMsg,
+          msg: qInner || qMsg,
+          mimetype: qInner?.mimetype || "",
+          seconds: qInner?.seconds || 0,
+          download: () => downloadMediaFromObject(qMsg),
         };
       }
+
       try {
         await gk.run({
           msg, sock,
@@ -102,6 +154,7 @@ function wrapGinkoCmd(gk) {
 
 export async function loadCommands() {
   const commands = new Map();
+  const befores = [];
   if (!fs.existsSync(CMDS_DIR)) return commands;
 
   const files = scanFiles(CMDS_DIR);
@@ -110,13 +163,13 @@ export async function loadCommands() {
 
   for (const filePath of files) {
     try {
-      // ?t= fuerza el re-import de ESM. LIMITACIÓN DOCUMENTADA: Node no
-      // expone API para borrar módulos del cache, así que cada recarga
-      // completa deja la copia anterior huérfina en memoria. loadCommands
-      // está pensada para el ARRANQUE (y para /reloadall, que es raro);
-      // para cambios de un archivo usa /reload <cmd> (reloadCommand).
       const mod = await import(pathToFileURL(filePath).href + "?t=" + Date.now());
       const cmd = mod.default || mod;
+
+      if (typeof mod.before === "function") {
+        befores.push({ name: path.basename(filePath, ".js"), fn: mod.before });
+      }
+
       if (!cmd) continue;
 
       let shinCmd;
@@ -131,8 +184,6 @@ export async function loadCommands() {
       }
 
       const name = shinCmd.name || path.basename(filePath, ".js");
-      // (Antes: el set cegaba silenciosamente cualquier comando con el
-      // mismo nombre/alias — ahora al menos se deja rastro en el log.)
       const prev = commands.get(name);
       if (prev) {
         dupeCount++;
@@ -147,12 +198,9 @@ export async function loadCommands() {
     }
   }
 
-  // B2.3: el Map guarda cada comando + todos sus aliases como entradas,
-  // así que commands.size NO es el número de comandos (195 únicos vs 667
-  // entradas con aliases). El log viejo mostraba el tamaño del Map y
-  // parecía que hubiera cientos de comandos duplicados.
+  commands.befores = befores;
   const unique = shinCount + ginkoCount - dupeCount;
-  log.success(unique + " comandos únicos (" + shinCount + " Shin, " + ginkoCount + " Ginko) · " + commands.size + " entradas con aliases" + (dupeCount ? " · " + dupeCount + " duplicados" : ""));
+  log.success(unique + " comandos únicos (" + shinCount + " Shin, " + ginkoCount + " Ginko) · " + commands.size + " entradas con aliases" + (dupeCount ? " · " + dupeCount + " duplicados" : "") + (befores.length ? " · " + befores.length + " hooks before" : ""));
   return commands;
 }
 
@@ -175,4 +223,4 @@ export async function reloadCommand(name, commands) {
   }
 }
 
-export default { loadCommands, reloadCommand, CMDS_DIR };
+export default { loadCommands, reloadCommand, downloadMediaFromObject, CMDS_DIR };

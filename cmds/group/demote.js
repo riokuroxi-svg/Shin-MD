@@ -15,7 +15,8 @@ export default {
     if (!who) return msg.reply('《✧》 Menciona al usuario que deseas degradar de administrador.');
     try {
       const ownerGroup = groupMetadata?.owner || msg.chat.split('-')[0] + '@s.whatsapp.net';
-      const ownerBot = global.owner + '@s.whatsapp.net';
+      const ownerList = Array.isArray(global.owner) ? global.owner : (global.owner ? [global.owner] : []);
+      const isOwnerBot = (jid) => ownerList.some(num => jid && jid.split('@')[0] === String(num).replace(/\D/g, ''));
       const whoBase = who.split('@')[0];
       const participant = participants.find(p => p.id?.split('@')[0] === whoBase || p.lid?.split('@')[0] === whoBase);
       if (!participant?.admin) {
@@ -23,7 +24,7 @@ export default {
       }
       const targetJid = participant?.id || who;
       if (targetJid === ownerGroup) return msg.reply('《✧》 No puedes degradar al creador del grupo de administrador.');
-      if (targetJid === ownerBot) return msg.reply('《✧》 No puedes degradar al creador del bot de administrador.');
+      if (isOwnerBot(targetJid)) return msg.reply('《✧》 No puedes degradar al creador del bot de administrador.');
       if (targetJid === sock.decodeJid(sock.user.id)) return msg.reply('《✧》 No puedes degradar al bot de administrador.');
       await sock.groupParticipantsUpdate(msg.chat, [targetJid], 'demote');
       await sock.sendMessage(msg.chat, { text: `✿ *@${whoBase}* ha sido degradado de administrador del grupo!`, mentions: [who] }, { quoted: msg });

@@ -126,6 +126,11 @@ export function connectSocket(engine, opts) {
     s.msgRetryCounterCache = msgRetryCounterCache;
     s.ev.on("creds.update", saveCreds);
     s.sendText = (j, t, q, o) => s.sendMessage(j, { text: t, ...o }, { quoted: q });
+    s.reply = (j, t, q, o) => {
+      const content = typeof t === "string" ? { text: t } : (t || {});
+      const quote = q?.key ? q : (q?.full || q);
+      return s.sendMessage(j, { ...content, ...(o || {}) }, { quoted: quote });
+    };
 
     // ═══ Punto único de envío (anti-ban) ═══════════════════════════
     // TODO lo que sale por esta conexión (comandos Ginko, msg.reply,

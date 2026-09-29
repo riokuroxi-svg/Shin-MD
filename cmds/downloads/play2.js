@@ -34,12 +34,9 @@ export default {
       return "❌ Por favor ingresa un enlace válido de YouTube.";
     }
 
-    const sent = await engine.getSendQueue().enqueue(
-      () => sock.sendMessage(ctx.chatId, {
-        text: "⏳ *Descargando video...*\n_" + query.slice(0, 40) + "_"
-      }, { quoted: ctx.full }),
-      { messageLength: 30 }
-    );
+    const sent = await sock.sendMessage(ctx.chatId, {
+      text: "⏳ *Descargando video...*\n_" + query.slice(0, 40) + "_"
+    }, { quoted: ctx.full });
 
     let key;
     if (sent && sent.key) key = sent.key;
@@ -69,24 +66,18 @@ export default {
       const fileName = title ? title.replace(/[/\\?*:<>|"]/g, '').slice(0, 80) + ".mp4" : "video.mp4";
 
       // Enviar video
-      await engine.getSendQueue().enqueue(
-        () => sock.sendMessage(ctx.chatId, {
-          video: { url: format.url },
-          mimetype: 'video/mp4',
-          fileName,
-        }, { quoted: ctx.full }),
-        { messageLength: 20, isNewContact: false }
-      );
+      await sock.sendMessage(ctx.chatId, {
+        video: { url: format.url },
+        mimetype: 'video/mp4',
+        fileName,
+      }, { quoted: ctx.full });
 
       if (key) {
         try {
-          await engine.getSendQueue().enqueue(
-            () => sock.sendMessage(ctx.chatId, {
-              text: `✅ *Video listo!*${title ? `\n📌 ${title.slice(0, 60)}` : ''}`,
-              edit: key,
-            }, {}),
-            { messageLength: 50, isPriority: true }
-          );
+          await sock.sendMessage(ctx.chatId, {
+            text: `✅ *Video listo!*${title ? `\n📌 ${title.slice(0, 60)}` : ''}`,
+            edit: key,
+          }, { _priority: true });
         } catch {}
       }
       return null;
@@ -94,10 +85,7 @@ export default {
       const errTxt = err.message?.length < 400 ? err.message : "❌ Error al descargar el video.";
       if (key) {
         try {
-          await engine.getSendQueue().enqueue(
-            () => sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, {}),
-            { messageLength: errTxt.length, isPriority: true }
-          );
+          await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, { _priority: true });
         } catch {}
         return null;
       }

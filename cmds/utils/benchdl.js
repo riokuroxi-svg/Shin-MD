@@ -23,12 +23,9 @@ export default {
   async handler(sock, ctx, engine) {
     const testUrl = ctx.arg?.trim() || "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
-    const sent = await engine.getSendQueue().enqueue(
-      () => sock.sendMessage(ctx.chatId, {
-        text: `⏱️ *Benchmark de descarga*\n\nProbando proveedores con:\n\`${testUrl.slice(0, 60)}\`\n\n_Esto puede tomar hasta 30 segundos..._`
-      }, { quoted: ctx.full }),
-      { messageLength: 60 }
-    );
+    const sent = await sock.sendMessage(ctx.chatId, {
+      text: `⏱️ *Benchmark de descarga*\n\nProbando proveedores con:\n\`${testUrl.slice(0, 60)}\`\n\n_Esto puede tomar hasta 30 segundos..._`
+    }, { quoted: ctx.full });
 
     let key;
     if (sent && sent.key) key = sent.key;
@@ -57,10 +54,7 @@ export default {
 
     if (key) {
       try {
-        await engine.getSendQueue().enqueue(
-          () => sock.sendMessage(ctx.chatId, { text: resultText, edit: key }, {}),
-          { messageLength: resultText.length }
-        );
+        await sock.sendMessage(ctx.chatId, { text: resultText, edit: key }, { _priority: true });
       } catch {}
       return null;
     }
