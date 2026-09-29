@@ -13,7 +13,8 @@ export default {
   botAdmin: true,
   run: async ({ msg, sock, args, usedPrefix, command, groupMetadata, participants }) => {
     const ownerGroup = groupMetadata?.owner || msg.chat.split('-')[0] + '@s.whatsapp.net';
-    const ownerBot = global.owner + '@s.whatsapp.net';
+    const ownerList = Array.isArray(global.owner) ? global.owner : (global.owner ? [global.owner] : []);
+    const isOwnerBot = (jid) => ownerList.some(num => jid && jid.split('@')[0] === String(num).replace(/\D/g, ''));
     const botId = sock.decodeJid(sock.user.id);
     if (args[0] === 'num' || args[0] === 'listnum') {
       if (!args[1]) return msg.reply(`《✧》 Ingrese algún prefijo de un país\n> ✎ Ejemplo: *${usedPrefix + command} num +54*`);
@@ -28,7 +29,7 @@ export default {
         const p = participants.find(x => x.id === jid);
         if (!p) return false;
         if (p.admin === 'admin' || p.admin === 'superadmin') return false;
-        if (jid === ownerGroup || jid === ownerBot) return false;
+        if (jid === ownerGroup || isOwnerBot(jid)) return false;
         return true;
       });
       if (usersToKick.length === 0) return msg.reply(`《✧》 Hay usuarios con prefijo +${prefix} pero todos son admins o propietarios.`);
@@ -44,7 +45,7 @@ export default {
       return msg.reply(res);
     }
     if (args[0] === 'all') {
-      const usersToKick = participants.filter(p => p.id && p.id !== botId && p.id !== ownerGroup && p.id !== ownerBot && p.admin !== 'admin' && p.admin !== 'superadmin').map(p => p.id);
+      const usersToKick = participants.filter(p => p.id && p.id !== botId && p.id !== ownerGroup && !isOwnerBot(p.id) && p.admin !== 'admin' && p.admin !== 'superadmin').map(p => p.id);
       if (usersToKick.length === 0) return msg.reply('《✧》 No hay usuarios para eliminar (todos son admins o propietarios).');
       await msg.reply(`《✧》 *Eliminando todos los usuarios* (${usersToKick.length})\n> El proceso tomará unos segundos...`);
       let eliminados = 0, errores = [], noEliminados = participants.length - usersToKick.length;
@@ -63,7 +64,7 @@ export default {
       let sider = [];
       for (const participant of participants) {
         const jid = participant.id;
-        if (!jid || jid === botId || jid === ownerGroup || jid === ownerBot) continue;
+        if (!jid || jid === botId || jid === ownerGroup || isOwnerBot(jid)) continue;
         if (participant.admin === 'admin' || participant.admin === 'superadmin') continue;
         const userStats = allChatUsers.find(u => u.user_id === jid || u.user_id?.split('@')[0] === jid.split('@')[0]);
         if (userStats) {
@@ -97,7 +98,7 @@ export default {
     const realJid = participant.id || targetRaw;
     if (realJid === sock.decodeJid(sock.user.id)) return msg.reply('《✧》 No puedo eliminar al *bot* del grupo');
     if (realJid === ownerGroup) return msg.reply('《✧》 No puedo eliminar al *propietario* del grupo');
-    if (realJid === ownerBot)   return msg.reply('《✧》 No puedo eliminar al *propietario* del bot');
+    if (isOwnerBot(realJid))    return msg.reply('《✧》 No puedo eliminar al *propietario* del bot');
     try {
       await sock.groupParticipantsUpdate(msg.chat, [realJid], 'remove');
       sock.reply(msg.chat, `✎ @${userBase} *eliminado* correctamente`, msg, { mentions: [targetRaw] });

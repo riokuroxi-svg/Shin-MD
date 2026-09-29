@@ -49,6 +49,16 @@ export function loadYtCookies() {
 
 const DEFAULT_PROVIDERS = [
   {
+    name: "vreden",
+    url: "https://api.vreden.my.id/api/ytmp3?url={url}",
+    parse: d => d?.result?.download?.url || d?.result?.download_url || d?.result?.url || d?.download_url || null,
+  },
+  {
+    name: "ryzendesu",
+    url: "https://api.ryzendesu.vip/api/downloader/ytmp3?url={url}",
+    parse: d => d?.result?.url || d?.url || d?.data?.url || d?.result?.download_url || null,
+  },
+  {
     name: "nikkatools",
     url: "https://nikkatools.serv00.net/yt/audio?url={url}",
     parse: d => d?.url || d?.download_url || null,

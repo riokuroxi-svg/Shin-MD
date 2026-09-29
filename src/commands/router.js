@@ -6,29 +6,25 @@
  */
 // ═══════════════════════════════════════════════════════════════════
 //  router.js — Router de comandos
-//  Pipeline: mensaje → serializar → detectar prefijo/comando → 
-//            cooldown/antispam → permisos → ejecutar handler
+//  Pipeline: mensaje → middlewares before → serializar → 
+//            detectar prefijo/comando → cooldown → permisos → handler
 //  Todo envío pasa por la cola anti-ban del engine.
 // ═══════════════════════════════════════════════════════════════════
 
 import log from "#logger";
-import { loadCommands, reloadCommand } from "#commands";
-import { serializeMessage } from "#serialize";
+import { loadCommands, reloadCommand, downloadMediaFromObject } from "#commands";
+import { serializeMessage, isAdmin, userPart, getCachedMeta } from "#serialize";
 import createCooldown from "#cooldown";
 import checkPermissions from "#permissions";
-import { parseButtonResponse, isButtonResponse } from "#interactive";
+import { parseButtonResponse } from "#interactive";
 import db from "../services/ginko-db.js";
 
 export const BOT_PREFIX = process.env.BOT_PREFIX || ".";
 
-// Modo Self (compat Ginko): el bot procesa sus PROPIOS mensajes como
-// comandos. Lo activa `.self enable` (guarda settings.self=1 en la fila
-// del JID del bot). Antes el flag se guardaba pero el router NUNCA lo
-// consultaba: ctx.isBot → return inmediato.
 let selfMode = { value: false, ts: 0 };
 function isSelfMode(sock) {
   const now = Date.now();
-  if (now - selfMode.ts < 30000) return selfMode.value; // caché 30s (evita SQLite por mensaje)
+  if (now - selfMode.ts < 30000) return selfMode.value;
   selfMode.ts = now;
   try {
     const botJid = sock?.user?.id;
@@ -82,6 +78,85 @@ export function createRouter(engine, opts) {
   }
 
   /**
+   * Ejecuta hooks before() registrados (antilink, antistatus, afk...)
+   */
+  async function runBefores(sock, ctx, rawMsg) {
+    if (!commands?.befores?.length) return;
+    const full = rawMsg;
+    let isAdmins = false, isBotAdmins = false, isOwner = false, groupMetadata = null;
+    if (ctx.isGroup) {
+      isAdmins = await isAdmin(sock, ctx.chatId, ctx.senderId);
+      const botJid = sock?.user?.id;
+      if (botJid) isBotAdmins = await isAdmin(sock, ctx.chatId, botJid);
+      const ownerJid = engine?.getOwnerJid?.();
+      if (ownerJid) isOwner = userPart(ctx.senderId) === userPart(ownerJid);
+      groupMetadata = getCachedMeta(ctx.chatId)
+        || (await sock?.groupMetadata?.(ctx.chatId).catch(() => null))
+        || null;
+    }
+
+    if (!sock.reply) {
+      sock.reply = (jid, text, quoted, o) => {
+        const content = typeof text === "string" ? { text } : (text || {});
+        const quote = quoted?.key ? quoted : (quoted?.full || quoted);
+        return sock.sendMessage(jid, { ...content, ...(o || {}) }, { quoted: quote });
+      };
+    }
+
+    const msg = {
+      chat: ctx.chatId,
+      sender: ctx.senderId,
+      isGroup: ctx.isGroup,
+      text: ctx.text,
+      pushName: ctx.pushName || full.pushName || "",
+      key: full.key || {},
+      id: full.key?.id,
+      fromMe: full.key?.fromMe,
+      message: full.message || {},
+      msg: full.message || {},
+      mentionedJid: full.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
+      quoted: null,
+      download: () => downloadMediaFromObject(full.message),
+      reply: async (content) => {
+        if (typeof content === "string")
+          return sock.sendMessage(ctx.chatId, { text: content }, { quoted: full });
+        return sock.sendMessage(ctx.chatId, content, { quoted: full });
+      },
+    };
+
+    if (full.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
+      const ci = full.message.extendedTextMessage.contextInfo;
+      const qMsg = ci.quotedMessage;
+      msg.quoted = {
+        id: ci.stanzaId,
+        sender: ci.participant || "",
+        text: qMsg?.conversation || qMsg?.extendedTextMessage?.text || "",
+        key: {
+          remoteJid: ctx.chatId,
+          fromMe: ci.participant ? ci.participant === sock?.user?.id : false,
+          id: ci.stanzaId || "",
+          participant: ci.participant || "",
+        },
+        message: qMsg,
+        download: () => downloadMediaFromObject(qMsg),
+      };
+    }
+
+    for (const hook of commands.befores) {
+      try {
+        await hook.fn({
+          msg, sock,
+          groupMetadata,
+          participants: groupMetadata?.participants || [],
+          isAdmins, isBotAdmins, isOwner,
+        });
+      } catch (err) {
+        log.error(`Hook before (${hook.name}): ` + (err.message || err));
+      }
+    }
+  }
+
+  /**
    * Punto de entrada para cada mensaje entrante.
    */
   async function handle(sock, msg) {
@@ -89,8 +164,6 @@ export function createRouter(engine, opts) {
       // Respuesta de botón (clic en un botón interactivo)
       const btnId = parseButtonResponse(msg);
       if (btnId) {
-        // El botón debe tener formato: "comando:argumento" o solo "comando"
-        // Ej: "kuro:1" → ".kuro 1", "menu" → ".menu"
         const [btnCmd, ...btnArgs] = btnId.split(":");
         const btnArg = btnArgs.join(" ");
         const virtualMsg = {
@@ -102,25 +175,25 @@ export function createRouter(engine, opts) {
 
       const ctx = serializeMessage(msg, sock);
       if (!ctx.text || ctx.chatId === "status@broadcast") return;
-      // Self mode ON → los mensajes propios (fromMe) SÍ se procesan;
-      // OFF → se ignoran (comportamiento original).
+
+      // ── Ejecutar middlewares 'before' (anti-link, anti-status, afk...) ──
+      await runBefores(sock, ctx, msg);
+
       if (ctx.isBot && !isSelfMode(sock)) return;
       if (!ctx.text.startsWith(BOT_PREFIX)) return;
 
       const raw = ctx.text.slice(BOT_PREFIX.length).trim();
       if (!raw) return;
 
-      const [nameRaw, ...rest] = raw.split(/\s+/);
+      const [nameRaw] = raw.split(/\s+/);
       const name = nameRaw.toLowerCase();
       const cmd = getCommand(name);
-      if (!cmd) return; // no es un comando nuestro
+      if (!cmd) return;
 
       // Cooldown / antispam
       if (cooldown.check({ senderId: ctx.senderId, cmd })) return;
 
       // Permisos
-      // (sock.sendMessage ya encola en la cola anti-ban del socket;
-      // encolarlo otra vez aquí deadlockearía la cola serial)
       const denied = await checkPermissions(sock, ctx, cmd, engine);
       if (denied) {
         await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
@@ -128,29 +201,20 @@ export function createRouter(engine, opts) {
       }
 
       // Ejecutar
-      // B1.4: comandos con `priority: true` (.menu/.ping/.owner) abren la
-      // ventana de prioridad de la cola: sus envíos salen con delay mínimo
-      // y saltan el tope del warm-up. Antes, .menu recién conectado tardaba
-      // 3-5s (delay base 1200ms + 25ms/char del texto largo) y parecía muerto.
       const start = Date.now();
       const sendQueue = engine?.getSendQueue?.();
-      // Defensivo: la API de prioridad puede no existir en stubs/colas viejas.
       const usePriority = !!(cmd.priority && sendQueue && typeof sendQueue.enterPriority === "function");
       if (usePriority) sendQueue.enterPriority();
       try {
         const result = await cmd.handler(sock, ctx, engine, commands);
         const ms = Date.now() - start;
 
-        // Log estilo Ginko-MD si hay callback
         if (typeof opts.onCommand === "function") {
           try { opts.onCommand(ctx, cmd.name, ms); } catch {}
         } else if (ms > 1000) {
           log.gray("Comando " + cmd.name + " tardó " + ms + "ms");
         }
 
-        // Si el handler devolvió texto, enviarlo (conveniencia).
-        // La cola se aplica dentro de sock.sendMessage (punto único).
-        // Se envía DENTRO de la ventana para que también sea prioridad.
         if (typeof result === "string" && result.length > 0) {
           await sock.sendMessage(ctx.chatId, { text: result }, { quoted: msg });
         }
@@ -160,7 +224,6 @@ export function createRouter(engine, opts) {
     } catch (err) {
       log.error("Router: " + (err.message || err), err);
       try {
-        // _priority: la cola lo envía antes que el tráfico normal
         await sock.sendMessage(msg.key.remoteJid, { text: "⚠️ Error interno al procesar el comando." }, { _priority: true });
       } catch {}
     }

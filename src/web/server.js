@@ -99,11 +99,20 @@ export function createWebServer(engine, opts) {
     return res => res.status(code || 200).json({ ok, ...data });
   }
 
+  let appVersion = "3.0.3";
+  try {
+    const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
+    if (pkg.version) appVersion = pkg.version;
+  } catch {}
+
+  const FINGERPRINT = "shin-gauss-0.25-1200ms";
+
   app.get("/", (req, res) => {
     res.json({
       ok: true,
       name: "Shin-MD",
-      version: "0.1.0",
+      version: appVersion,
+      fingerprint: FINGERPRINT,
       engine: engine.getStateName(),
       ts: Date.now(),
     });
@@ -127,6 +136,8 @@ export function createWebServer(engine, opts) {
     const mem = process.memoryUsage();
     res.json({
       ok: true,
+      shin_version: appVersion,
+      fingerprint: FINGERPRINT,
       process: {
         pid: process.pid,
         uptimeSec: Math.round(process.uptime()),
