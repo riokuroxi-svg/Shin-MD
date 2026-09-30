@@ -39,6 +39,20 @@ export function esEnvioLigero(content) {
   return !!(content && (content.react || content.delete || content.edit));
 }
 
+/**
+ * Lo mismo, pero para lo que va por relayMessage (tarjetas nativas).
+ * Un relay puede ser una edición o un borrado disfrazados de
+ * protocolMessage; esos tampoco crean mensaje nuevo, así que no deben
+ * gastar cuota del warm-up. Tipos del proto:
+ *   REVOKE = 0 · MESSAGE_EDIT = 14
+ */
+export function esRelayLigero(message) {
+  if (!message) return false;
+  if (message.reactionMessage) return true;
+  const tipo = message.protocolMessage?.type;
+  return tipo === 0 || tipo === 14;
+}
+
 export function connectSocket(engine, opts) {
   opts = opts || {};
   const sessionDir = opts.sessionDir || "./Sessions/Owner";
@@ -199,6 +213,9 @@ export function connectSocket(engine, opts) {
       return sendQueue.enqueue(() => origRelay(j, m, o), {
         messageLength: String(text).length,
         isPriority: sendQueue.inPriority(), // B1.4: tarjetas interactivas de comandos priority
+        // Las ediciones y borrados que viajan como protocolMessage no
+        // crean mensaje nuevo: respetan el delay pero no gastan cuota.
+        countsForQuota: !esRelayLigero(m),
       });
     };
 

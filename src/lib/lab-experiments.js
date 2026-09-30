@@ -34,7 +34,8 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { buildRichContent, texto, tabla, codigo, rejilla } from "#lib/rich-response";
+import { buildRichContent, texto, tabla, codigo, rejilla, reels, mapa, latex } from "#lib/rich-response";
+import { PASO, buildStepsContent } from "#lib/bot-steps";
 import { buildQuiz, sendImagePoll } from "#lib/poll-plus";
 import { sendAlbum, sendEventCover } from "#lib/album";
 import { sendVoiceArt, hexToArgb } from "#lib/voice-art";
@@ -226,6 +227,88 @@ export function buildComentario({ targetKey, cuerpo = "Esto es un comentario, no
   };
 }
 
+/** Panel de pasos de razonamiento, como el de Meta AI. */
+export function buildPasos() {
+  return buildStepsContent({
+    descripcion: "Preparando tu canción",
+    texto: "● Buscando en YouTube\n◐ Descargando audio\n○ Enviando",
+    disclaimer: "Shin-MD",
+    pasos: [
+      { titulo: "Buscando en YouTube", detalle: "3 resultados", estado: PASO.HECHO, razonando: true,
+        fuentes: [{ titulo: "youtube.com", url: "https://youtube.com" }] },
+      { titulo: "Descargando audio", detalle: "4.2 MB · 128 kbps", estado: PASO.EJECUTANDO,
+        secciones: [{ titulo: "Calidad", cuerpo: "128 kbps" }] },
+      { titulo: "Enviando", estado: PASO.PLANEADO },
+    ],
+  });
+}
+
+/** Carrusel de vídeos dentro de una sola burbuja. */
+export function buildReels(items) {
+  const lista = items?.length ? items : [
+    { titulo: "Yoasobi · Idol", miniatura: "https://i.ytimg.com/vi/ZRtdQ81jPUQ/hqdefault.jpg", video: "https://youtu.be/ZRtdQ81jPUQ" },
+    { titulo: "Kenshi Yonezu · Lemon", miniatura: "https://i.ytimg.com/vi/SX_ViT4Ra7k/hqdefault.jpg", video: "https://youtu.be/SX_ViT4Ra7k" },
+  ];
+  return buildRichContent([texto("*Resultados de la búsqueda*"), reels(lista)], {
+    disclaimer: "Shin-MD · resultados",
+  });
+}
+
+/** Mapa con chinchetas numeradas y lista debajo. */
+export function buildMapa() {
+  return buildRichContent([
+    texto("*Dónde queda la quedada*"),
+    mapa({ puntos: [
+      { lat: 19.6011, lon: -99.0526, titulo: "Ecatepec", cuerpo: "Punto de encuentro" },
+      { lat: 19.4326, lon: -99.1332, titulo: "Zócalo", cuerpo: "Plan B" },
+    ] }),
+  ], { disclaimer: "Shin-MD · mapa" });
+}
+
+/** Fórmula matemática compuesta. */
+export function buildLatex() {
+  return buildRichContent([
+    texto("La de siempre:"),
+    latex("{{0}} y también {{1}}", [
+      { expr: "E = mc^2", ancho: 140, alto: 44 },
+      { expr: "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}", ancho: 220, alto: 60 },
+    ]),
+  ], { disclaimer: "Shin-MD · fórmulas" });
+}
+
+/** Lista de productos nativa (catálogo). */
+export function buildCatalogo({ vendedor = "" } = {}) {
+  return {
+    listMessage: {
+      title: "Tienda de Shin-MD",
+      description: "Gasta las monedas que tanto te costaron.",
+      buttonText: "Ver tienda",
+      footerText: "❦ Shin-MD",
+      listType: 2, // PRODUCT_LIST
+      productListInfo: {
+        ...(vendedor ? { businessOwnerJid: vendedor } : {}),
+        productSections: [
+          { title: "Pociones", products: [{ productId: "shin-pocion" }, { productId: "shin-elixir" }] },
+          { title: "Armas", products: [{ productId: "shin-katana" }] },
+        ],
+      },
+    },
+  };
+}
+
+/** Registro de llamada (tarjeta de sistema). */
+export function buildRegistroLlamada() {
+  return {
+    callLogMesssage: {
+      isVideo: true,
+      callOutcome: 1, // MISSED
+      durationSecs: 0,
+      callType: 1,    // SCHEDULED_CALL
+      participants: [],
+    },
+  };
+}
+
 /**
  * Zonas pinchables dentro de una foto.
  * Las coordenadas van de 0 a 1 sobre la imagen.
@@ -316,6 +399,30 @@ export const EXPERIMENTOS = [
   deContenido("comentario", "Comentario colgado de un mensaje",
     "Un hilo debajo del mensaje original, distinto de una cita normal.",
     (ctx) => buildComentario({ targetKey: ctx.quoted?.key || ctx.targetKey })),
+
+  deContenido("pasos", "Pasos de razonamiento (panel de Meta AI)",
+    "Un panel con los pasos tachándose solos y sus fuentes, no una barra de texto.",
+    () => buildPasos()),
+
+  deContenido("reels", "Carrusel de vídeos en una burbuja",
+    "Tarjetas con portada y título que se deslizan dentro del mensaje.",
+    (ctx) => buildReels(ctx.items)),
+
+  deContenido("mapa", "Mapa con chinchetas numeradas",
+    "Un mapa de verdad dentro de la burbuja, con su lista de puntos.",
+    () => buildMapa()),
+
+  deContenido("latex", "Fórmulas matemáticas",
+    "Las fórmulas se ven compuestas, no como texto plano.",
+    () => buildLatex()),
+
+  deContenido("catalogo", "Lista de productos (catálogo)",
+    "Un catálogo con secciones y productos, no una lista con emojis.",
+    (ctx) => buildCatalogo({ vendedor: ctx.autor })),
+
+  deContenido("llamadalog", "Registro de llamada",
+    "La tarjeta gris de «llamada perdida» que pone el sistema.",
+    () => buildRegistroLlamada()),
 
   {
     clave: "fotoencuesta",
