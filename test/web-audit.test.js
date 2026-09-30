@@ -30,7 +30,7 @@ async function withExposedPanel(pass, fn) {
     await new Promise(r => web.server.once("listening", r));
     await fn("http://127.0.0.1:" + web.server.address().port);
   } finally {
-    if (web) web.close();
+    if (web) await web.close();
     if (prevLoop === undefined) delete process.env.LOOPBACK; else process.env.LOOPBACK = prevLoop;
     if (prevPass === undefined) delete process.env.PANEL_PASSWORD; else process.env.PANEL_PASSWORD = prevPass;
   }
@@ -43,8 +43,10 @@ function basic(user, pass) {
 test("auditoría: usuario incorrecto se rechaza aunque la contraseña sea correcta", async () => {
   await withExposedPanel("clave-x", async base => {
     const r = await fetch(base + "/health", { headers: basic("hacker", "clave-x") });
+    await r.text();
     assert.equal(r.status, 401, "otro usuario no debe pasar");
     const ok = await fetch(base + "/health", { headers: basic("admin", "clave-x") });
+    await ok.text();
     assert.equal(ok.status, 200, "admin con buena contraseña sí");
   });
 });
@@ -54,12 +56,15 @@ test("auditoría: 10 intentos fallidos bloquean la IP con 429", async () => {
     let last;
     for (let i = 0; i < 10; i++) {
       last = await fetch(base + "/health", { headers: basic("admin", "mala-" + i) });
+      await last.text();
     }
     assert.equal(last.status, 401, "los primeros 10 van en 401");
     const once = await fetch(base + "/health", { headers: basic("admin", "mala-11") });
+    await once.text();
     assert.equal(once.status, 429, "el intento 11 ya está bloqueado");
     // ni con la contraseña correcta pasa mientras esté bloqueado
     const real = await fetch(base + "/health", { headers: basic("admin", "clave-y") });
+    await real.text();
     assert.equal(real.status, 429, "el bloqueo aplica aunque aciertes");
   });
 });

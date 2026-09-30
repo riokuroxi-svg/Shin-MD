@@ -177,6 +177,9 @@ export function createWebServer(engine, opts) {
   function close() {
     return new Promise((resolve) => {
       try {
+        if (typeof server.closeAllConnections === "function") {
+          server.closeAllConnections();
+        }
         server.close(() => {
           log.gray("Web server closed");
           resolve();
