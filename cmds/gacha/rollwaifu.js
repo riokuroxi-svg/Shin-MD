@@ -7,6 +7,7 @@
 import { fastFetch } from '#lib/fastFetch';
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
+import { formatTag } from "#lib/gacha-shared";
 
 const FILE_PATH = './core/characters.json';
 const rollLocks = new Map();
@@ -55,9 +56,6 @@ function getSeriesNameByCharacter(chars, id) {
   return Object.entries(chars).find(([, serie]) => Array.isArray(serie.characters) && serie.characters.some(c => String(c.id) === String(id)))?.[1]?.name || 'Desconocido';
 }
 
-function formatTag(tag) {
-  return String(tag).trim().toLowerCase().replace(/\s+/g, '_');
-}
 
 function getRefererForUrl(url) {
   if (url.includes('safebooru.org')) return 'https://safebooru.org/';
