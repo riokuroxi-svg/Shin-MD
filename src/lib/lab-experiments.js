@@ -40,6 +40,13 @@ import { buildQuiz, sendImagePoll } from "#lib/poll-plus";
 import { sendAlbum, sendEventCover } from "#lib/album";
 import { sendVoiceArt, hexToArgb } from "#lib/voice-art";
 import { drawWaveform } from "#lib/waveform";
+import {
+  botonRapido, botonUrl, botonCopiar, botonLlamar, botonRecordatorio,
+  botonUbicacion, botonWebview, botonLista, buildCtaContent,
+} from "#lib/cta-buttons";
+import {
+  buildLlamadaProgramada, buildUbicacionViva, buildSolicitudPago, buildPedido, buildPin,
+} from "#lib/native-actions";
 
 const COVERS = path.join(process.cwd(), "media", "covers");
 
@@ -225,6 +232,63 @@ export function buildComentario({ targetKey, cuerpo = "Esto es un comentario, no
       targetMessageKey: targetKey,
     },
   };
+}
+
+/** Los ocho botones nativos que el bot no usaba, en una sola tarjeta. */
+export function buildCtasDemo() {
+  return buildCtaContent({
+    titulo: "Shin-MD · botonera completa",
+    texto: "Los ocho tipos de botón que WhatsApp sabe dibujar y casi nadie usa.",
+    pie: "❦ Shin-MD · 反魂",
+    botones: [
+      botonUrl({ texto: "Ver el repo", url: "https://github.com/riokuroxi-svg/Shin-MD" }),
+      botonCopiar({ texto: "Copiar código", codigo: "SHIN-2026" }),
+      botonLlamar({ texto: "Llamar al dueño", telefono: "+520000000000" }),
+      botonRecordatorio({ texto: "Recordármelo" }),
+      botonUbicacion({ texto: "Mandar mi ubicación" }),
+      botonWebview({ titulo: "Abrir mini web", url: "https://github.com/riokuroxi-svg/Shin-MD" }),
+      botonRapido({ texto: "Menú", id: ".menu" }),
+      botonLista({
+        titulo: "Categorías",
+        secciones: [
+          { titulo: "Música", filas: [{ titulo: "play", descripcion: "baja canciones", id: ".play" }] },
+          { titulo: "Juegos", etiqueta: "nuevo", filas: [{ titulo: "trivia", descripcion: "quiz nativo", id: ".trivia" }] },
+        ],
+      }),
+    ],
+    hoja: { titulo: "Todas las acciones", boton: "Ver las 8" },
+  });
+}
+
+/** Llamada programada: sale con su hora y su botón de avisarme. */
+export function buildProgramada() {
+  return buildLlamadaProgramada({
+    cuando: Date.now() + 26 * 3600 * 1000,
+    titulo: "Noche de trivia de Shin-MD",
+    video: true,
+  });
+}
+
+/** Ubicación en vivo. */
+export function buildEnVivo() {
+  return buildUbicacionViva({
+    lat: 19.6011, lon: -99.0526, velocidad: 1.4, nota: "Shin-MD en movimiento", secuencia: 1,
+  });
+}
+
+/** Carrito con total y número de artículos. */
+export function buildCarrito({ vendedor = "" } = {}) {
+  return buildPedido({
+    id: "shin-001", titulo: "Tienda de Shin-MD", articulos: 3, total: 120,
+    resumen: "1 katana · 2 pociones", vendedor,
+  });
+}
+
+/** Cobro con fondo de color. */
+export function buildCobro({ de = "" } = {}) {
+  return buildSolicitudPago({
+    monto: 500, moneda: "MXN", nota: "Renovación de premium", de, color: "#8B6CFF",
+  });
 }
 
 /** Panel de pasos de razonamiento, como el de Meta AI. */
@@ -442,6 +506,26 @@ export const EXPERIMENTOS = [
   deContenido("comentario", "Comentario colgado de un mensaje",
     "Un hilo debajo del mensaje original, distinto de una cita normal.",
     (ctx) => buildComentario({ targetKey: ctx.quoted?.key || ctx.targetKey })),
+
+  deContenido("ctas", "La botonera completa (8 tipos)",
+    "Enlace, copiar, llamar, recordatorio, ubicación, mini web, lista y respuesta rápida, todo junto.",
+    () => buildCtasDemo()),
+
+  deContenido("programada", "Llamada programada",
+    "La tarjeta de llamada agendada, con su hora y su recordatorio.",
+    () => buildProgramada()),
+
+  deContenido("envivo", "Ubicación en vivo",
+    "El mapa que se mueve solo, no una chincheta muerta.",
+    () => buildEnVivo()),
+
+  deContenido("carrito", "Pedido con total",
+    "La tarjeta de carrito: número de artículos e importe.",
+    (ctx) => buildCarrito({ vendedor: ctx.autor })),
+
+  deContenido("cobro", "Cobro con fondo de color",
+    "Solicitud de pago con el importe en grande y el color de la marca.",
+    (ctx) => buildCobro({ de: ctx.autor })),
 
   deContenido("pasos", "Pasos de razonamiento (panel de Meta AI)",
     "Un panel con los pasos tachándose solos y sus fuentes, no una barra de texto.",
