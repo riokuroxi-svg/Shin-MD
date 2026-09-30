@@ -31,8 +31,8 @@ import {
 } from "#lib/album";
 
 import {
-  SUB, COLOR_CODIGO, tokenizeCode, texto, tabla, codigo, rejilla, imagen,
-  buildUnified, buildRichContent, sendRich,
+  SUB, COLOR_CODIGO, PROVEEDOR_FUENTE, tokenizeCode, texto, tabla, codigo, rejilla, imagen,
+  reels, mapa, latex, fuentes, buildUnified, buildRichContent, sendRich,
 } from "#lib/rich-response";
 
 import {
@@ -44,8 +44,15 @@ import {
   EXPERIMENTOS, buscarExperimento, listarExperimentos, anotarImagen,
   buildTabla, buildCodigo, buildChips, buildLlamada, buildPago,
   buildEncuesta, buildInvitacion, buildQuizDemo, buildEtiqueta,
-  buildProducto, buildComentario,
+  buildProducto, buildComentario, buildCatalogo,
 } from "#lib/lab-experiments";
+
+import {
+  PASO, TIPO_EDICION, normalizarPasos, buildStepsContent, buildStepsEdit,
+  renderPasosTexto, createNativeSteps,
+} from "#lib/bot-steps";
+
+import { esRelayLigero } from "../src/core/socket.js";
 
 import lab from "../cmds/owner/lab.js";
 
@@ -401,7 +408,7 @@ test("sendQuiz manda por relayMessage y sendImagePoll cuelga las fotos", async (
 
 test("todos los experimentos de contenido codifican contra el proto real", () => {
   const conContenido = EXPERIMENTOS.filter((e) => typeof e.construir === "function");
-  assert.ok(conContenido.length >= 11, "se perdieron experimentos por el camino");
+  assert.ok(conContenido.length >= 17, "se perdieron experimentos por el camino");
 
   for (const experimento of conContenido) {
     const contenido = experimento.construir({
@@ -512,4 +519,160 @@ test(".lab voz sin audio citado avisa en vez de romperse", async () => {
 test(".lab es solo del dueño", () => {
   assert.equal(lab.ownerOnly, true);
   assert.equal(lab.name, "lab");
+});
+
+// ── 7. Panel de pasos nativo (lo de Meta AI) ───────────────────────
+
+test("normalizarPasos traduce la lista cómoda a la del protocolo", () => {
+  const [uno, dos] = normalizarPasos([
+    { titulo: "Buscando", detalle: "3 resultados", estado: PASO.HECHO, razonando: true,
+      fuentes: [{ titulo: "youtube.com", url: "https://youtu.be/x" }] },
+    { titulo: "Bajando", secciones: [{ titulo: "Calidad", cuerpo: "128 kbps" }] },
+  ]);
+
+  assert.equal(uno.statusTitle, "Buscando");
+  assert.equal(uno.status, PASO.HECHO);
+  assert.equal(uno.isReasoning, true);
+  assert.equal(uno.sourcesMetadata[0].sourceUrl, "https://youtu.be/x");
+  assert.equal(dos.status, PASO.PLANEADO, "sin estado, el paso está planeado");
+  assert.equal(dos.sections[0].sectionBody, "128 kbps");
+});
+
+test("el panel de pasos siempre lleva texto de respaldo", () => {
+  assert.throws(() => buildStepsContent({ pasos: [] }), /pasos/);
+
+  const contenido = buildStepsContent({
+    descripcion: "Preparando",
+    pasos: [{ titulo: "Buscando", estado: PASO.EJECUTANDO }],
+  });
+  assert.ok(contenido.extendedTextMessage.text, "sin texto no se lee nada si el panel no se dibuja");
+
+  const vuelta = roundTrip(contenido);
+  const panel = vuelta.messageContextInfo.botMetadata.progressIndicatorMetadata;
+  assert.equal(panel.progressDescription, "Preparando");
+  assert.equal(panel.stepsMetadata[0].status, 2);
+});
+
+test("la edición mete el contenido nuevo entero, panel incluido", () => {
+  assert.throws(() => buildStepsEdit(null, {}), /clave/);
+
+  const contenido = buildStepsContent({ pasos: [{ titulo: "Listo", estado: PASO.HECHO }] });
+  const edicion = buildStepsEdit({ id: "MSG1", remoteJid: "1@g.us", fromMe: true }, contenido, 1770000000000);
+
+  assert.equal(edicion.protocolMessage.type, TIPO_EDICION);
+  const vuelta = roundTrip(edicion);
+  assert.equal(vuelta.protocolMessage.type, 14);
+  assert.equal(
+    vuelta.protocolMessage.editedMessage.messageContextInfo.botMetadata.progressIndicatorMetadata.stepsMetadata[0].status,
+    3,
+  );
+});
+
+test("el texto de respaldo marca cada paso con su símbolo", () => {
+  const salida = renderPasosTexto([
+    { titulo: "Uno", estado: PASO.HECHO },
+    { titulo: "Dos", detalle: "en ello", estado: PASO.EJECUTANDO },
+    { titulo: "Tres", estado: PASO.PLANEADO },
+  ], "Trabajando");
+  assert.match(salida, /\*Trabajando\*/);
+  assert.match(salida, /● Uno/);
+  assert.match(salida, /◐ Dos · en ello/);
+  assert.match(salida, /○ Tres/);
+});
+
+test("el panel vivo se manda una vez y luego solo se edita", async () => {
+  const sock = socketFalso();
+  const panel = createNativeSteps(sock, "1@g.us", { minGapMs: 0, descripcion: "Descargando" });
+
+  assert.equal(await panel.start([{ titulo: "Buscar" }, { titulo: "Bajar" }, { titulo: "Enviar" }]), true);
+  assert.equal(sock.enviados.length, 1, "el arranque es un envío normal");
+  assert.ok(panel.alive());
+
+  await panel.avanzar(1, { detalle: "4.2 MB" });
+  assert.equal(sock.enviados.length, 2);
+  assert.equal(sock.enviados[1].message.protocolMessage.type, 14, "avanzar edita, no manda otro mensaje");
+
+  const pasos = sock.enviados[1].message.protocolMessage.editedMessage
+    .messageContextInfo.botMetadata.progressIndicatorMetadata.stepsMetadata;
+  assert.equal(pasos[0].status, PASO.HECHO);
+  assert.equal(pasos[1].status, PASO.EJECUTANDO);
+  assert.equal(pasos[1].statusBody, "4.2 MB");
+  assert.equal(pasos[2].status, PASO.PLANEADO);
+
+  await panel.finish();
+  const finales = sock.enviados[2].message.protocolMessage.editedMessage
+    .messageContextInfo.botMetadata.progressIndicatorMetadata.stepsMetadata;
+  assert.ok(finales.every((p) => p.status === PASO.HECHO));
+  assert.equal(panel.alive(), false);
+
+  await panel.avanzar(0);
+  assert.equal(sock.enviados.length, 3, "cerrado ya no toca el chat");
+});
+
+test("el panel vivo no se cae si el socket falla", async () => {
+  const panel = createNativeSteps({}, "1@g.us", { minGapMs: 0 });
+  assert.equal(await panel.start([{ titulo: "Uno" }]), false);
+  assert.equal(await panel.avanzar(0), false);
+  assert.equal(panel.key(), null);
+});
+
+// ── 8. Bloques nuevos de la tarjeta rica ───────────────────────────
+
+test("el carrusel de vídeos guarda portada, título y enlace", () => {
+  const bloque = reels([{ titulo: "Idol", miniatura: "https://x/t.jpg", video: "https://x/v.mp4", perfil: "https://x/p.jpg" }]);
+  const vuelta = roundTrip(buildRichContent([bloque]));
+  const item = vuelta.richResponseMessage.submessages[0].contentItemsMetadata.itemsMetadata[0].reelItem;
+  assert.equal(item.title, "Idol");
+  assert.equal(item.thumbnailUrl, "https://x/t.jpg");
+  assert.equal(item.videoUrl, "https://x/v.mp4");
+});
+
+test("el mapa centra solo y numera las chinchetas", () => {
+  const bloque = mapa({ puntos: [{ lat: 10, lon: 20, titulo: "A" }, { lat: 20, lon: 40, titulo: "B" }] });
+  assert.equal(bloque.mapMetadata.centerLatitude, 15);
+  assert.equal(bloque.mapMetadata.centerLongitude, 30);
+  assert.equal(bloque.mapMetadata.annotations[1].annotationNumber, 2);
+  assert.throws(() => mapa({ puntos: [] }), /punto/);
+
+  const vuelta = roundTrip(buildRichContent([bloque]));
+  assert.equal(vuelta.richResponseMessage.submessages[0].mapMetadata.annotations.length, 2);
+});
+
+test("las fórmulas viajan con su tamaño", () => {
+  const bloque = latex("{{0}}", [{ expr: "E=mc^2", ancho: 140, alto: 44 }]);
+  const vuelta = roundTrip(buildRichContent([bloque]));
+  const expr = vuelta.richResponseMessage.submessages[0].latexMetadata.expressions[0];
+  assert.equal(expr.latexExpression, "E=mc^2");
+  assert.equal(expr.width, 140);
+});
+
+test("las citas salen numeradas con su favicon", () => {
+  assert.equal(fuentes([]), null);
+
+  const contenido = buildRichContent([texto("hola")], {
+    citas: [{ url: "https://es.wikipedia.org", favicon: "https://x/f.ico", proveedor: PROVEEDOR_FUENTE.GOOGLE }],
+  });
+  const vuelta = roundTrip(contenido);
+  const fuente = vuelta.messageContextInfo.botMetadata.richResponseSourcesMetadata.sources[0];
+  assert.equal(fuente.citationNumber, 1);
+  assert.equal(fuente.faviconCdnUrl, "https://x/f.ico");
+  assert.equal(fuente.provider, PROVEEDOR_FUENTE.GOOGLE);
+});
+
+test("el catálogo es una lista de tipo PRODUCT_LIST", () => {
+  const contenido = buildCatalogo({ vendedor: "1@s.whatsapp.net" });
+  const vuelta = roundTrip(contenido);
+  assert.equal(vuelta.listMessage.listType, 2);
+  assert.equal(vuelta.listMessage.productListInfo.productSections[0].products.length, 2);
+});
+
+// ── 9. La cola no debe cobrar cuota por editar ─────────────────────
+
+test("esRelayLigero reconoce lo que no crea mensaje nuevo", () => {
+  assert.equal(esRelayLigero({ protocolMessage: { type: 14 } }), true, "edición");
+  assert.equal(esRelayLigero({ protocolMessage: { type: 0 } }), true, "borrado");
+  assert.equal(esRelayLigero({ reactionMessage: { text: "✅" } }), true);
+  assert.equal(esRelayLigero({ protocolMessage: { type: 5 } }), false);
+  assert.equal(esRelayLigero({ extendedTextMessage: { text: "hola" } }), false);
+  assert.equal(esRelayLigero(null), false);
 });

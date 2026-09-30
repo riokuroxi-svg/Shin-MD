@@ -135,6 +135,102 @@ export function imagen(url, { pie = "", enlace = "", alineacion = 0 } = {}) {
   };
 }
 
+/**
+ * Carrusel de vídeos dentro de la burbuja (lo que Meta AI usa para
+ * enseñar reels). Cada tarjeta lleva portada, título y su vídeo.
+ * @param {object[]} items [{titulo, miniatura, video, perfil}]
+ */
+export function reels(items = []) {
+  const lista = (Array.isArray(items) ? items : []).filter(Boolean);
+  return {
+    messageType: SUB.ITEMS,
+    contentItemsMetadata: {
+      contentType: 1, // CAROUSEL
+      itemsMetadata: lista.map((i) => ({
+        reelItem: {
+          title: String(i.titulo ?? ""),
+          thumbnailUrl: String(i.miniatura ?? ""),
+          videoUrl: String(i.video ?? ""),
+          ...(i.perfil ? { profileIconUrl: String(i.perfil) } : {}),
+        },
+      })),
+    },
+  };
+}
+
+/**
+ * Mapa con chinchetas numeradas y su lista debajo.
+ * @param {object} op
+ * @param {object[]} op.puntos [{lat, lon, titulo, cuerpo}]
+ */
+export function mapa({ puntos = [], zoom = 0.08, lista = true } = {}) {
+  const marcas = (Array.isArray(puntos) ? puntos : []).filter(Boolean);
+  if (!marcas.length) throw new Error("el mapa necesita al menos un punto");
+
+  const lat = marcas.reduce((s, p) => s + Number(p.lat || 0), 0) / marcas.length;
+  const lon = marcas.reduce((s, p) => s + Number(p.lon || 0), 0) / marcas.length;
+
+  return {
+    messageType: SUB.MAPA,
+    mapMetadata: {
+      centerLatitude: lat,
+      centerLongitude: lon,
+      latitudeDelta: zoom,
+      longitudeDelta: zoom,
+      showInfoList: Boolean(lista),
+      annotations: marcas.map((p, i) => ({
+        annotationNumber: i + 1,
+        latitude: Number(p.lat || 0),
+        longitude: Number(p.lon || 0),
+        title: String(p.titulo ?? ""),
+        body: String(p.cuerpo ?? ""),
+      })),
+    },
+  };
+}
+
+/**
+ * Fórmulas matemáticas. El texto lleva marcas {{0}}, {{1}}... donde
+ * van las expresiones.
+ */
+export function latex(textoConMarcas, expresiones = []) {
+  return {
+    messageType: SUB.LATEX,
+    latexMetadata: {
+      text: String(textoConMarcas ?? ""),
+      expressions: (Array.isArray(expresiones) ? expresiones : []).map((e) => ({
+        latexExpression: String(typeof e === "string" ? e : e.expr ?? ""),
+        ...(e?.ancho ? { width: Number(e.ancho) } : {}),
+        ...(e?.alto ? { height: Number(e.alto) } : {}),
+        ...(e?.url ? { url: String(e.url) } : {}),
+      })),
+    },
+  };
+}
+
+/** SourceProvider de BotSourceItem: 1 Bing, 2 Google, 3 soporte. */
+export const PROVEEDOR_FUENTE = Object.freeze({ DESCONOCIDO: 0, BING: 1, GOOGLE: 2, SOPORTE: 3 });
+
+/**
+ * Tira de fuentes citadas con favicon y número, la que Meta AI pone
+ * debajo de sus respuestas.
+ * @param {object[]} lista [{url, favicon, miniatura, busqueda, proveedor}]
+ */
+export function fuentes(lista = []) {
+  const items = (Array.isArray(lista) ? lista : []).filter(Boolean);
+  if (!items.length) return null;
+  return {
+    sources: items.map((f, i) => ({
+      provider: Number.isInteger(f.proveedor) ? f.proveedor : PROVEEDOR_FUENTE.DESCONOCIDO,
+      ...(f.url ? { sourceProviderUrl: String(f.url) } : {}),
+      ...(f.favicon ? { faviconCdnUrl: String(f.favicon) } : {}),
+      ...(f.miniatura ? { thumbnailCdnUrl: String(f.miniatura) } : {}),
+      ...(f.busqueda ? { sourceQuery: String(f.busqueda) } : {}),
+      citationNumber: Number.isInteger(f.numero) ? f.numero : i + 1,
+    })),
+  };
+}
+
 // ── Armado del mensaje ─────────────────────────────────────────────
 
 /**
@@ -194,13 +290,16 @@ export function buildUnified(bloques = [], idRespuesta = randomUUID()) {
  * @param {string} [op.disclaimer]    línea gris sobre la tarjeta
  * @param {string[]} [op.sugerencias] píldoras de seguimiento
  */
-export function buildRichContent(bloques = [], { disclaimer = "", sugerencias = [] } = {}) {
+export function buildRichContent(bloques = [], { disclaimer = "", sugerencias = [], citas = [] } = {}) {
   if (!Array.isArray(bloques) || !bloques.length) throw new Error("hacen falta bloques");
 
   const idRespuesta = randomUUID();
   const botMetadata = {};
 
   if (disclaimer) botMetadata.messageDisclaimerText = String(disclaimer);
+
+  const tiraFuentes = fuentes(citas);
+  if (tiraFuentes) botMetadata.richResponseSourcesMetadata = tiraFuentes;
   if (Array.isArray(sugerencias) && sugerencias.length) {
     botMetadata.suggestedPromptMetadata = {
       suggestedPrompts: sugerencias.map(String),
@@ -225,12 +324,12 @@ export function buildRichContent(bloques = [], { disclaimer = "", sugerencias = 
  * Manda la tarjeta. Nunca lanza.
  * @returns {Promise<{sent: boolean, key?: object, error?: any}>}
  */
-export async function sendRich(sock, jid, bloques, { quoted, disclaimer, sugerencias } = {}) {
+export async function sendRich(sock, jid, bloques, { quoted, disclaimer, sugerencias, citas } = {}) {
   try {
     if (!sock?.relayMessage) throw new Error("el socket no expone relayMessage");
 
     const { generateWAMessageFromContent } = await import("baileys");
-    const generado = generateWAMessageFromContent(jid, buildRichContent(bloques, { disclaimer, sugerencias }), {
+    const generado = generateWAMessageFromContent(jid, buildRichContent(bloques, { disclaimer, sugerencias, citas }), {
       userJid: sock.user?.id,
       quoted,
       timestamp: new Date(),
