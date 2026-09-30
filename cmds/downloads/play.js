@@ -24,6 +24,7 @@ import { fastFetch, globalFetchCache, isYtdlpAvailable, resolveYtdlpBinary } fro
 import { downloadAudioSourceYtdlp, processMp3ForWhatsApp, isMp3Valid } from "#lib/mp3Utils";
 import { getSelectedResponse } from "#lib/interactive-response";
 import { sendNativeQuickReply } from "#lib/native-reply";
+import { createProgress } from "#lib/progress";
 import { getChannelContext } from "../../src/lib/contextBuilder.js";
 import log from "#logger";
 
@@ -451,7 +452,18 @@ async function ejecutarDescarga(sock, job, modo, m) {
 
   const emoji = tipo === "audio" ? (comoDoc ? "📄" : "🎵") : (comoDoc ? "📁" : "🎬");
   try { await sock.sendMessage(chat, { react: { text: emoji, key: m.key } }); } catch {}
-  const estadoMsg = await sock.sendMessage(chat, { text: `⏳ *Descargando ${tipo}...*\n> *${job.title}*` }, { quoted: m }).catch(() => null);
+  // Un solo mensaje que se va editando (src/lib/progress.js). Editar NO
+  // gasta cuota diaria (socket.js → esEnvioLigero), así que esto cuesta
+  // lo mismo que el viejo "mando aviso y luego lo borro", pero el aviso
+  // se queda de recibo con el título y la duración en vez de parpadear.
+  // Importante: NO se edita mientras se descarga; el único retoque va
+  // DESPUÉS del audio, para no meter ni un segundo de espera antes.
+  const prog = createProgress(sock, chat, { quoted: m });
+  await prog.start({
+    title: `Descargando ${tipo}`,
+    detail: job.title,
+    pct: 20,
+  });
 
   try {
     liberar = await adquirir("descargas", 2);
@@ -461,7 +473,6 @@ async function ejecutarDescarga(sock, job, modo, m) {
       //  ~1.5s de retraso añadido justo antes del audio, sin valor para nadie.)
       const procesado = await obtenerAudioProcesado(job);
       buffer = procesado.buffer;
-      if (estadoMsg?.key) try { await sock.sendMessage(chat, { delete: estadoMsg.key }); } catch {}
       const segundos = procesado.seconds || 0;
       const nombre = `${sanitizeFilename(job.title)}.mp3`;
       const audioPayload = {
@@ -474,18 +485,29 @@ async function ejecutarDescarga(sock, job, modo, m) {
       await sock.sendMessage(chat, comoDoc ? {
         document: buffer, mimetype: "audio/mpeg", fileName: nombre,
       } : audioPayload, { quoted: m });
+      await prog.finish({
+        title: `Listo · ${job.title}`,
+        detail: segundos > 0
+          ? `${tipo} · ${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`
+          : tipo,
+        pct: 100,
+      });
     } else {
       const r = await descargarVideoApis(job.url);
       buffer = r.buffer;
       if (buffer.length > MAX_MB_VIDEO) throw new Error("Video muy grande (>100MB)");
       if (!esMp4Valido(buffer)) comoDoc = true;
-      if (estadoMsg?.key) try { await sock.sendMessage(chat, { delete: estadoMsg.key }); } catch {}
       await sock.sendMessage(chat, {
         [comoDoc ? "document" : "video"]: buffer,
         mimetype: "video/mp4",
         fileName: `${sanitizeFilename(job.title)}.mp4`,
         caption: `乂 *Video*\n> ❒ Título › *${job.title}*${r.calidad ? `\n> ❒ Calidad › *${r.calidad}*` : ""}`,
       }, { quoted: m });
+      await prog.finish({
+        title: `Listo · ${job.title}`,
+        detail: r.calidad ? `video · ${r.calidad}` : "video",
+        pct: 100,
+      });
     }
     job._completado = true;
     try { await sock.sendMessage(chat, { react: { text: "✅", key: job._commandKey || m.key } }); } catch {}
@@ -496,13 +518,14 @@ async function ejecutarDescarga(sock, job, modo, m) {
     }, 60000);
   } catch (e) {
     job._procesando = false;
+    // El aviso ya está en pantalla: se edita. Antes se borraba y se
+    // mandaba otro mensaje, o sea un envío más del cupo diario por cada
+    // descarga fallida.
     if (e?.semaforo) {
-      if (estadoMsg?.key) try { await sock.sendMessage(chat, { delete: estadoMsg.key }); } catch {}
-      await sock.sendMessage(chat, { text: "⏳ Ya hay 2 descargas en curso, espera un momento e inténtalo de nuevo." }, { quoted: m });
+      await prog.fail("Ya hay 2 descargas en curso. Espera un momento e inténtalo de nuevo.");
       return;
     }
-    if (estadoMsg?.key) try { await sock.sendMessage(chat, { delete: estadoMsg.key }); } catch {}
-    await sock.sendMessage(chat, { text: `❌ *Error:* ${e?.message || e}\n\n> Prueba con otro enlace o canción.` }, { quoted: m });
+    await prog.fail(`${e?.message || e} · Prueba con otro enlace o canción.`);
     try { await sock.sendMessage(chat, { react: { text: "❌", key: job._commandKey || m.key } }); } catch {}
   } finally {
     if (liberar) liberar();
@@ -544,7 +567,9 @@ export default {
 
       // Si es comando de audio directo (.mp3, .ytmp3, .ytaudio)
       if (isDirectAudio) {
-        const estado = await sock.sendMessage(ctx.chatId, { text: `⏳ *Descargando audio...*` }, { quoted: ctx.full }).catch(() => null);
+        // Mismo criterio que arriba: un solo mensaje que se edita.
+        const prog = createProgress(sock, ctx.chatId, { quoted: ctx.full });
+        await prog.start({ title: "Descargando audio", detail: input, pct: 20 });
         try {
           const job = {
             url: videoId ? `https://youtu.be/${videoId}` : input,
@@ -552,7 +577,6 @@ export default {
             title: input,
           };
           const procesado = await obtenerAudioProcesado(job);
-          if (estado?.key) try { await sock.sendMessage(ctx.chatId, { delete: estado.key }); } catch {}
           const safeName = `${sanitizeFilename(input)}.mp3`;
           const audioPayload = {
             audio: procesado.buffer,
@@ -562,10 +586,17 @@ export default {
           };
           if (procesado.seconds > 0) audioPayload.seconds = procesado.seconds;
           await sock.sendMessage(ctx.chatId, audioPayload, { quoted: ctx.full });
+          await prog.finish({
+            title: `Listo · ${input}`,
+            detail: procesado.seconds > 0
+              ? `audio · ${Math.floor(procesado.seconds / 60)}:${String(procesado.seconds % 60).padStart(2, "0")}`
+              : "audio",
+            pct: 100,
+          });
           return null;
         } catch (e) {
-          if (estado?.key) try { await sock.sendMessage(ctx.chatId, { delete: estado.key }); } catch {}
-          return `❌ *Error:* ${e?.message || e}`;
+          await prog.fail(e?.message || e);
+          return null; // el aviso de error ya está editado en pantalla
         }
       }
 

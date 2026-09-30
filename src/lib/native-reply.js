@@ -55,6 +55,9 @@ function buildBizNode() {
  * @param {object} [opts.quoted]      Mensaje citado.
  * @param {Array}  [opts.buttons]     [{ text, id, copy_code, url, name }]
  * @param {Buffer|string} [opts.imageBuffer] Portada (Buffer o URL).
+ * @param {object|string} [opts.params] Adornos extra del mensaje
+ *        (messageParamsJson): tarjeta con cuenta atrás, hoja inferior…
+ *        Se arman con #lib/native-params. Ver ese archivo.
  * @returns {Promise<{sent: boolean, key?: object, error?: any}>}
  */
 export async function sendNativeQuickReply({
@@ -66,6 +69,7 @@ export async function sendNativeQuickReply({
   quoted,
   buttons = [],
   imageBuffer = null,
+  params = null,
 } = {}) {
   try {
     if (!sock?.relayMessage) throw new Error('El socket no expone relayMessage');
@@ -139,12 +143,20 @@ export async function sendNativeQuickReply({
       };
     });
 
+    const paramsJson = !params
+      ? ''
+      : (typeof params === 'string' ? params : JSON.stringify(params));
+
     const interactiveMessage = {
       header,
       body: { text: String(body || '') },
       footer: { text: String(footer || '') },
       nativeFlowMessage: {
         buttons: formattedButtons,
+        // Adornos extra (cuenta atrás, hoja inferior). Solo se manda si
+        // hay algo de verdad: un JSON vacío hace que algunos clientes
+        // dibujen una franja gris de más.
+        ...(paramsJson ? { messageParamsJson: paramsJson } : {}),
         messageVersion: 1,
       },
     };
