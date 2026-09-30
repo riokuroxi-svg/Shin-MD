@@ -106,7 +106,16 @@ export function getText(msg) {
 export function serializeMessage(msg, sock) {
   const key = msg.key || {};
   const chatId = key.remoteJid || "";
-  const senderId = isJidGroup(chatId) ? (key.participant || key.remoteJid || "") : (key.remoteJid || "");
+  const crudo = isJidGroup(chatId) ? (key.participant || key.remoteJid || "") : (key.remoteJid || "");
+  // WhatsApp ya direcciona muchos mensajes (sobre todo de grupo) con IDs
+  // @lid en vez del número real. Baileys adjunta el número en el propio
+  // mensaje (key.participantPn / key.senderPn): si el remitente salió
+  // como @lid y el número viaja pegado, usamos el número. Si no viaja,
+  // caemos al @lid (nadie podrá suplantar al dueño solo por salir @lid).
+  const numeroPegado = normalizeJid(key.participantPn || key.senderPn || "");
+  const senderId = (crudo.endsWith("@lid") && numeroPegado.endsWith("@s.whatsapp.net"))
+    ? numeroPegado
+    : crudo;
   const isGroup = isJidGroup(chatId);
   const pushName = msg.pushName || "";
   const text = getText(msg);
