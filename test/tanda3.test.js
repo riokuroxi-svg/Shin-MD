@@ -409,7 +409,7 @@ test("sendQuiz manda por relayMessage y sendImagePoll cuelga las fotos", async (
 
 test("todos los experimentos de contenido codifican contra el proto real", () => {
   const conContenido = EXPERIMENTOS.filter((e) => typeof e.construir === "function");
-  assert.ok(conContenido.length >= 17, "se perdieron experimentos por el camino");
+  assert.ok(conContenido.length >= 22, "se perdieron experimentos por el camino");
 
   for (const experimento of conContenido) {
     const contenido = experimento.construir({
