@@ -178,8 +178,11 @@ function crearProgresoNativo(sock, jid, { quoted, minGapMs, pasos, descripcion }
 
   return {
     async start(datos) {
-      const texto = typeof datos === "string" ? datos : renderProgress(datos);
-      const ok = await panel.start(lista, texto);
+      // El texto visible NO es la barra de antes: es la lista de pasos.
+      // Así, aunque el cliente no dibuje el panel nativo (en grupos
+      // WhatsApp no admite el nodo de bot), el mensaje ya se ve
+      // distinto y se entiende igual de bien.
+      const ok = await panel.start(lista, "");
       if (!ok) { await caerARespaldo(datos); return respaldo.key(); }
       return panel.key();
     },
@@ -195,8 +198,12 @@ function crearProgresoNativo(sock, jid, { quoted, minGapMs, pasos, descripcion }
     async finish(datos) {
       cerrado = true;
       if (respaldo) return respaldo.finish(datos);
-      const texto = typeof datos === "string" ? datos : renderProgress(datos);
-      return panel.finish(texto);
+      // Al cerrar se dejan los pasos todos en verde y debajo el
+      // resumen de lo que salió. Nada de volver a la barra de antes:
+      // quedaría un mensaje que empieza con pasos y acaba con barra.
+      if (typeof datos === "string") return panel.finish(datos);
+      const detalle = datos?.detail ? ` · ${datos.detail}` : "";
+      return panel.finish("", { cola: `> ✅ ${datos?.title || "Listo"}${detalle}` });
     },
 
     async fail(motivo) {
