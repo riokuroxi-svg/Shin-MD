@@ -6,7 +6,6 @@
  */
 
 import {
-  toSmallCaps,
   createBracketBox,
   getCommandBadges,
   CATEGORY_EMOJIS,

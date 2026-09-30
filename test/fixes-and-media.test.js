@@ -8,6 +8,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { downloadMediaFromObject } from "#commands";
 import createWebServer from "#server";
+import { getAudioUrl } from "#downloader";
+import spotifyCmd from "../cmds/downloads/spotify.js";
 
 function mockEngine() {
   return {
@@ -44,6 +46,20 @@ test("sock.reply funciona y responde correctamente", async () => {
   assert.equal(sent[0].jid, "12345@s.whatsapp.net");
   assert.equal(sent[0].content.text, "Mensaje de prueba");
   assert.equal(sent[0].opts.quoted.key.id, "Q1");
+});
+
+test("Downloader: getAudioUrl resuelve búsqueda de música resiliente", async () => {
+  const res = await getAudioUrl("cunumi");
+  assert.ok(res.url);
+  assert.ok(res.title);
+  assert.ok(typeof res.url === "string");
+  assert.match(res.url, /^https?:\/\//i);
+});
+
+test("Spotify Command: maneja argumentos vacíos con guía de uso", async () => {
+  const res = await spotifyCmd.handler(null, { arg: "", usedPrefix: "." });
+  assert.ok(res.includes("SPOTIFY MUSIC PLAYER"));
+  assert.ok(res.includes(".spotify <canción o link>"));
 });
 
 test("web server metrics incluye shin_version y fingerprint", async () => {

@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  play.js — Descarga y reproducción de música (YouTube / Vreden / Multi-API)
+//  play.js — Descarga y reproducción de música ultrarresiliente
 // ═══════════════════════════════════════════════════════════════════
 
 import { getAudioUrl } from "#downloader";
@@ -28,7 +28,7 @@ export default {
       return "🎵 *SHIN MUSIC PLAYER*\n\n" +
         "Uso: `" + (ctx.usedPrefix || ".") + "play <canción o link>`\n" +
         "Ej: `" + (ctx.usedPrefix || ".") + "play bad bunny monaco`\n\n" +
-        "💡 _También puedes usar `" + (ctx.usedPrefix || ".") + "playsc` para buscar en SoundCloud._";
+        "💡 _También puedes usar `" + (ctx.usedPrefix || ".") + "spotify <canción>` o `" + (ctx.usedPrefix || ".") + "playsc <canción>`._";
     }
 
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
@@ -43,7 +43,8 @@ export default {
     let searchMeta = null;
     try {
       const s = await searchYouTube(ctx.arg);
-      if (s && s.length > 0) searchMeta = s[0];
+      const list = s?.videos || (Array.isArray(s) ? s : []);
+      if (list.length > 0) searchMeta = list[0];
     } catch {}
 
     const waitMsg = await sock.sendMessage(ctx.chatId, {
@@ -55,20 +56,20 @@ export default {
 
     try {
       const result = await getAudioUrl(ctx.arg);
-      const { url, provider, title, duration } = result;
+      const { url, provider, title, duration, author, thumbnail, views } = result;
 
       const trackTitle = title || searchMeta?.title || "Audio Shin-MD";
-      const trackAuthor = searchMeta?.author?.name || "YouTube Music";
+      const trackAuthor = author || searchMeta?.author?.name || "YouTube Music";
       const trackDuration = duration || searchMeta?.timestamp || "0:00";
-      const trackViews = searchMeta?.views ? searchMeta.views.toLocaleString() : "N/A";
-      const trackThumbnail = searchMeta?.thumbnail || searchMeta?.image;
+      const trackViews = views ? views.toLocaleString() : (searchMeta?.views ? searchMeta.views.toLocaleString() : "N/A");
+      const trackThumbnail = thumbnail || searchMeta?.thumbnail || searchMeta?.image;
 
       let cardText = `╭┈┈⫹⫺ *SHIN MUSIC PLAYER* ⫹⫺┈┈╮\n`;
       cardText += `│ ◈ *Título* : *${trackTitle}*\n`;
       cardText += `│ ◈ *Artista* : *${trackAuthor}*\n`;
       cardText += `│ ◈ *Duración* : *${trackDuration}*\n`;
       cardText += `│ ◈ *Vistas* : *${trackViews}*\n`;
-      cardText += `│ ◈ *Servidor* : \`${provider || "Vreden / Multi-API"}\`\n`;
+      cardText += `│ ◈ *Servidor* : \`${provider || "Multi-API Engine"}\`\n`;
       cardText += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n`;
       cardText += `_⏳ Enviando archivo de audio..._`;
 
@@ -82,7 +83,7 @@ export default {
         } catch {}
       }
 
-      const safeFileName = trackTitle.replace(/[/\\?*:<>|"]/g, "").slice(0, 75) + ".mp3";
+      const safeFileName = `${trackAuthor} - ${trackTitle}`.replace(/[/\\?*:<>|"]/g, "").slice(0, 75) + ".mp3";
 
       const audioMsg = await sock.sendMessage(ctx.chatId, {
         audio: { url },

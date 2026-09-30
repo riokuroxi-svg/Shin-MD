@@ -8,7 +8,8 @@
 //  interactive.js — Mensajes interactivos (rich messages) con botones
 //  · sendInteractive: tarjeta con botones nativos (quick_reply, cta_url,
 //    cta_copy, single_select...) en un solo mensaje
-//  · parseButtonResponse: extrae el id del botón que el usuario tocó
+//  · sendCarousel: carrusel interactivo de tarjetas
+//  · parseButtonResponse / isButtonResponse: extrae el id del botón tocado
 //  · Siempre con fallback a texto plano si WhatsApp no lo renderiza
 //  ⚠️ Anti-ban: usamos estos mensajes con moderación, todo por la cola.
 // ═══════════════════════════════════════════════════════════════════
@@ -23,9 +24,20 @@ import log from "#logger";
 /**
  * Prepara un buffer o URL como header media (imagen/video) del mensaje.
  */
-async function prepareMedia(sock, bufferOrUrl) {
+async function prepareMedia(sock, bufferOrUrl, isVideo = false, gifPlayback = false) {
   if (!bufferOrUrl) return { imageMessage: null, videoMessage: null };
   try {
+    if (isVideo) {
+      const videoPayload = (typeof bufferOrUrl === "string" && /^https?:\/\//i.test(bufferOrUrl))
+        ? { url: bufferOrUrl }
+        : bufferOrUrl;
+      const media = await prepareWAMessageMedia(
+        { video: videoPayload, gifPlayback: !!gifPlayback },
+        { upload: sock.waUploadToServer },
+      );
+      return { imageMessage: null, videoMessage: media.videoMessage };
+    }
+
     if (typeof bufferOrUrl === "string" && /^https?:\/\//i.test(bufferOrUrl)) {
       const media = await prepareWAMessageMedia(
         { image: { url: bufferOrUrl } },
@@ -48,8 +60,6 @@ async function prepareMedia(sock, bufferOrUrl) {
 
 /**
  * Construye el botón nativo quick_reply.
- * @param {string} label - texto visible del botón (máx ~20 chars)
- * @param {string} id - id que se devuelve al tocar
  */
 export function quickReply(label, id) {
   return { name: "quick_reply", buttonParamsJson: JSON.stringify({ display_text: label, id }) };
@@ -64,11 +74,7 @@ export function ctaCopy(label, code) {
 }
 
 /**
- * Botón de lista desplegable nativa (single_select). Se abre como lista
- * del sistema con secciones — el estándar de los menús premium 2026.
- * @param {string} title - texto visible del botón que abre la lista
- * @param {Array} sections - [{ title, rows: [{ id, title, description? }] }]
- *   El id de cada row sigue el formato del router: "comando" o "comando:arg".
+ * Botón de lista desplegable nativa (single_select).
  */
 export function singleSelect(title, sections) {
   const clean = (sections || []).map(s => ({
@@ -87,10 +93,7 @@ export function singleSelect(title, sections) {
 }
 
 /**
- * Mensaje con externalAdReply: el "tag verde chiquito" + link preview.
- * Opcionalmente lleva imagen (thumbnailUrl) y título/descripción.
- * ⚠️ B4: si RICH_EXTRA=1 añade forwardingScore/newsletter fake (riesgo de
- * ban — por defecto APAGADO).
+ * Mensaje con externalAdReply
  */
 export async function sendAdReply(sock, jid, opts = {}) {
   const contextInfo = {
@@ -154,29 +157,23 @@ function formatButtonsAsText(buttons = []) {
 
 /**
  * Envía un mensaje interactivo con botones.
- * @param {object} sock - socket Baileys
- * @param {string} jid - chat destino
- * @param {object} opts
- *   - body: texto principal (tabla/markdown permitido)
- *   - footer: texto inferior
- *   - title: cabecera (si no hay imagen)
- *   - image: Buffer o URL de imagen de cabecera
- *   - buttons: array de botones (quickReply/ctaUrl/...)
- *   - quoted: mensaje a citar
- * @returns {Promise<object|null>} mensaje enviado o null si falló
  */
 export async function sendInteractive(sock, jid, opts = {}) {
   const body = opts.body || "";
   const footer = opts.footer || "";
   const isGroup = typeof jid === "string" && (jid.endsWith("@g.us") || jid.endsWith("@newsletter"));
 
-  // ⚠️ En grupos de WhatsApp (@g.us), los servidores de WhatsApp descartan
-  // los botones interactiveMessage / nativeFlow para cuentas estándar.
-  // Enviamos directamente el formato visual garantizado con cotización limpia.
   if (isGroup) {
     const safeQuoted = (opts.quoted && (opts.quoted.message || opts.quoted.key)) ? (opts.quoted.full || opts.quoted) : undefined;
     const btnText = formatButtonsAsText(opts.buttons);
     const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : "") + btnText);
+
+    if (opts.video) {
+      const videoPayload = typeof opts.video === "string" && /^https?:\/\//i.test(opts.video)
+        ? { url: opts.video }
+        : opts.video;
+      return await sock.sendMessage(jid, { video: videoPayload, gifPlayback: !!opts.gifPlayback, caption: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
+    }
 
     if (opts.image) {
       const imagePayload = typeof opts.image === "string" && /^https?:\/\//i.test(opts.image)
@@ -187,9 +184,11 @@ export async function sendInteractive(sock, jid, opts = {}) {
     return await sock.sendMessage(jid, { text: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
   }
 
-  const { imageMessage } = await prepareMedia(sock, opts.image);
+  const isVideo = !!opts.video;
+  const mediaSource = opts.video || opts.image;
+  const { imageMessage, videoMessage } = await prepareMedia(sock, mediaSource, isVideo, opts.gifPlayback);
   const buttons = Array.isArray(opts.buttons) ? opts.buttons.filter(Boolean) : [];
-  const hasMedia = !!imageMessage;
+  const hasMedia = !!(imageMessage || videoMessage);
 
   try {
     const content = {
@@ -199,185 +198,183 @@ export async function sendInteractive(sock, jid, opts = {}) {
             deviceListMetadata: {},
             deviceListMetadataVersion: 2,
           },
-          interactiveMessage: {
-            body: { text: body },
-            footer: { text: footer },
-            header: {
+          interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+            body: proto.Message.InteractiveMessage.Body.fromObject({
+              text: body,
+            }),
+            footer: footer
+              ? proto.Message.InteractiveMessage.Footer.fromObject({ text: footer })
+              : undefined,
+            header: proto.Message.InteractiveMessage.Header.fromObject({
+              title: hasMedia ? "" : (opts.title || ""),
+              subtitle: "",
               hasMediaAttachment: hasMedia,
-              imageMessage: imageMessage || null,
-              ...(opts.title ? { title: opts.title } : {}),
-            },
-            nativeFlowMessage: {
-              buttons,
-              messageParamsJson: "",
-            },
-          },
+              imageMessage: imageMessage || undefined,
+              videoMessage: videoMessage || undefined,
+            }),
+            nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+              buttons: buttons.map(b => ({
+                name: b.name,
+                buttonParamsJson: b.buttonParamsJson,
+              })),
+            }),
+            contextInfo: opts.contextInfo || undefined,
+          }),
         },
       },
     };
 
-    // Baileys 6.7.24 falla si quoted tiene key pero no message → validar
-    const validQuoted = opts.quoted && opts.quoted.message ? opts.quoted : undefined;
-
     const msg = generateWAMessageFromContent(jid, content, {
-      userJid: sock.user?.jid || sock.user?.id,
-      quoted: validQuoted,
-      upload: sock.waUploadToServer,
+      userJid: sock.user?.id,
+      quoted: opts.quoted && opts.quoted.message ? opts.quoted : undefined,
     });
 
     await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
     return msg;
   } catch (err) {
     log.warn("interactive: fallback a texto (" + (err.message || err) + ")");
+    const btnText = formatButtonsAsText(buttons);
+    const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : "") + btnText);
+    const safeQuoted = (opts.quoted && (opts.quoted.message || opts.quoted.key)) ? (opts.quoted.full || opts.quoted) : undefined;
     try {
-      const safeQuoted = (opts.quoted && opts.quoted.message) ? opts.quoted : undefined;
-      const btnText = formatButtonsAsText(opts.buttons);
-      const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : "") + btnText);
-      const sent = await sock.sendMessage(jid, { text: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
-      return sent;
-    } catch (err2) {
-      log.error("interactive: el fallback de texto también falló: " + (err2.message || err2));
+      if (opts.video) {
+        const videoPayload = typeof opts.video === "string" && /^https?:\/\//i.test(opts.video) ? { url: opts.video } : opts.video;
+        return await sock.sendMessage(jid, { video: videoPayload, gifPlayback: !!opts.gifPlayback, caption: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
+      }
+      if (opts.image) {
+        const imagePayload = typeof opts.image === "string" && /^https?:\/\//i.test(opts.image) ? { url: opts.image } : opts.image;
+        return await sock.sendMessage(jid, { image: imagePayload, caption: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
+      }
+      return await sock.sendMessage(jid, { text: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
+    } catch {
       return null;
     }
   }
 }
 
 /**
- * Envía un carrusel de tarjetas (tabla + imagen + botones en un solo mensaje).
- * @param {object} sock - socket Baileys
- * @param {string} jid - chat destino
- * @param {object} opts
- *   - title: título del carrusel
- *   - body: texto del carrusel
- *   - footer: pie
- *   - cards: array de { image (Buffer|URL), title, body, footer, buttons }
- * @returns {Promise<object|null>}
+ * Envía un carrusel interactivo de tarjetas (Carousel)
  */
 export async function sendCarousel(sock, jid, opts = {}) {
+  const cards = opts.cards || [];
+  const contextInfo = opts.contextInfo || {};
   const isGroup = typeof jid === "string" && (jid.endsWith("@g.us") || jid.endsWith("@newsletter"));
 
-  // ⚠️ En grupos de WhatsApp (@g.us), formateamos todas las tarjetas en un
-  // mensaje visual completo con soporte de imagen para asegurar 100% entrega.
-  if (isGroup) {
+  if (isGroup || !cards.length) {
+    let fallback = opts.text || "✨ *SHOWCASE*\n\n";
+    for (let i = 0; i < cards.length; i++) {
+      const c = cards[i];
+      fallback += `╭──〔 📌 *${c.title || "Opción"}* 〕──⬣\n`;
+      fallback += `│ ${(c.body || "").replace(/\n/g, "\n│ ")}\n`;
+      if (c.footer) fallback += `│ _${c.footer}_\n`;
+      fallback += `╰─────────────────────────⬣\n\n`;
+    }
     const safeQuoted = (opts.quoted && (opts.quoted.message || opts.quoted.key)) ? (opts.quoted.full || opts.quoted) : undefined;
-    let fullText = (opts.title ? `✨ *${opts.title}*\n\n` : "") + (opts.body ? `${opts.body}\n\n` : "");
-    for (let i = 0; i < (opts.cards || []).length; i++) {
-      const c = opts.cards[i];
-      fullText += `╭──〔 📌 *${c.title || `OPCIÓN ${i + 1}`}* 〕──⬣\n`;
-      if (c.body) fullText += `│ ${c.body.replace(/\n/g, "\n│ ")}\n`;
-      if (c.footer) fullText += `│ _${c.footer}_\n`;
-      const cardBtns = formatButtonsAsText(c.buttons);
-      if (cardBtns) fullText += cardBtns + "\n";
-      fullText += `╰─────────────────────────⬣\n\n`;
-    }
-    if (opts.footer) fullText += `_${opts.footer}_\n`;
-
-    const firstImg = opts.cards?.[0]?.image;
-    if (firstImg) {
-      const imagePayload = typeof firstImg === "string" && /^https?:\/\//i.test(firstImg)
-        ? { url: firstImg }
-        : firstImg;
-      return await sock.sendMessage(jid, { image: imagePayload, caption: fullText.trim() }, safeQuoted ? { quoted: safeQuoted } : {});
-    }
-    return await sock.sendMessage(jid, { text: fullText.trim() }, safeQuoted ? { quoted: safeQuoted } : {});
+    return await sock.sendMessage(jid, { text: fallback.trim(), contextInfo }, safeQuoted ? { quoted: safeQuoted } : {});
   }
-
-  const cards = [];
-  for (const card of opts.cards || []) {
-    const { imageMessage } = await prepareMedia(sock, card.image);
-    cards.push({
-      body: { text: card.body || "" },
-      footer: { text: card.footer || "" },
-      header: {
-        hasMediaAttachment: !!imageMessage,
-        imageMessage: imageMessage || null,
-        title: card.title || "",
-      },
-      nativeFlowMessage: {
-        buttons: (card.buttons || []).filter(Boolean),
-        messageParamsJson: "",
-      },
-    });
-  }
-  if (cards.length === 0) return null;
 
   try {
+    const cardObjects = [];
+    for (const card of cards) {
+      const { imageMessage } = await prepareMedia(sock, card.image);
+      cardObjects.push({
+        header: proto.Message.InteractiveMessage.Header.fromObject({
+          title: imageMessage ? "" : (card.title || ""),
+          hasMediaAttachment: !!imageMessage,
+          imageMessage: imageMessage || undefined,
+        }),
+        body: proto.Message.InteractiveMessage.Body.fromObject({ text: card.body || "" }),
+        footer: card.footer ? proto.Message.InteractiveMessage.Footer.fromObject({ text: card.footer }) : undefined,
+        nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
+          buttons: (card.buttons || []).map(b => ({
+            name: b.name,
+            buttonParamsJson: b.buttonParamsJson,
+          })),
+        }),
+      });
+    }
+
     const content = {
       viewOnceMessage: {
         message: {
-          messageContextInfo: {
-            deviceListMetadata: {},
-            deviceListMetadataVersion: 2,
-          },
-          interactiveMessage: {
-            body: { text: opts.body || "" },
-            footer: { text: opts.footer || "" },
-            header: {
-              hasMediaAttachment: false,
-              title: opts.title || "",
-            },
-            carouselMessage: {
-              cards,
-              messageVersion: 2,
-            },
-          },
+          messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
+          interactiveMessage: proto.Message.InteractiveMessage.fromObject({
+            body: proto.Message.InteractiveMessage.Body.fromObject({ text: opts.text || "" }),
+            carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({
+              cards: cardObjects,
+            }),
+            contextInfo,
+          }),
         },
       },
     };
-    const validQuoted = opts.quoted && opts.quoted.message ? opts.quoted : undefined;
+
     const msg = generateWAMessageFromContent(jid, content, {
-      userJid: sock.user?.jid || sock.user?.id,
-      quoted: validQuoted,
-      upload: sock.waUploadToServer,
+      userJid: sock.user?.id,
+      quoted: opts.quoted && opts.quoted.message ? opts.quoted : undefined,
     });
+
     await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
     return msg;
   } catch (err) {
-    log.warn("interactive: carousel fallback (" + (err.message || err) + ")");
-    try {
-      const safeQuoted = (opts.quoted && opts.quoted.message) ? opts.quoted : undefined;
-      let fullText = (opts.title ? `*${opts.title}*\n\n` : "") + (opts.body || "");
-      const sent = await sock.sendMessage(jid, { text: fullText }, safeQuoted ? { quoted: safeQuoted } : {});
-      return sent;
-    } catch (err2) {
-      log.error("interactive: el fallback de texto del carousel también falló: " + (err2.message || err2));
-      return null;
+    log.warn("carousel fallback (" + (err.message || err) + ")");
+    let fallback = opts.text || "✨ *SHOWCASE*\n\n";
+    for (const c of cards) {
+      fallback += `• *${c.title}*: ${c.body}\n`;
     }
+    return await sock.sendMessage(jid, { text: fallback, contextInfo }, opts.quoted ? { quoted: opts.quoted } : {});
   }
 }
 
-/**
- * Extrae el id del botón que el usuario tocó, de cualquier tipo de respuesta.
- * @param {object} msg - mensaje entrante (WAMessage)
- * @returns {string|null} id del botón, o null si no es una respuesta
- */
-export function parseButtonResponse(msg) {
-  if (!msg || !msg.message) return null;
-  const m = msg.message;
+export function parseButtonResponse(rawMsg) {
+  if (!rawMsg || !rawMsg.message) return null;
+  const msg = rawMsg.message;
 
-  if (m.buttonsResponseMessage) {
-    return m.buttonsResponseMessage.selectedButtonId || null;
+  if (msg.buttonsResponseMessage?.selectedButtonId) {
+    return msg.buttonsResponseMessage.selectedButtonId;
   }
-  if (m.templateButtonReplyMessage) {
-    return m.templateButtonReplyMessage.selectedId || null;
+
+  if (msg.templateButtonReplyMessage?.selectedId) {
+    return msg.templateButtonReplyMessage.selectedId;
   }
-  if (m.listResponseMessage) {
-    return m.listResponseMessage.singleSelectReply?.selectedRowId || null;
-  }
-  if (m.interactiveResponseMessage) {
+
+  const interactive =
+    msg.interactiveResponseMessage ||
+    msg.viewOnceMessage?.message?.interactiveResponseMessage ||
+    msg.viewOnceMessageV2?.message?.interactiveResponseMessage;
+
+  if (interactive?.nativeFlowResponseMessage?.paramsJson) {
     try {
-      const params = m.interactiveResponseMessage.nativeFlowResponseMessage?.paramsJson;
-      if (params) return JSON.parse(params).id || null;
+      const parsed = JSON.parse(interactive.nativeFlowResponseMessage.paramsJson);
+      if (parsed.id) return parsed.id;
+      if (parsed.selected_row_id) return parsed.selected_row_id;
+      if (parsed.values && parsed.values[0]) return parsed.values[0];
     } catch {}
   }
+
+  if (interactive?.body?.text) {
+    return interactive.body.text;
+  }
+
+  if (msg.listResponseMessage?.singleSelectReply?.selectedRowId) {
+    return msg.listResponseMessage.singleSelectReply.selectedRowId;
+  }
+
   return null;
 }
 
-/**
- * ¿Es este mensaje una respuesta a un botón? (no reaccionar como comando normal)
- */
-export function isButtonResponse(msg) {
-  return parseButtonResponse(msg) !== null;
+export function isButtonResponse(rawMsg) {
+  return parseButtonResponse(rawMsg) !== null;
 }
 
-export default { sendInteractive, sendCarousel, parseButtonResponse, isButtonResponse, quickReply, ctaUrl, ctaCopy, singleSelect, sendAdReply };
+export default {
+  sendInteractive,
+  sendCarousel,
+  sendAdReply,
+  quickReply,
+  ctaUrl,
+  ctaCopy,
+  singleSelect,
+  parseButtonResponse,
+  isButtonResponse,
+};

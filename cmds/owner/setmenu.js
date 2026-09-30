@@ -11,14 +11,26 @@ const VARIANTS = {
   v1: {
     id: 1,
     name: "INTERACTIVE BOTTOM SHEET",
-    desc: "Menú interactivo con menú desplegable (Single Select), botones de acción y tarjeta rica",
+    desc: "Menú interactivo con selector desplegable (Single Select), botones de acción y banner rotativo",
     emoji: "📱",
   },
   v2: {
     id: 2,
     name: "AESTHETIC BANNER & READMORE",
-    desc: "Banner de imagen con cabecera estética, cajas bracket y colapsado invisible (ReadMore)",
+    desc: "Banner de imagen aleatorio con cabecera estética, cajas bracket Unicode y colapsado (ReadMore)",
     emoji: "🖼️",
+  },
+  v3: {
+    id: 3,
+    name: "ANIMATED VIDEO GIFPLAYBACK",
+    desc: "Cabecera de video animado en bucle continuo (gifPlayback) con selector interactivo",
+    emoji: "🎬",
+  },
+  v4: {
+    id: 4,
+    name: "COMPACT DASHBOARD",
+    desc: "Ficha técnica compacta con acceso directo a categorías y monitor de latencia",
+    emoji: "📊",
   },
 };
 
@@ -27,7 +39,7 @@ export default {
   aliases: ["menuvariant", "menustyle", "cambiarmenu"],
   category: "owner",
   description: "Configura el estilo visual y la variante activa del menú principal",
-  usage: ".setmenu <v1 | v2>",
+  usage: ".setmenu <v1 | v2 | v3 | v4>",
   cooldown: 2,
   ownerOnly: true,
 
@@ -49,7 +61,7 @@ export default {
 
     const selected = VARIANTS[target];
     if (!selected) {
-      return `❌ Variante inválida. Opciones válidas: *v1*, *v2*.\nEjemplo: \`${ctx.usedPrefix}setmenu v1\``;
+      return `❌ Variante inválida. Opciones válidas: *v1*, *v2*, *v3*, *v4*.\nEjemplo: \`${ctx.usedPrefix}setmenu v1\``;
     }
 
     try {

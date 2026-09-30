@@ -5,6 +5,9 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   readMore,
   createBracketBox,
@@ -14,6 +17,35 @@ import {
   CATEGORY_EMOJIS,
 } from "../../src/lib/formatter.js";
 import { getVerifiedQuoted, getChannelContext } from "../../src/lib/contextBuilder.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function getRandomBanner() {
+  const shuffleDir = path.resolve(__dirname, "../../assets/image/shuffle");
+  try {
+    if (fs.existsSync(shuffleDir)) {
+      const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
+      if (files.length > 0) {
+        const chosen = files[Math.floor(Math.random() * files.length)];
+        return fs.readFileSync(path.join(shuffleDir, chosen));
+      }
+    }
+  } catch {}
+
+  const fallbackPaths = [
+    process.env.MENU_IMAGE,
+    path.resolve(__dirname, "../../assets/image/anita-landscape.jpg"),
+    path.resolve(__dirname, "../../assets/image/anita.png"),
+    path.resolve(__dirname, "../../assets/banner-default.png"),
+  ].filter(Boolean);
+
+  for (const p of fallbackPaths) {
+    try {
+      if (typeof p === "string" && fs.existsSync(p)) return fs.readFileSync(p);
+    } catch {}
+  }
+  return null;
+}
 
 const CAT_LABELS = {
   info: "INFORMACIÓN",
@@ -47,7 +79,7 @@ export default {
     const prefix = ctx.usedPrefix || ".";
     const greeting = getTimeGreeting();
     const uptimeFormatted = formatUptime(engine?.getUptime?.() || (process.uptime() * 1000));
-    const senderNumber = (ctx.senderId || "").split("@")[0].split(":")[0];
+    const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
 
     const cats = new Map();
     const seenNames = new Set();
@@ -84,6 +116,13 @@ export default {
     }
 
     const fullText = header + readMore + body + `\n_Shin-MD • Desarrollado por riokuroxi-svg_`;
+    const banner = getRandomBanner();
+
+    if (banner) {
+      await sock.sendMessage(ctx.chatId, { image: banner, caption: fullText, contextInfo: channelCtx }, { quoted: ctx.full });
+      return null;
+    }
+
     await sock.sendMessage(ctx.chatId, { text: fullText, contextInfo: channelCtx }, { quoted: ctx.full });
     return null;
   },
