@@ -1,20 +1,10 @@
 import { randomBytes } from 'node:crypto';
 
 /**
- * Envío de una tarjeta interactiva nativa con botones `quick_reply`.
+ * Envío de una tarjeta interactiva nativa con botones (quick_reply, cta_copy, cta_url).
  *
- * Reutiliza el patrón que ya funciona en `.menu` (`buildBizNode` +
- * generateWAMessageFromContent + relayMessage) para construir un mensaje
- * `interactiveMessage` moderno (native_flow), que WhatsApp actual renderiza
- * de forma estable. A diferencia de `sendMessage({ buttons })` (tipo legacy
- * `buttonsMessage`, que Meta está descartando), esta ruta produce el formato
- * actual y NO exige una imagen: si no hay portada, se usa header de texto.
- *
- * Se mantiene deliberadamente autocontenido (solo importa 'baileys' y node:crypto)
- * para poder probarse aislado y para no acoplar el envío de tarjetas al sistema
- * de comandos del menú. `buildBizNode`/`isPrivateChat` reflejan la misma
- * estructura que `core/lib/native-menu.js`; consolidar ambos en un único helper
- * es una limpieza futura, no un requisito para funcionar.
+ * Construye un mensaje `interactiveMessage` moderno (native_flow), compatible con
+ * WhatsApp Multi-Device tanto en chats privados como en grupos.
  */
 
 function buildMessageContextInfo() {
@@ -54,17 +44,17 @@ function buildBizNode() {
 }
 
 /**
- * Envía una tarjeta con botones nativos `quick_reply`.
+ * Envía una tarjeta con botones nativos.
  *
  * @param {object} opts
- * @param {object} opts.sock          Socket de Baileys (debe exponer relayMessage, user, waUploadToServer).
- * @param {string} opts.jid           Chat destino (msg.chat).
+ * @param {object} opts.sock          Socket de Baileys.
+ * @param {string} opts.jid           Chat destino.
  * @param {string} opts.body          Texto principal de la tarjeta.
  * @param {string} [opts.footer]      Pie de la tarjeta.
- * @param {string} [opts.title]       Título del header (se usa cuando hay media).
+ * @param {string} [opts.title]       Título del header.
  * @param {object} [opts.quoted]      Mensaje citado.
- * @param {Array}  [opts.buttons]     [{ text, id, icon? }] para quick_reply.
- * @param {Buffer} [opts.imageBuffer] Portada opcional (best-effort).
+ * @param {Array}  [opts.buttons]     [{ text, id, copy_code, url, name }]
+ * @param {Buffer|string} [opts.imageBuffer] Portada (Buffer o URL).
  * @returns {Promise<{sent: boolean, key?: object, error?: any}>}
  */
 export async function sendNativeQuickReply({
@@ -72,7 +62,7 @@ export async function sendNativeQuickReply({
   jid,
   body,
   footer = '',
-  title = '❦ Ginko-MD',
+  title = '❦ Shin-MD',
   quoted,
   buttons = [],
   imageBuffer = null,
@@ -85,17 +75,21 @@ export async function sendNativeQuickReply({
       prepareWAMessageMedia,
     } = await import('baileys');
 
-    // La portada es opcional y NUNCA bloquea los botones: si no se puede subir
-    // (o el socket no expone waUploadToServer), se envía con header de texto.
     let mediaMessage = null;
     if (imageBuffer) {
       try {
         if (typeof sock.waUploadToServer === 'function') {
-          const prepared = await prepareWAMessageMedia(
-            { image: imageBuffer },
-            { upload: sock.waUploadToServer },
-          );
-          mediaMessage = prepared?.imageMessage || null;
+          const payload = Buffer.isBuffer(imageBuffer)
+            ? { image: imageBuffer }
+            : (typeof imageBuffer === 'string' && /^https?:\/\//i.test(imageBuffer) ? { image: { url: imageBuffer } } : null);
+
+          if (payload) {
+            const prepared = await prepareWAMessageMedia(
+              payload,
+              { upload: sock.waUploadToServer },
+            );
+            mediaMessage = prepared?.imageMessage || null;
+          }
         }
       } catch {
         mediaMessage = null;
@@ -109,19 +103,48 @@ export async function sendNativeQuickReply({
     };
     if (mediaMessage) header.imageMessage = mediaMessage;
 
+    const formattedButtons = (buttons || []).map((button) => {
+      // 1. Botón nativo de Copiar Código (cta_copy)
+      if (button.name === 'cta_copy' || button.copy_code || button.code) {
+        return {
+          name: 'cta_copy',
+          buttonParamsJson: JSON.stringify({
+            display_text: String(button.text || button.display_text || 'Copiar Código'),
+            id: String(button.id || 'copy_code'),
+            copy_code: String(button.copy_code || button.code || ''),
+          }),
+        };
+      }
+      // 2. Botón nativo de Enlace (cta_url)
+      if (button.name === 'cta_url' || button.url) {
+        return {
+          name: 'cta_url',
+          buttonParamsJson: JSON.stringify({
+            display_text: String(button.text || button.display_text || 'Enlace'),
+            url: String(button.url || ''),
+            merchant_url: String(button.url || ''),
+          }),
+        };
+      }
+      // 3. Botón de respuesta rápida (quick_reply)
+      return {
+        name: button.name || 'quick_reply',
+        buttonParamsJson: typeof button.buttonParamsJson === 'string'
+          ? button.buttonParamsJson
+          : JSON.stringify({
+              display_text: String(button.text || button.display_text || ''),
+              id: String(button.id || ''),
+              icon: (button.icon ? String(button.icon).toUpperCase() : undefined),
+            }),
+      };
+    });
+
     const interactiveMessage = {
       header,
       body: { text: String(body || '') },
       footer: { text: String(footer || '') },
       nativeFlowMessage: {
-        buttons: (buttons || []).map((button) => ({
-          name: 'quick_reply',
-          buttonParamsJson: JSON.stringify({
-            display_text: String(button.text || ''),
-            id: String(button.id || ''),
-            icon: (button.icon ? String(button.icon).toUpperCase() : undefined),
-          }),
-        })),
+        buttons: formattedButtons,
         messageVersion: 1,
       },
     };
