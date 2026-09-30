@@ -404,3 +404,71 @@ test(".acortar y .tourl entregan el enlace listo para copiar", async () => {
     assert.ok(src.includes("fallbackText"), f + " necesita respaldo en texto");
   }
 });
+
+// ── 11. El pase de estilo ─────────────────────────────────────────
+//
+//  El sistema de diseño existía desde hace tandas y lo usaban 9 de
+//  212 comandos. El resto seguía con su adorno a mano. Como
+//  reescribir 101 ficheros es la mejor forma de romper algo, el
+//  texto se peina en el punto único de envío. Estas pruebas fijan
+//  que el peinado sea cobarde: ante la duda, no toca nada.
+test("estilizar da la cara de la casa a los avisos sueltos", async () => {
+  const { estilizar } = await import("../src/lib/theme.js");
+
+  const ayuda = estilizar("《✧》 Responde a una imagen con .tourl para subirlo.");
+  assert.match(ayuda, /^💡 ─+/, "un 'responde a…' es una pista, no un error");
+  assert.match(ayuda, /Responde a una imagen/);
+  assert.ok(!ayuda.includes("《✧》"), "el adorno viejo se va");
+
+  assert.match(estilizar("ꕥ No se pudo descargar el archivo."), /^❌/);
+  assert.match(estilizar("《✧》 Solo el dueño puede hacer eso."), /^🔒/);
+  assert.match(estilizar("✎ Tu descripción ha sido eliminada."), /^✅/);
+  assert.match(estilizar("ꕥ Espera unos segundos."), /^🕐/);
+});
+
+test("estilizar NO toca lo que no debe", async () => {
+  const { estilizar, boxMain, boxData } = await import("../src/lib/theme.js");
+
+  const menu = boxMain("MENÚ", ["una línea", "otra"]);
+  assert.equal(estilizar(menu), menu, "lo que ya es de la casa se queda igual");
+  assert.equal(estilizar(boxData("DATOS", [["a", "b"]])), boxData("DATOS", [["a", "b"]]));
+
+  const codigo = "《✧》 mira esto:\n```js\nconst x = 1;\n```";
+  assert.equal(estilizar(codigo), codigo, "el código no se toca ni con adorno");
+
+  const largo = "《✧》 " + "x".repeat(800);
+  assert.equal(estilizar(largo), largo, "lo largo es una ficha, no un aviso");
+
+  const normal = "Hola, esto es una respuesta cualquiera.";
+  assert.equal(estilizar(normal), normal, "sin adorno no hay nada que arreglar");
+
+  assert.equal(estilizar(""), "");
+  assert.equal(estilizar(null), null);
+  assert.equal(estilizar(42), 42);
+});
+
+test("el pase de estilo está enchufado en el punto único de envío", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../src/core/socket.js", import.meta.url), "utf8");
+  assert.ok(src.includes("estilizar(c.text)"), "si no, los 212 comandos siguen cada uno a su aire");
+  assert.ok(src.includes('SHIN_ESTILO'), "y con interruptor de emergencia");
+});
+
+test("los avisos de permisos los redacta el sistema, no el middleware", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../src/commands/middleware/permissions.js", import.meta.url), "utf8");
+  assert.ok(src.includes('state("onlyOwner")'));
+  assert.ok(src.includes('state("onlyAdmin")'));
+  assert.ok(src.includes('state("botNotAdmin")'));
+  assert.ok(!src.includes("Solo el dueño* puede usar"), "el texto a mano sobra");
+});
+
+test("ningún comando nuevo debería estrenar adornos a mano", async () => {
+  // Aviso suave: los 531 mensajes viejos los peina el punto de envío,
+  // pero lo nuevo debería nacer ya con state() o las cajas.
+  const { readFile } = await import("node:fs/promises");
+  for (const f of ["../cmds/group/guardar.js", "../cmds/group/pin.js", "../cmds/utils/ptv.js"]) {
+    const src = await readFile(new URL(f, import.meta.url), "utf8");
+    assert.ok(!src.includes("《✧》"), f + " debería usar el sistema de diseño");
+  }
+});

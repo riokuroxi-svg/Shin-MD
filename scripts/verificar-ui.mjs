@@ -303,6 +303,28 @@ const anotar = (comando, donde, esperado, envs, nota = "") =>
   anotar(".daily", "grupo", "tarjeta de recompensa con atajos", sock.enviados);
 }
 
+// ── Los estados del sistema, antes y después ───────────────────────
+//  Lo que más se ve de un bot no son sus tarjetas: son sus "no",
+//  sus "te falta algo" y sus "se rompió". Aquí están, peinados.
+{
+  const { estilizar, state } = await import("../src/lib/theme.js");
+  const crudos = [
+    ["Comando de dueño", "🚫 *Solo el dueño* puede usar este comando.", state("onlyOwner")],
+    ["Ayuda de .tourl", "《✧》 Responde a una imagen, video, audio o sticker con .tourl para subirlo y obtener un enlace.", null],
+    ["Enlace inválido", "《✧》 El texto no parece un enlace válido (debe empezar con http:// o https://).", null],
+    ["Descarga fallida", "ꕥ No se pudo descargar el archivo.", null],
+    ["Dato borrado", "✎ Tu descripción ha sido eliminada.", null],
+    ["Sin resultados", "《✧》 Anime no encontrado.", null],
+  ];
+  for (const [nombre, antes, forzado] of crudos) {
+    casos.push({
+      comando: nombre, donde: "estado", esperado: "así se veía antes del pase de estilo",
+      nota: "", antes,
+      mensajes: [{ clase: "corriente", tipo: "texto", texto: forzado || estilizar(antes), botones: [], nodos: null }],
+    });
+  }
+}
+
 // ── salida ─────────────────────────────────────────────────────────
 const destino = process.argv.includes("--json") ? process.argv[process.argv.indexOf("--json") + 1] : null;
 if (destino) {

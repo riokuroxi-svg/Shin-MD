@@ -25,6 +25,7 @@ import path from "path";
 import chalk from "chalk";
 import NodeCache from "node-cache";
 import log from "#logger";
+import { estilizar } from "#lib/theme";
 
 export { getCachedMeta, setCachedMeta, deleteCachedMeta };
 
@@ -182,6 +183,15 @@ export function connectSocket(engine, opts) {
       // pero ya no agotan el tope diario ni se quedan bloqueadas detrás de
       // él. Antes, un solo .play gastaba 9 de los 20 envíos del día 0
       // porque cada reaccion/borrado contaba igual que un audio.
+      // Pase de estilo: el sistema de diseño lo usaban 9 comandos de
+      // 212, así que en vez de reescribir 101 ficheros a mano (y
+      // romper alguno por el camino) el texto se peina aquí, de una
+      // vez, justo antes de salir. La función es cobarde: si duda,
+      // devuelve el texto igual. Se apaga con SHIN_ESTILO=0.
+      if (c && typeof c.text === "string" && process.env.SHIN_ESTILO !== "0") {
+        try { c = { ...c, text: estilizar(c.text) }; } catch {}
+      }
+
       const esLigero = esEnvioLigero(c);
       const qo = {
         messageLength: c?.text?.length || 0,
