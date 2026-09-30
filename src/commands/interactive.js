@@ -59,6 +59,40 @@ async function prepareMedia(sock, bufferOrUrl, isVideo = false, gifPlayback = fa
 }
 
 /**
+ * Los NODOS BINARIOS que WhatsApp espera alrededor de un mensaje
+ * interactivo. Sin ellos, el servidor acepta el mensaje y el teléfono
+ * lo tira a la basura sin dibujar nada: ni error, ni aviso, ni pista.
+ *
+ * Es justo por esto que los botones "no funcionaban en grupos" y se
+ * acabó mandando texto plano: faltaba el envoltorio, no el permiso.
+ *
+ * Estructura (la misma que emite el cliente oficial):
+ *   biz → interactive(type=native_flow, v=1) → native_flow(v=9, name=mixed)
+ *   + bot(biz_bot=1)  SOLO en chats privados
+ *
+ * El nodo `bot` es el que enciende la chispita ✨ de IA en el mensaje;
+ * en grupos no se pone (WhatsApp no lo admite ahí).
+ *
+ * Comprobado contra cuatro paquetes independientes que reproducen el
+ * mismo envoltorio: baileys_helpers, flow-buttons, zq_baileys_helper y
+ * meowguck-art/baileys-buttons. Ninguno instalado: solo la forma.
+ */
+export function nodosInteractivos(jid, { ai = true } = {}) {
+  const esPrivado = typeof jid === "string" && jid.endsWith("@s.whatsapp.net");
+  const nodos = [{
+    tag: "biz",
+    attrs: {},
+    content: [{
+      tag: "interactive",
+      attrs: { type: "native_flow", v: "1" },
+      content: [{ tag: "native_flow", attrs: { v: "9", name: "mixed" }, content: [] }],
+    }],
+  }];
+  if (esPrivado && ai) nodos.push({ tag: "bot", attrs: { biz_bot: "1" } });
+  return nodos;
+}
+
+/**
  * Construye el botón nativo quick_reply.
  */
 export function quickReply(label, id) {
@@ -206,9 +240,14 @@ function formatButtonsAsText(buttons = []) {
 export async function sendInteractive(sock, jid, opts = {}) {
   const body = opts.body || "";
   const footer = opts.footer || "";
-  const isGroup = typeof jid === "string" && (jid.endsWith("@g.us") || jid.endsWith("@newsletter"));
+  // Los canales (@newsletter) no admiten botones de ninguna forma: ahí
+  // sí o sí va texto. En los GRUPOS ahora sí se manda el interactivo,
+  // con los nodos binarios puestos. Si algo falla, más abajo está el
+  // respaldo de texto de siempre, así que nadie se queda sin respuesta.
+  const esCanal = typeof jid === "string" && jid.endsWith("@newsletter");
+  const soloTexto = esCanal || process.env.SHIN_BOTONES_GRUPO === "0";
 
-  if (isGroup) {
+  if (soloTexto) {
     const safeQuoted = (opts.quoted && (opts.quoted.message || opts.quoted.key)) ? (opts.quoted.full || opts.quoted) : undefined;
     const btnText = formatButtonsAsText(opts.buttons);
     const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : "") + btnText);
@@ -277,7 +316,10 @@ export async function sendInteractive(sock, jid, opts = {}) {
       quoted: opts.quoted && opts.quoted.message ? opts.quoted : undefined,
     });
 
-    await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
+    await sock.relayMessage(jid, msg.message, {
+      messageId: msg.key.id,
+      additionalNodes: nodosInteractivos(jid, { ai: opts.ai !== false }),
+    });
     return msg;
   } catch (err) {
     log.warn("interactive: fallback a texto (" + (err.message || err) + ")");
@@ -306,9 +348,10 @@ export async function sendInteractive(sock, jid, opts = {}) {
 export async function sendCarousel(sock, jid, opts = {}) {
   const cards = opts.cards || [];
   const contextInfo = opts.contextInfo || {};
-  const isGroup = typeof jid === "string" && (jid.endsWith("@g.us") || jid.endsWith("@newsletter"));
+  const esCanal = typeof jid === "string" && jid.endsWith("@newsletter");
+  const soloTexto = esCanal || process.env.SHIN_BOTONES_GRUPO === "0";
 
-  if (isGroup || !cards.length) {
+  if (soloTexto || !cards.length) {
     let fallback = opts.text || "✨ *SHOWCASE*\n\n";
     for (let i = 0; i < cards.length; i++) {
       const c = cards[i];
@@ -362,7 +405,10 @@ export async function sendCarousel(sock, jid, opts = {}) {
       quoted: opts.quoted && opts.quoted.message ? opts.quoted : undefined,
     });
 
-    await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
+    await sock.relayMessage(jid, msg.message, {
+      messageId: msg.key.id,
+      additionalNodes: nodosInteractivos(jid, { ai: opts.ai !== false }),
+    });
     return msg;
   } catch (err) {
     log.warn("carousel fallback (" + (err.message || err) + ")");

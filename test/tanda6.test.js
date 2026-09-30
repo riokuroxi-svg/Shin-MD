@@ -15,7 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  buildSheetParams, MAX_BOTONES_VISIBLES,
+  buildSheetParams, MAX_BOTONES_VISIBLES, nodosInteractivos, sendInteractive,
   quickReply, ctaUrl, ctaCopy, ctaReminder, ctaLocation, ctaCall, ctaWebview,
 } from "../src/commands/interactive.js";
 import { createProgress } from "../src/lib/progress.js";
@@ -184,4 +184,64 @@ test("cada texto firma una onda distinta y válida", async () => {
   assert.ok(esWaveformValida(a));
   assert.notDeepEqual(Array.from(a), Array.from(b));
   assert.deepEqual(Array.from(a), Array.from(waveformFromText("Hola, soy Shin")), "la misma frase da siempre la misma onda");
+});
+
+// ── 6. Los nodos binarios: por qué los botones no salían en grupos ─
+//
+//  WhatsApp no rechaza un interactivo sin envoltorio: lo acepta y el
+//  teléfono lo tira sin dibujar nada. Por eso parecía que "en grupos
+//  no se puede" y se acabó mandando texto plano.
+test("el envoltorio binario es el que espera WhatsApp", () => {
+  const enGrupo = nodosInteractivos("1203630000@g.us");
+  assert.equal(enGrupo.length, 1, "en grupo solo va el nodo biz");
+  assert.equal(enGrupo[0].tag, "biz");
+  const inter = enGrupo[0].content[0];
+  assert.equal(inter.tag, "interactive");
+  assert.deepEqual(inter.attrs, { type: "native_flow", v: "1" });
+  assert.deepEqual(inter.content[0].attrs, { v: "9", name: "mixed" });
+});
+
+test("en privado se añade el nodo bot (el de la chispita de IA)", () => {
+  const priv = nodosInteractivos("52155@s.whatsapp.net");
+  assert.equal(priv.length, 2);
+  assert.deepEqual(priv[1], { tag: "bot", attrs: { biz_bot: "1" } });
+  // y se puede pedir sin la chispita
+  assert.equal(nodosInteractivos("52155@s.whatsapp.net", { ai: false }).length, 1);
+});
+
+test("en un GRUPO ya se manda el interactivo, no texto plano", async () => {
+  const sock = socketFalso();
+  await sendInteractive(sock, "1203630000@g.us", {
+    body: "menú de grupo",
+    buttons: [quickReply("A", "a"), quickReply("B", "b")],
+  });
+  assert.equal(sock.enviados.length, 1);
+  assert.equal(sock.enviados[0].via, "relay", "antes esto salía como texto plano");
+  assert.equal(sock.enviados[0].opts.additionalNodes[0].tag, "biz");
+});
+
+test("los canales siguen recibiendo texto: ahí no hay botones que valgan", async () => {
+  const sock = socketFalso();
+  await sendInteractive(sock, "12036@newsletter", { body: "aviso", buttons: [quickReply("A", "a")] });
+  assert.equal(sock.enviados[0].via, "send");
+});
+
+test("SHIN_BOTONES_GRUPO=0 devuelve los grupos a texto plano", async () => {
+  const sock = socketFalso();
+  process.env.SHIN_BOTONES_GRUPO = "0";
+  try {
+    await sendInteractive(sock, "1203630000@g.us", { body: "hola", buttons: [quickReply("A", "a")] });
+    assert.equal(sock.enviados[0].via, "send", "el interruptor de emergencia funciona");
+  } finally {
+    delete process.env.SHIN_BOTONES_GRUPO;
+  }
+});
+
+test("las encuestas relayeadas a mano llevan la marca que pone baileys", async () => {
+  const { sendQuiz } = await import("../src/lib/poll-plus.js");
+  const sock = socketFalso();
+  await sendQuiz(sock, "1@g.us", { pregunta: "¿Sí o no?", opciones: ["Sí", "No"], correcta: 0 });
+  const nodos = sock.enviados[0].opts.additionalNodes;
+  assert.deepEqual(nodos, [{ tag: "meta", attrs: { polltype: "creation" } }],
+    "sin esta marca el servidor no la registra como encuesta nueva");
 });
