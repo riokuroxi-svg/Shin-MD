@@ -14,15 +14,16 @@ function shinJitter(mean, stddev) {
 }
 
 const DEFAULTS = {
-  baseDelayMs: 1200,
-  jitterStddev: 0.25,
-  minDelayMs: 400,
-  maxDelayMs: 5000,
-  msPerChar: 25,
-  newContactPenalty: 1.5,
-  warmUpDays: 7,
-  warmUpStartMsgsPerDay: 20,
-  warmUpMaxMsgsPerDay: 500,
+  baseDelayMs: 400,
+  jitterStddev: 0.15,
+  minDelayMs: 150,
+  maxDelayMs: 2500,
+  msPerChar: 10,
+  newContactPenalty: 1.2,
+  warmUpDays: 0,
+  warmUpStartMsgsPerDay: 50000,
+  warmUpMaxMsgsPerDay: 100000,
+  disableWarmup: false,
 };
 
 export function createThrottler(opts) {
@@ -30,6 +31,14 @@ export function createThrottler(opts) {
   const config = {};
   for (const k of Object.keys(DEFAULTS)) {
     config[k] = opts[k] !== undefined ? opts[k] : DEFAULTS[k];
+  }
+
+  // Si WARMUP_LIMIT=0 o NUMBER_PROFILE=veterano en .env, desactivar límite diario
+  if (process.env.WARMUP_LIMIT === "0" || process.env.NUMBER_PROFILE === "veterano" || process.env.NUMBER_PROFILE === "ilimitado") {
+    config.disableWarmup = true;
+  }
+  if (opts.warmUpStartMsgsPerDay !== undefined && opts.disableWarmup === undefined && process.env.WARMUP_LIMIT !== "0") {
+    config.disableWarmup = false;
   }
 
   const state = {
@@ -48,10 +57,11 @@ export function createThrottler(opts) {
   }
 
   function getDailyLimit() {
+    if (config.disableWarmup) return Infinity;
     const start = new Date(state.warmUpStartDate).getTime();
     const now = Date.now();
-    const day = Math.max(0, Math.min(config.warmUpDays, Math.floor((now - start) / 86400000)));
-    const progress = day / config.warmUpDays;
+    const day = Math.max(0, Math.min(config.warmUpDays || 1, Math.floor((now - start) / 86400000)));
+    const progress = config.warmUpDays > 0 ? (day / config.warmUpDays) : 1;
     const range = config.warmUpMaxMsgsPerDay - config.warmUpStartMsgsPerDay;
     return Math.round(config.warmUpStartMsgsPerDay + range * progress);
   }
@@ -64,8 +74,8 @@ export function createThrottler(opts) {
 
     let delay = config.baseDelayMs + shinJitter(0, config.baseDelayMs * config.jitterStddev);
 
-    if (extra.messageLength > 10) {
-      delay += Math.min(extra.messageLength * config.msPerChar, 2000);
+    if (extra.messageLength > 20) {
+      delay += Math.min(extra.messageLength * config.msPerChar, 800);
     }
 
     if (extra.isNewContact) {
@@ -76,6 +86,7 @@ export function createThrottler(opts) {
   }
 
   function canSend() {
+    if (config.disableWarmup) return true;
     checkReset();
     return state.warmUpMsgsToday < getDailyLimit();
   }
@@ -95,11 +106,8 @@ export function createThrottler(opts) {
       dailyLimit: getDailyLimit(),
       msgsToday: state.warmUpMsgsToday,
       totalSent: state.totalSent,
-      // (Antes: warmUpComplete significaba "cumplió la cuota de HOY",
-      //  que no es lo mismo que haber completado el período de warm-up.)
-      warmUpComplete: day > config.warmUpDays,
-      // Cumplió la cuota diaria actual (canSend() == false)
-      dailyLimitReached: state.warmUpMsgsToday >= getDailyLimit(),
+      warmUpComplete: config.disableWarmup || day > config.warmUpDays,
+      dailyLimitReached: !config.disableWarmup && state.warmUpMsgsToday >= getDailyLimit(),
     };
   }
 
