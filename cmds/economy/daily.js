@@ -5,6 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { sendNativeQuickReply } from '#lib/native-reply';
+import { offerParams } from '#lib/native-params';
 export default {
   command: ['daily', 'diario', 'recompensa', 'gratis'],
   category: 'economy',
@@ -43,6 +45,26 @@ export default {
 
     if (now < user.lastdaily) {
       const restante = formatRemainingTime(user.lastdaily - now);
+      // Tarjeta con cuenta atrás: le pasamos la hora exacta y WhatsApp
+      // escribe solo el "Finaliza hoy a la(s)…" en la zona horaria de
+      // quien la recibe. Si el cliente no la dibuja, queda el texto.
+      try {
+        const r = await sendNativeQuickReply({
+          sock,
+          jid: msg.chat,
+          title: '⏳ Recompensa diaria',
+          body: 'Ya reclamaste la de hoy.\n> Vuelve cuando se acabe la cuenta atrás.',
+          footer: '❦ Shin-MD · economía',
+          quoted: msg,
+          buttons: [{ text: '💰 Mi saldo', id: '.balance' }],
+          params: offerParams({
+            text: 'Próxima recompensa',
+            expiresAt: user.lastdaily,
+            copyCode: `${usedPrefix}daily`,
+          }),
+        });
+        if (r?.sent) return;
+      } catch {}
       return msg.reply(`ꕥ Ya has reclamado hoy.\n> Vuelve en *${restante}*`);
     }
 
