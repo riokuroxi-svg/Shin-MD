@@ -32,6 +32,26 @@ export function createSendQueue(throttler, health, opts = {}) {
   // diario del warm-up (son respuestas directas a quien escribe: lo
   // menos baneable que hay).
   let priorityDepth = 0;
+
+  // B2.2: el tope diario antes escribía "Warm-up limit reached, waiting 60s..."
+  // una vez por minuto, para siempre, sin decir cuánto era el tope ni cuándo
+  // se libera. Ahora se avisa UNA sola vez por episodio y con datos útiles.
+  let avisoTopeDado = false;
+  function avisarTopeDiario(th) {
+    if (avisoTopeDado) return;
+    avisoTopeDado = true;
+    let detalle = "";
+    try {
+      const s = th.getStats();
+      const faltanMs = new Date().setUTCHours(24, 0, 0, 0) - Date.now();
+      const horas = Math.floor(faltanMs / 3600000);
+      const mins = Math.round((faltanMs % 3600000) / 60000);
+      detalle = ` (${s.msgsToday}/${s.dailyLimit} hoy · día ${s.day} del warm-up · se reinicia en ${horas}h ${mins}m)`;
+    } catch {}
+    log.warn("Tope diario del warm-up alcanzado" + detalle);
+    log.warn("Los envíos normales esperan; .menu/.ping y las reacciones siguen pasando. Ajusta con WARMUP_START_MSGS / WARMUP_MAX_MSGS / WARMUP=off en .env, o revísalo con .warmup");
+  }
+
   function enterPriority() { priorityDepth++; }
   function exitPriority() { priorityDepth = Math.max(0, priorityDepth - 1); }
   function inPriority() { return priorityDepth > 0; }
@@ -54,11 +74,15 @@ export function createSendQueue(throttler, health, opts = {}) {
       // B1.4: con el tope diario del warm-up alcanzado, las tareas
       // normales esperan; si hay una tarea de prioridad en la cola,
       // se adelanta y pasa (nunca se queda 60s detrás del bloqueo).
+      // B2.2: lo mismo para las tareas que no gastan cuota (reacciones,
+      // borrados, ediciones): no tiene sentido congelarlas 60s por un
+      // tope que ni siquiera consumen.
       let task;
+      if (throttler && throttler.canSend()) avisoTopeDado = false;
       if (throttler && !throttler.canSend()) {
-        const pIdx = queue.findIndex(t => t.opts && t.opts.isPriority);
+        const pIdx = queue.findIndex(t => t.opts && (t.opts.isPriority || t.opts.countsForQuota === false));
         if (pIdx === -1) {
-          log.warn("Warm-up limit reached, waiting 60s...");
+          avisarTopeDiario(throttler);
           await new Promise(r => setTimeout(r, 60000));
           continue;
         }
@@ -75,9 +99,11 @@ export function createSendQueue(throttler, health, opts = {}) {
 
       await new Promise(r => setTimeout(r, delay));
 
+      const gastaCuota = task.opts.countsForQuota !== false;
+
       try {
         const result = await withTimeout(task.fn(), timeoutMs, "envío");
-        if (throttler) throttler.recordSent();
+        if (throttler && gastaCuota) throttler.recordSent();
         if (health) health.recordSend();
         task.resolve(result);
       } catch (err) {
@@ -91,7 +117,7 @@ export function createSendQueue(throttler, health, opts = {}) {
             : 3000;
           await new Promise(r => setTimeout(r, retryDelay));
           const result2 = await withTimeout(task.fn(), timeoutMs, "reintento");
-          if (throttler) throttler.recordSent();
+          if (throttler && gastaCuota) throttler.recordSent();
           task.resolve(result2);
           if (health) health.recordSend();
         } catch (err2) {

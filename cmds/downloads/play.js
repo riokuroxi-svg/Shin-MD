@@ -280,7 +280,9 @@ async function prepararAudioProcesado(job) {
     const p = await processMp3ForWhatsApp(
       buffer,
       title,
-      "Shin Bot",
+      // Artista real del ID3: el canal de YouTube suele ser el artista.
+      // Sin canal (ej. `.mp3 <nombre>`), cae al nombre por defecto.
+      sanitizeFilename(job.channel || "").slice(0, 60) || undefined,
       128,
       audioDescargado.origen || "local",
       durSegundos,
@@ -455,7 +457,8 @@ async function ejecutarDescarga(sock, job, modo, m) {
     liberar = await adquirir("descargas", 2);
     let buffer;
     if (tipo === "audio") {
-      await sock.sendMessage(chat, { react: { text: "🖼️", key: m.key } }).catch(() => {});
+      // (Antes había aquí una reacción 🖼️ extra: un envío más en la cola,
+      //  ~1.5s de retraso añadido justo antes del audio, sin valor para nadie.)
       const procesado = await obtenerAudioProcesado(job);
       buffer = procesado.buffer;
       if (estadoMsg?.key) try { await sock.sendMessage(chat, { delete: estadoMsg.key }); } catch {}
