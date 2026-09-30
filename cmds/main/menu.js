@@ -26,6 +26,7 @@ import {
 import { resolveChannel } from "../../src/lib/channel.js";
 import { sendInteractive, singleSelect, quickReply, ctaUrl } from "#interactive";
 import db from "../../src/services/ginko-db.js";
+import { pickBanner } from "#lib/theme";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -33,6 +34,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * Obtiene un banner aleatorio de la colección shuffle o assets por defecto
  */
 function getRandomBanner() {
+  // Tanda 1 del sistema de diseño: banner según la hora (día/noche).
+  // media/banners/ manda sobre todo lo demás; si está vacía, se conserva
+  // exactamente el comportamiento anterior (shuffle → assets → MENU_IMAGE).
+  try {
+    const porHora = pickBanner();
+    if (porHora) return fs.readFileSync(porHora);
+  } catch {}
+
   const shuffleDir = path.resolve(__dirname, "../../assets/image/shuffle");
   try {
     if (fs.existsSync(shuffleDir)) {

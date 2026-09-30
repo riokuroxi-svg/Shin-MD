@@ -2,6 +2,15 @@ import { randomBytes } from 'node:crypto';
 import { menuObject } from '#system/commands';
 import { getSelectedResponse } from '#lib/interactive-response';
 
+// ── viewOnce: por qué el valor por defecto cambió ───────────────────
+// Antes se envolvía SIEMPRE en viewOnceMessage (`!== '0'`). WhatsApp
+// Web/Escritorio trata ese envoltorio como "multimedia de una sola
+// vista" y DESCARTA los botones: la lista de categorías desaparecía en
+// esos clientes. El .play nunca envolvió (src/lib/native-reply.js) y
+// ahí los botones sí se ven — dos archivos con criterios opuestos.
+// Ahora el valor por defecto es NO envolver, igual que el .play.
+// Si en algún cliente tuyo los botones dejaran de verse, se recupera
+// el comportamiento viejo con GINKO_NATIVE_MENU_VIEW_ONCE=1 en el .env.
 export const NATIVE_MENU_PREFIX = 'gkmenu:';
 export const MAX_NATIVE_MENU_ROWS = 14;
 
@@ -68,7 +77,7 @@ export function buildNativeMenuContent({
   footer,
   title = 'Categorías',
   rows = getNativeMenuRows(),
-  wrapViewOnce = process.env.GINKO_NATIVE_MENU_VIEW_ONCE !== '0',
+  wrapViewOnce = process.env.GINKO_NATIVE_MENU_VIEW_ONCE === '1',
   mediaMessage = null,
 } = {}) {
   if (!Array.isArray(rows) || rows.length === 0) throw new Error('El menú nativo no tiene categorías');
@@ -143,7 +152,7 @@ export async function sendNativeCategoryMenu({
   title = 'Categorías',
   quoted,
   bannerBuffer = null,
-  wrapViewOnce = process.env.GINKO_NATIVE_MENU_VIEW_ONCE !== '0',
+  wrapViewOnce = process.env.GINKO_NATIVE_MENU_VIEW_ONCE === '1',
 } = {}) {
   try {
     if (!sock?.relayMessage) throw new Error('El socket no expone relayMessage');
