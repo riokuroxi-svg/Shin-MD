@@ -120,6 +120,23 @@ function printBanner() {
   console.log(chalk.cyan("      🍁 Hecho por riokuroxi-svg · Anti-ban nativo") + "\n");
 }
 
+function logIncomingMessage(ctx, usedPrefix) {
+  const t = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
+  const name = ctx.pushName || "Usuario";
+  const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
+  const isCmd = !!usedPrefix;
+  const boxColor = isCmd ? chalk.hex("#00ff88") : chalk.hex("#38bdf8");
+  console.log("");
+  console.log(boxColor("  ╭───────────────────────────────────────"));
+  console.log(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
+  console.log(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
+  console.log(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
+  console.log(boxColor("  │") + chalk.magenta("  Remitente: ") + chalk.magentaBright(ctx.senderId || ctx.chatId));
+  console.log(boxColor("  │") + chalk.green("  " + (ctx.isGroup ? "Grupo" : "Privado") + ": ") + chalk.white(g));
+  console.log(boxColor("  │") + chalk.cyanBright("  " + (isCmd ? "Comando" : "Mensaje") + ": ") + chalk.white(ctx.text.slice(0, 70)));
+  console.log(boxColor("  ╰───────────────────────────────────────"));
+}
+
 function logCommand(ctx, cmdName, ms) {
   const t = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
   const name = ctx.pushName || ctx.pushname || "Usuario";
@@ -289,7 +306,7 @@ async function main() {
     }
   });
 
-  const router = createRouter(engine, { onCommand: logCommand });
+  const router = createRouter(engine, { onCommand: logCommand, onMessage: logIncomingMessage });
   await router.init();
 
   const sockModule = connectSocket(engine, {

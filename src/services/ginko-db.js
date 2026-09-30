@@ -28,9 +28,11 @@ function init(d) {
   d.exec("CREATE TABLE IF NOT EXISTS g_users (id TEXT PRIMARY KEY, name TEXT DEFAULT '', exp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, usedcommands INTEGER DEFAULT 0, pasatiempo TEXT DEFAULT '', description TEXT DEFAULT '', marry TEXT DEFAULT '', genre TEXT DEFAULT '', birth TEXT DEFAULT '', metadatos TEXT, metadatos2 TEXT)");
   d.exec("CREATE TABLE IF NOT EXISTS g_chats (id TEXT PRIMARY KEY, isBanned INTEGER DEFAULT 0, welcome INTEGER DEFAULT 0, goodbye INTEGER DEFAULT 0, sWelcome TEXT DEFAULT '', sGoodbye TEXT DEFAULT '', nsfw INTEGER DEFAULT 0, alerts INTEGER DEFAULT 1, gacha INTEGER DEFAULT 1, economy INTEGER DEFAULT 1, adminonly INTEGER DEFAULT 0, primaryBot TEXT, antilinks INTEGER DEFAULT 1, antistatus INTEGER DEFAULT 0, rolls TEXT DEFAULT '{}')");
   d.exec("CREATE TABLE IF NOT EXISTS g_chat_users (chat_id TEXT, user_id TEXT, coins INTEGER DEFAULT 0, bank INTEGER DEFAULT 0, lastCmd INTEGER DEFAULT 0, usedTime TEXT, afk INTEGER DEFAULT -1, afkReason TEXT DEFAULT '', health INTEGER DEFAULT 100, stamina INTEGER DEFAULT 100, magic INTEGER DEFAULT 100, characters TEXT DEFAULT '[]', stats TEXT DEFAULT '{}', PRIMARY KEY (chat_id, user_id))");
-  d.exec("CREATE TABLE IF NOT EXISTS g_settings (id TEXT PRIMARY KEY, self INTEGER DEFAULT 0, prefix TEXT DEFAULT '[]', commandsejecut INTEGER DEFAULT 0, newsletter_id TEXT DEFAULT '', nameid TEXT DEFAULT '', type TEXT DEFAULT 'Owner', link TEXT DEFAULT '', banner TEXT DEFAULT '', icon TEXT DEFAULT '', currency TEXT DEFAULT 'Yenes', namebot TEXT DEFAULT 'Shin', botname TEXT DEFAULT 'Shin-MD', owner TEXT DEFAULT '')");
+  d.exec("CREATE TABLE IF NOT EXISTS g_settings (id TEXT PRIMARY KEY, self INTEGER DEFAULT 0, prefix TEXT DEFAULT '[]', commandsejecut INTEGER DEFAULT 0, newsletter_id TEXT DEFAULT '', nameid TEXT DEFAULT '', type TEXT DEFAULT 'Owner', link TEXT DEFAULT '', banner TEXT DEFAULT '', icon TEXT DEFAULT '', currency TEXT DEFAULT 'Yenes', namebot TEXT DEFAULT 'Shin', botname TEXT DEFAULT 'Shin-MD', owner TEXT DEFAULT '', menu_variant INTEGER DEFAULT 1)");
   d.exec("CREATE TABLE IF NOT EXISTS g_characters (id TEXT PRIMARY KEY, data TEXT)");
   d.exec("CREATE TABLE IF NOT EXISTS g_sticker_packs (id TEXT PRIMARY KEY, packs TEXT DEFAULT '[]')");
+
+  try { d.exec("ALTER TABLE g_settings ADD COLUMN menu_variant INTEGER DEFAULT 1"); } catch {}
 }
 
 const mem = new Map();

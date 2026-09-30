@@ -18,15 +18,16 @@ function mockEngine() {
   };
 }
 
-test("B5.2: LOOPBACK=0 sin PANEL_PASSWORD vuelve a loopback (failsafe)", () => {
+test("B5.2: LOOPBACK=0 sin PANEL_PASSWORD vuelve a loopback (failsafe)", async () => {
   const prevLoop = process.env.LOOPBACK, prevPass = process.env.PANEL_PASSWORD;
   process.env.LOOPBACK = "0";
   delete process.env.PANEL_PASSWORD;
+  let web;
   try {
-    const web = createWebServer(mockEngine(), { port: 0 });
+    web = createWebServer(mockEngine(), { port: 0 });
     assert.equal(web.host, "127.0.0.1", "sin contraseña no debe exponerse en red");
-    web.close();
   } finally {
+    if (web) await web.close();
     if (prevLoop === undefined) delete process.env.LOOPBACK; else process.env.LOOPBACK = prevLoop;
     if (prevPass !== undefined) process.env.PANEL_PASSWORD = prevPass;
   }
@@ -58,7 +59,7 @@ test("B5.2: panel expuesto exige PANEL_PASSWORD (Basic auth)", async () => {
     });
     assert.equal(mala.status, 401, "contraseña incorrecta debe rechazar");
   } finally {
-    if (web) web.close();
+    if (web) await web.close();
     if (prevLoop === undefined) delete process.env.LOOPBACK; else process.env.LOOPBACK = prevLoop;
     if (prevPass === undefined) delete process.env.PANEL_PASSWORD; else process.env.PANEL_PASSWORD = prevPass;
   }
@@ -87,5 +88,5 @@ test("web server serves root, health and metrics", async () => {
   assert.ok(metrics.memory.rssMB > 0);
   assert.ok(metrics.process.node.startsWith("v"));
 
-  web.close();
+  await web.close();
 });
