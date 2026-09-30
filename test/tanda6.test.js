@@ -472,3 +472,85 @@ test("ningún comando nuevo debería estrenar adornos a mano", async () => {
     assert.ok(!src.includes("《✧》"), f + " debería usar el sistema de diseño");
   }
 });
+
+// ── 12. El carrusel, que era el "FALTA" grande de las maquetas ────
+test("el carrusel arma las tarjetas que WhatsApp entiende", async () => {
+  const { buildTarjeta, buildCarouselContent, MAX_TARJETAS, MIN_TARJETAS } = await import("../src/lib/carousel.js");
+
+  const t = buildTarjeta({
+    titulo: "Cunumi",
+    cuerpo: "3:28 · 20M vistas",
+    pie: "1 de 5",
+    botones: [
+      { texto: "⬇️ Descargar", id: ".play https://youtu.be/x" },
+      { texto: "▶️ YouTube", url: "https://youtu.be/x" },
+      { texto: "📋 Copiar", copiar: "https://youtu.be/x" },
+    ],
+  });
+  const nombres = t.nativeFlowMessage.buttons.map((b) => b.name);
+  assert.deepEqual(nombres, ["quick_reply", "cta_url", "cta_copy"]);
+  assert.equal(JSON.parse(t.nativeFlowMessage.buttons[0].buttonParamsJson).id, ".play https://youtu.be/x",
+    "el id lleva el prefijo: así el botón entra por el router de siempre");
+  assert.equal(t.header.hasMediaAttachment, false, "sin imagen subida, no se promete imagen");
+
+  const c = buildCarouselContent({ texto: "Resultados", pie: "Shin-MD", tarjetas: [t, t, t] });
+  assert.equal(c.interactiveMessage.carouselMessage.cards.length, 3);
+  assert.equal(c.interactiveMessage.carouselMessage.messageVersion, 1);
+  assert.ok(!c.viewOnceMessage, "nunca en viewOnce, que mata los botones");
+
+  assert.throws(() => buildCarouselContent({ texto: "x", tarjetas: [t] }),
+    /2 tarjetas o más/, `con menos de ${MIN_TARJETAS} no es un carrusel`);
+  const muchas = Array.from({ length: MAX_TARJETAS + 4 }, () => t);
+  assert.equal(buildCarouselContent({ texto: "x", tarjetas: muchas }).interactiveMessage.carouselMessage.cards.length,
+    MAX_TARJETAS, "de 10 en adelante WhatsApp las tira: se recorta antes");
+});
+
+test("el carrusel viaja con nodos y cae a texto si falla", async () => {
+  const { buildTarjeta, sendCarousel } = await import("../src/lib/carousel.js");
+  const t = buildTarjeta({ titulo: "A", cuerpo: "b" });
+
+  const ok = socketFalso();
+  const r = await sendCarousel(ok, "1203630000@g.us", { texto: "x", tarjetas: [t, t] });
+  assert.equal(r.sent, true);
+  assert.deepEqual(ok.enviados[0].opts.additionalNodes.map((n) => n.tag), ["biz"]);
+
+  // socket roto: tiene que salvar el mensaje por texto, no explotar
+  const roto = {
+    user: { id: "1@s.whatsapp.net" },
+    async relayMessage() { throw new Error("sin red"); },
+    enviados: [],
+    async sendMessage(jid, content) { this.enviados.push(content); return { key: { id: "T" } }; },
+  };
+  const r2 = await sendCarousel(roto, "1203630000@g.us", { texto: "x", tarjetas: [t, t], respaldo: "lista en texto" });
+  assert.equal(r2.sent, true);
+  assert.equal(r2.respaldo, true);
+  assert.equal(roto.enviados[0].text, "lista en texto");
+
+  // sin respaldo, avisa del fallo en vez de fingir que fue bien
+  const r3 = await sendCarousel(roto, "1203630000@g.us", { texto: "x", tarjetas: [t, t] });
+  assert.equal(r3.sent, false);
+});
+
+test("prepararImagen nunca tumba el comando", async () => {
+  const { prepararImagen } = await import("../src/lib/carousel.js");
+  assert.equal(await prepararImagen(null, "http://x/y.jpg"), null);
+  assert.equal(await prepararImagen({}, null), null);
+  assert.equal(await prepararImagen({ waUploadToServer: async () => { throw new Error("no"); } }, Buffer.from("x")), null);
+});
+
+test(".ytsearch resume los vídeos y deja respaldo legible", async () => {
+  const { resumirVideo, renderLista, RESULTADOS } = await import("../cmds/downloads/ytsearch.js");
+  const v = resumirVideo({
+    title: "Cunumi - Faraon Love Shady (Video Oficial)", timestamp: "3:28",
+    views: 20127468, ago: "hace 4 años", url: "https://youtu.be/x", author: { name: "Faraón" },
+  });
+  assert.equal(v.duracion, "3:28");
+  assert.equal(v.vistas, "20,127,468", "las vistas en cristiano, no un número pegado");
+  assert.ok(v.titulo.length <= 60, "el título cabe en la tarjeta");
+
+  const lista = renderLista([v, v], ".");
+  assert.match(lista, /\*1\.\*/);
+  assert.match(lista, /\*2\.\*/);
+  assert.match(lista, /\.play/, "el respaldo dice cómo descargar");
+  assert.ok(RESULTADOS >= 3 && RESULTADOS <= 10);
+});
