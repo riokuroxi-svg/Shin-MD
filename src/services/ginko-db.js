@@ -33,6 +33,7 @@ function init(d) {
   d.exec("CREATE TABLE IF NOT EXISTS g_sticker_packs (id TEXT PRIMARY KEY, packs TEXT DEFAULT '[]')");
 
   try { d.exec("ALTER TABLE g_users ADD COLUMN Subs INTEGER DEFAULT 0"); } catch {}
+  try { d.exec("ALTER TABLE g_chats ADD COLUMN autotr TEXT DEFAULT ''"); } catch {}
   try { d.exec("ALTER TABLE g_settings ADD COLUMN menu_variant INTEGER DEFAULT 1"); } catch {}
   try { d.exec("ALTER TABLE g_settings ADD COLUMN instagram TEXT DEFAULT 'https://www.instagram.com/__ikg.05'"); } catch {}
 }
