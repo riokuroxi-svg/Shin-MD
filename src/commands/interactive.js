@@ -73,6 +73,51 @@ export function ctaCopy(label, code) {
   return { name: "cta_copy", buttonParamsJson: JSON.stringify({ display_text: label, copy_code: code }) };
 }
 
+/** Recordatorio nativo: lo avisa WhatsApp, no el bot. */
+export function ctaReminder(label = "Recordármelo", id = "") {
+  return { name: "cta_reminder", buttonParamsJson: JSON.stringify({ display_text: label, id: id || label }) };
+}
+
+/** Pide al usuario que comparta su ubicación de un toque. */
+export function ctaLocation(label = "Mandar mi ubicación") {
+  return { name: "send_location", buttonParamsJson: JSON.stringify({ display_text: label }) };
+}
+
+/** Marca un teléfono. */
+export function ctaCall(label, phone) {
+  return { name: "cta_call", buttonParamsJson: JSON.stringify({ display_text: label, phone_number: String(phone) }) };
+}
+
+/** Mini web dentro de WhatsApp, sin salir al navegador. */
+export function ctaWebview(title, url, inApp = true) {
+  return { name: "open_webview", buttonParamsJson: JSON.stringify({ title, link: { in_app_webview: !!inApp, url } }) };
+}
+
+/** Cuántos botones ve la gente sin desplegar nada. */
+export const MAX_BOTONES_VISIBLES = 3;
+
+/**
+ * WhatsApp solo dibuja tres botones. El cuarto y los siguientes se
+ * PIERDEN en silencio salvo que se pida la hoja inferior, y eso es lo
+ * que le pasaba al menú: mandaba cuatro y el último no aparecía.
+ *
+ * Esto devuelve el messageParamsJson (una CADENA, no un objeto) que
+ * mete los botones sobrantes en una hoja desplegable.
+ */
+export function buildSheetParams(buttons = [], opts = {}) {
+  const total = Array.isArray(buttons) ? buttons.filter(Boolean).length : 0;
+  if (total <= MAX_BOTONES_VISIBLES && !opts.forzar) return null;
+  return JSON.stringify({
+    bottom_sheet: {
+      in_thread_buttons_limit: Math.min(opts.visibles || MAX_BOTONES_VISIBLES, MAX_BOTONES_VISIBLES),
+      divider_indices: Array.isArray(opts.divisiones) ? opts.divisiones : [],
+      list_title: opts.titulo || "Más opciones",
+      button_title: opts.boton || "Ver todo",
+    },
+    has_multiple_buttons: true,
+  });
+}
+
 /**
  * Botón de lista desplegable nativa (single_select).
  */
@@ -217,6 +262,9 @@ export async function sendInteractive(sock, jid, opts = {}) {
                 name: b.name,
                 buttonParamsJson: b.buttonParamsJson,
               })),
+              // Con más de tres botones hay que pedir la hoja inferior
+              // o los de más no se dibujan (y nadie avisa).
+              messageParamsJson: buildSheetParams(buttons, opts.hoja || {}) || undefined,
             }),
             contextInfo: opts.contextInfo || undefined,
           }),
