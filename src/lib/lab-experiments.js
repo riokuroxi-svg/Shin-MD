@@ -35,6 +35,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { buildRichContent, texto, tabla, codigo, rejilla } from "#lib/rich-response";
+import { buildQuiz, sendImagePoll } from "#lib/poll-plus";
 import { sendAlbum, sendEventCover } from "#lib/album";
 import { sendVoiceArt, hexToArgb } from "#lib/voice-art";
 import { drawWaveform } from "#lib/waveform";
@@ -168,6 +169,63 @@ export function buildInvitacion({ groupJid, codigo, nombre = "Grupo", caption = 
   return m;
 }
 
+/** Quiz nativo: WhatsApp marca solo el acierto y el fallo. */
+export function buildQuizDemo() {
+  return buildQuiz({
+    pregunta: "¿Quién compuso «Lemon»?",
+    opciones: ["Yoasobi", "Kenshi Yonezu", "Aimer", "Radwimps"],
+    correcta: 1,
+  });
+}
+
+/** Etiqueta propia junto al nombre de un miembro del grupo. */
+export function buildEtiqueta({ jid = "", etiqueta = "Nivel 42 · Leyenda", cuerpo = "Mira la etiqueta que llevo al lado del nombre." } = {}) {
+  return {
+    extendedTextMessage: {
+      text: cuerpo,
+      contextInfo: {
+        memberLabel: { label: String(etiqueta), labelTimestamp: Math.floor(Date.now() / 1000) },
+        ...(jid ? { mentionedJid: [jid] } : {}),
+      },
+    },
+  };
+}
+
+/** Ficha de producto con precio: para la tienda del bot. */
+export function buildProducto({
+  titulo = "Poción de vida", descripcion = "Cura 50 HP al instante.",
+  precio = 250, moneda = "MXN", vendedor = "", imagenUrl = "",
+} = {}) {
+  return {
+    productMessage: {
+      product: {
+        ...(imagenUrl ? { productImage: { url: imagenUrl, mimetype: "image/jpeg" } } : {}),
+        productId: "shin-pocion",
+        title: String(titulo),
+        description: String(descripcion),
+        currencyCode: String(moneda),
+        priceAmount1000: Math.round(precio * 1000),
+        retailerId: "shin-md",
+        productImageCount: imagenUrl ? 1 : 0,
+      },
+      ...(vendedor ? { businessOwnerJid: vendedor } : {}),
+      body: { text: "Tienda de Shin-MD" },
+      footer: { text: "❦ Shin-MD" },
+    },
+  };
+}
+
+/** Comentario colgado de otro mensaje (hilo, no cita). */
+export function buildComentario({ targetKey, cuerpo = "Esto es un comentario, no una cita." } = {}) {
+  if (!targetKey?.id) throw new Error("falta el mensaje al que comentar");
+  return {
+    commentMessage: {
+      message: { conversation: String(cuerpo) },
+      targetMessageKey: targetKey,
+    },
+  };
+}
+
 /**
  * Zonas pinchables dentro de una foto.
  * Las coordenadas van de 0 a 1 sobre la imagen.
@@ -242,6 +300,39 @@ export const EXPERIMENTOS = [
   deContenido("encuesta", "Resultado de encuesta",
     "Tarjeta con los votos ya contados, sin poder votar.",
     () => buildEncuesta()),
+
+  deContenido("quiz", "Encuesta tipo QUIZ (con respuesta correcta)",
+    "Al votar, WhatsApp marca solo el acierto en verde y el fallo en rojo.",
+    () => buildQuizDemo()),
+
+  deContenido("etiqueta", "Etiqueta junto al nombre del miembro",
+    "Un distintivo propio («Nivel 42») pegado al nombre, como el de admin.",
+    (ctx) => buildEtiqueta({ jid: ctx.autor })),
+
+  deContenido("producto", "Ficha de producto con precio",
+    "Tarjeta de tienda con foto, precio y moneda, no un texto con emojis.",
+    (ctx) => buildProducto({ vendedor: ctx.autor })),
+
+  deContenido("comentario", "Comentario colgado de un mensaje",
+    "Un hilo debajo del mensaje original, distinto de una cita normal.",
+    (ctx) => buildComentario({ targetKey: ctx.quoted?.key || ctx.targetKey })),
+
+  {
+    clave: "fotoencuesta",
+    titulo: "Encuesta con foto en cada opción",
+    mira: "Las opciones se votan mirando imágenes, no leyendo nombres.",
+    async ejecutar(sock, ctx) {
+      const fotos = portadasDisponibles(3);
+      if (fotos.length < 2) return { ok: false, motivo: "no hay portadas en media/covers" };
+
+      const r = await sendImagePoll(sock, ctx.jid, {
+        pregunta: "¿Cuál portada para el menú?",
+        items: fotos.map((f, i) => ({ texto: `Portada ${i + 1}`, imagen: fs.readFileSync(f) })),
+      }, { quoted: ctx.quoted });
+
+      return r.sent ? { ok: true } : { ok: false, motivo: String(r.error?.message || r.error) };
+    },
+  },
 
   {
     clave: "album",
