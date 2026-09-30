@@ -45,6 +45,7 @@ import {
   buildTabla, buildCodigo, buildChips, buildLlamada, buildPago,
   buildEncuesta, buildInvitacion, buildQuizDemo, buildEtiqueta,
   buildProducto, buildComentario, buildCatalogo,
+  conBotonEnlace, conMencionDeGrupo,
 } from "#lib/lab-experiments";
 
 import {
@@ -675,4 +676,34 @@ test("esRelayLigero reconoce lo que no crea mensaje nuevo", () => {
   assert.equal(esRelayLigero({ protocolMessage: { type: 5 } }), false);
   assert.equal(esRelayLigero({ extendedTextMessage: { text: "hola" } }), false);
   assert.equal(esRelayLigero(null), false);
+});
+
+// ── 10. Propina de la tercera excavación ───────────────────────────
+
+test("una zona de la foto puede abrir un enlace o llevar canción", () => {
+  const img = anotarImagen({ url: "https://x", mimetype: "image/jpeg" }, [
+    { vertices: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 0.5 }, { x: 0, y: 0.5 }],
+      nombre: "Escuchar", enlace: "https://youtu.be/x" },
+    { vertices: [{ x: 0, y: 0.5 }, { x: 1, y: 0.5 }, { x: 1, y: 1 }, { x: 0, y: 1 }],
+      cancion: { titulo: "Idol", autor: "YOASOBI" } },
+    { vertices: [{ x: 0, y: 0 }, { x: 1, y: 1 }], lat: 19.6, lon: -99.05, nombre: "Ecatepec" },
+  ]);
+
+  const zonas = roundTrip({ imageMessage: img }).imageMessage.interactiveAnnotations;
+  assert.equal(zonas[0].tapAction.tapUrl, "https://youtu.be/x");
+  assert.equal(zonas[1].embeddedContent.embeddedMusic.artistAttribution, "YOASOBI");
+  assert.equal(zonas[2].location.name, "Ecatepec");
+  assert.throws(() => anotarImagen(null, []), /imageMessage/);
+});
+
+test("cualquier mensaje admite botón de enlace y mención de grupo", () => {
+  const ctx = conMencionDeGrupo(
+    conBotonEnlace({}, { url: "https://github.com/riokuroxi-svg/Shin-MD", texto: "Ver el repo" }),
+    [{ jid: "1203@g.us", nombre: "Shin-MD" }],
+  );
+  const vuelta = roundTrip({ extendedTextMessage: { text: "mira @grupo", contextInfo: ctx } });
+  assert.equal(vuelta.extendedTextMessage.contextInfo.actionLink.buttonTitle, "Ver el repo");
+  assert.equal(vuelta.extendedTextMessage.contextInfo.groupMentions[0].groupSubject, "Shin-MD");
+  assert.throws(() => conBotonEnlace({}, {}), /url/);
+  assert.deepEqual(conMencionDeGrupo({ a: 1 }, []), { a: 1 });
 });

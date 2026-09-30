@@ -315,15 +315,58 @@ export function buildRegistroLlamada() {
  */
 export function anotarImagen(imageMessage, zonas = []) {
   if (!imageMessage) throw new Error("falta el imageMessage");
-  imageMessage.interactiveAnnotations = zonas.map((z) => ({
-    polygonVertices: z.vertices,
-    location: {
+  imageMessage.interactiveAnnotations = zonas.map((z) => {
+    const zona = { polygonVertices: z.vertices };
+
+    // 1) Zona que abre un enlace al tocarla.
+    if (z.enlace) {
+      zona.tapAction = { title: String(z.nombre || ""), tapUrl: String(z.enlace) };
+      zona.shouldSkipConfirmation = z.sinAviso !== false;
+      return zona;
+    }
+
+    // 2) Zona con una canción pegada (la chapa de música de los estados).
+    if (z.cancion) {
+      zona.embeddedContent = {
+        embeddedMusic: {
+          title: String(z.cancion.titulo ?? ""),
+          author: String(z.cancion.autor ?? ""),
+          artistAttribution: String(z.cancion.atribucion ?? z.cancion.autor ?? ""),
+          isExplicit: Boolean(z.cancion.explicito),
+          ...(z.cancion.id ? { songId: String(z.cancion.id) } : {}),
+        },
+      };
+      return zona;
+    }
+
+    // 3) Por defecto, la etiqueta de lugar.
+    zona.location = {
       degreesLatitude: z.lat ?? 0,
       degreesLongitude: z.lon ?? 0,
       name: String(z.nombre || ""),
-    },
-  }));
+    };
+    return zona;
+  });
   return imageMessage;
+}
+
+/**
+ * Botón de enlace pegado a CUALQUIER mensaje, sin tarjeta interactiva:
+ * va en el contextInfo, así que funciona hasta en un texto suelto.
+ */
+export function conBotonEnlace(contextInfo = {}, { url, texto: rotulo }) {
+  if (!url) throw new Error("el botón de enlace necesita url");
+  return { ...contextInfo, actionLink: { url: String(url), buttonTitle: String(rotulo || "Abrir") } };
+}
+
+/** Menciona un grupo dentro del texto (queda pinchable, como un @). */
+export function conMencionDeGrupo(contextInfo = {}, grupos = []) {
+  const lista = (Array.isArray(grupos) ? grupos : []).filter((g) => g?.jid);
+  if (!lista.length) return contextInfo;
+  return {
+    ...contextInfo,
+    groupMentions: lista.map((g) => ({ groupJid: String(g.jid), groupSubject: String(g.nombre ?? "") })),
+  };
 }
 
 // ── Utilidad de envío para los experimentos de contenido ───────────
