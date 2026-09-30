@@ -9,7 +9,7 @@
 //  Usa node:sqlite (Node >= 22.5.0). Singleton con export por defecto.
 // ═══════════════════════════════════════════════════════════════════
 
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "./sqlite-compat.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "node:url";

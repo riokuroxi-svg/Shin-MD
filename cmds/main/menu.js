@@ -244,7 +244,7 @@ export default {
         singleSelect("📂 Explorar Categorías", [{ title: "反魂 · Categorías", rows: categoryRows }]),
         quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
         quickReply("🏓 Ping", "ping"),
-        ctaUrl("📢 Canal Oficial", "https://whatsapp.com/channel/0029Vb8dmsUElagkVPIw9X2P"),
+        ctaUrl("📢 Canal Oficial", globalThis.links?.channel || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522"),
       ],
       quoted: ctx.full,
       fallbackText: headerText + readMore + fullCategoriesList,

@@ -10,7 +10,7 @@
 //  durante el pairing (como Ginko-MD)
 // ═══════════════════════════════════════════════════════════════════
 
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "../storage/sqlite-compat.js";
 import { initAuthCreds, BufferJSON } from "baileys";
 import fs from "fs";
 import path from "path";

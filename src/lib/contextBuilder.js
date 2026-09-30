@@ -4,6 +4,7 @@
  */
 
 import axios from "axios";
+import { getChannelInfo } from "./channel.js";
 
 let _weatherCache = null;
 let _weatherCacheTime = 0;
@@ -66,10 +67,11 @@ export async function getWeatherSummary(city = "Mexico City") {
  * @returns {Object}
  */
 export function getChannelContext(options = {}) {
+  const ch = getChannelInfo();
   const {
     mentionedJid = [],
-    channelJid = "120363412350560864@newsletter",
-    channelName = "Shin-MD Official Channel",
+    channelJid = ch.id || "120363380000000000@newsletter",
+    channelName = ch.name || "Shin-MD Official Channel",
     serverMessageId = 127,
   } = options;
 

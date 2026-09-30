@@ -22,7 +22,7 @@
 // ════════════════════════════════════════════════════════════
 import path from 'path'
 import fs from 'fs'
-import { DatabaseSync } from 'node:sqlite'
+import { DatabaseSync } from '../storage/sqlite-compat.js'
 import { BufferJSON, initAuthCreds, proto } from 'baileys'
 
 // Mismo mangleo de nombres que Baileys usa para archivos sueltos
