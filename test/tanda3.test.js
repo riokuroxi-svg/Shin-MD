@@ -36,9 +36,15 @@ import {
 } from "#lib/rich-response";
 
 import {
+  MAX_OPCIONES, TIPO_QUIZ, CONTENIDO_IMAGEN, TIPO_FOTO_ENCUESTA,
+  parseQuiz, buildQuiz, buildImagePoll, asociarFotoOpcion, sendQuiz, sendImagePoll,
+} from "#lib/poll-plus";
+
+import {
   EXPERIMENTOS, buscarExperimento, listarExperimentos, anotarImagen,
   buildTabla, buildCodigo, buildChips, buildLlamada, buildPago,
-  buildEncuesta, buildInvitacion,
+  buildEncuesta, buildInvitacion, buildQuizDemo, buildEtiqueta,
+  buildProducto, buildComentario,
 } from "#lib/lab-experiments";
 
 import lab from "../cmds/owner/lab.js";
@@ -312,14 +318,98 @@ test("sendRich manda por relayMessage y no lanza si el socket está roto", async
   assert.equal(mal.sent, false);
 });
 
-// ── 5. Catálogo del laboratorio ────────────────────────────────────
+// ── 5. Encuestas que nadie manda ───────────────────────────────────
+
+test("parseQuiz entiende el asterisco como respuesta correcta", () => {
+  const r = parseQuiz("¿Capital de Japón? | Kioto | *Tokio | Osaka");
+  assert.equal(r.ok, true);
+  assert.equal(r.pregunta, "¿Capital de Japón?");
+  assert.deepEqual(r.opciones, ["Kioto", "Tokio", "Osaka"]);
+  assert.equal(r.correcta, 1);
+  assert.equal(parseQuiz("¿Sí? | No* | Sí").correcta, 0, "el asterisco al final también vale");
+});
+
+test("parseQuiz avisa de cada forma de escribirlo mal", () => {
+  assert.equal(parseQuiz("").error, "faltan datos");
+  assert.equal(parseQuiz("solo la pregunta").error, "faltan datos");
+  assert.equal(parseQuiz("pregunta | *una").error, "pocas");
+  assert.equal(parseQuiz("p | " + Array(MAX_OPCIONES + 1).fill("o").join(" | ")).error, "muchas");
+  assert.equal(parseQuiz("pregunta | a | b").error, "sin correcta");
+  assert.equal(parseQuiz("pregunta | *a | *b").error, "varias correctas");
+});
+
+test("el quiz lleva pollType QUIZ y la respuesta correcta", () => {
+  const contenido = buildQuiz({ pregunta: "¿2+2?", opciones: ["3", "4", "5"], correcta: 1 });
+  const encuesta = contenido.pollCreationMessageV3;
+
+  assert.equal(encuesta.pollType, TIPO_QUIZ);
+  assert.equal(encuesta.correctAnswer.optionName, "4");
+  assert.equal(encuesta.selectableOptionsCount, 1);
+  assert.equal(contenido.messageContextInfo.messageSecret.length, 32);
+
+  const vuelta = roundTrip(contenido);
+  assert.equal(vuelta.pollCreationMessageV3.pollType, 1);
+  assert.equal(vuelta.pollCreationMessageV3.correctAnswer.optionName, "4");
+  assert.equal(vuelta.pollCreationMessageV3.options.length, 3);
+});
+
+test("el quiz se niega a salir mal armado", () => {
+  assert.throws(() => buildQuiz({ pregunta: "x", opciones: ["una"] }), /al menos 2/);
+  assert.throws(() => buildQuiz({ pregunta: "x", opciones: Array(MAX_OPCIONES + 1).fill("o") }), /como mucho/);
+  assert.throws(() => buildQuiz({ pregunta: "", opciones: ["a", "b"] }), /pregunta/);
+  assert.throws(() => buildQuiz({ pregunta: "x", opciones: ["a", "b"], correcta: 9 }), /correcta/);
+});
+
+test("la encuesta con fotos se marca como de imagen", () => {
+  const contenido = buildImagePoll({ pregunta: "¿Cuál?", opciones: ["A", "B"] });
+  assert.equal(contenido.pollCreationMessageV3.pollContentType, CONTENIDO_IMAGEN);
+
+  const multiple = buildImagePoll({ pregunta: "¿Cuáles?", opciones: ["A", "B", "C"], multiple: true });
+  assert.equal(multiple.pollCreationMessage.selectableOptionsCount, 3);
+
+  const vuelta = roundTrip(contenido);
+  assert.equal(vuelta.pollCreationMessageV3.pollContentType, 2);
+});
+
+test("cada foto se cuelga de su opción por índice", () => {
+  const hijo = { imageMessage: { url: "https://x" } };
+  asociarFotoOpcion(hijo, { id: "ENCUESTA" }, 2);
+
+  const asociacion = roundTrip(hijo).messageContextInfo.messageAssociation;
+  assert.equal(asociacion.associationType, TIPO_FOTO_ENCUESTA);
+  assert.equal(asociacion.messageIndex, 2);
+  assert.throws(() => asociarFotoOpcion(hijo, {}), /encuesta/);
+});
+
+test("sendQuiz manda por relayMessage y sendImagePoll cuelga las fotos", async () => {
+  const sock = socketFalso();
+  const r = await sendQuiz(sock, "1@g.us", { pregunta: "¿2+2?", opciones: ["3", "4"], correcta: 1 });
+  assert.equal(r.sent, true);
+  assert.equal(sock.enviados[0].message.pollCreationMessageV3.pollType, 1);
+
+  const malo = await sendQuiz(sock, "1@g.us", { pregunta: "x", opciones: ["una"] });
+  assert.equal(malo.sent, false);
+
+  const sinFotos = await sendImagePoll(socketFalso(), "1@g.us", {
+    pregunta: "¿Cuál?", items: [{ texto: "A" }, { texto: "B" }],
+  });
+  assert.equal(sinFotos.sent, true);
+  assert.equal(sinFotos.fotos, 0, "sin imagen no se cuelga nada, pero la encuesta sale");
+});
+
+// ── 6. Catálogo del laboratorio ────────────────────────────────────
 
 test("todos los experimentos de contenido codifican contra el proto real", () => {
   const conContenido = EXPERIMENTOS.filter((e) => typeof e.construir === "function");
-  assert.ok(conContenido.length >= 7, "se perdieron experimentos por el camino");
+  assert.ok(conContenido.length >= 11, "se perdieron experimentos por el camino");
 
   for (const experimento of conContenido) {
-    const contenido = experimento.construir({ jid: "1@g.us", autor: "521555@s.whatsapp.net", urls: ["https://x/1.jpg"] });
+    const contenido = experimento.construir({
+      jid: "1@g.us",
+      autor: "521555@s.whatsapp.net",
+      urls: ["https://x/1.jpg"],
+      quoted: CTX.full,
+    });
     const vuelta = roundTrip(contenido);
     const campo = Object.keys(contenido).find((k) => k !== "messageContextInfo");
     assert.ok(vuelta[campo], `${experimento.clave}: se perdió ${campo} al codificar`);
@@ -341,6 +431,23 @@ test("las tarjetas sueltas llevan los datos que se ven en pantalla", () => {
 
   const encuesta = buildEncuesta({ votos: [["Sí", 3], ["No", 1]] });
   assert.equal(encuesta.pollResultSnapshotMessage.pollVotes[0].optionVoteCount, 3);
+});
+
+test("las tarjetas nuevas llevan sus datos y se niegan a salir vacías", () => {
+  assert.equal(buildQuizDemo().pollCreationMessageV3.correctAnswer.optionName, "Kenshi Yonezu");
+
+  const etiqueta = buildEtiqueta({ jid: "521555@s.whatsapp.net", etiqueta: "Nivel 42" });
+  assert.equal(etiqueta.extendedTextMessage.contextInfo.memberLabel.label, "Nivel 42");
+  assert.deepEqual(etiqueta.extendedTextMessage.contextInfo.mentionedJid, ["521555@s.whatsapp.net"]);
+  assert.equal(roundTrip(etiqueta).extendedTextMessage.contextInfo.memberLabel.label, "Nivel 42");
+
+  const producto = buildProducto({ precio: 250, moneda: "MXN" });
+  assert.equal(producto.productMessage.product.priceAmount1000, 250000);
+  assert.equal(roundTrip(producto).productMessage.product.title, "Poción de vida");
+
+  const comentario = buildComentario({ targetKey: { id: "OTRO", remoteJid: "1@g.us" }, cuerpo: "ole" });
+  assert.equal(roundTrip(comentario).commentMessage.message.conversation, "ole");
+  assert.throws(() => buildComentario({}), /comentar/);
 });
 
 test("la invitación necesita grupo y código de verdad", () => {
