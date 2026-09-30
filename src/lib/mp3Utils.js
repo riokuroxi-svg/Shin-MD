@@ -182,7 +182,7 @@ export function pickAudioCover() {
 // Portada ya optimizada en disco (500x500, ~30-55KB). Se elige una al azar
 // por canción para que la galería rote sola.
 async function getOptimizedCover() {
-  return pickAudioCover();
+  return pickAudioCover() || COVER_PATH;
 }
 
 /**
@@ -197,7 +197,7 @@ async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secon
   const outPath = path.join(tmpDir, 'final.mp3');
   try {
     fs.writeFileSync(inPath, inputBuffer);
-    const hasCover = fs.existsSync(coverPath);
+    const hasCover = coverPath && fs.existsSync(coverPath);
 
     const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', inPath];
     if (hasCover) args.push('-i', coverPath);
@@ -212,7 +212,7 @@ async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secon
       '-map_metadata', '-1',
       '-metadata', `title=${safeTitle}`,
       '-metadata', `artist=${artista}`,
-      '-metadata', `album=${ALBUM_NAME}`,
+      '-metadata', 'album=Shin-MD Music',
       '-avoid_negative_ts', 'make_zero',
       outPath,
     );
@@ -305,7 +305,7 @@ export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = DEFAU
     args.push(
       '-metadata', `title=${safeTitle}`,
       '-metadata', `artist=${artista}`,
-      '-metadata', `album=${ALBUM_NAME}`,
+      '-metadata', 'album=Shin-MD Music',
     );
 
     // Asegurar que el MP3 no tenga problemas de timestamps negativos
