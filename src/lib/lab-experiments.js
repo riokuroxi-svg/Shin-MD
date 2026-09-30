@@ -47,6 +47,8 @@ import {
 import {
   buildLlamadaProgramada, buildUbicacionViva, buildSolicitudPago, buildPedido, buildPin,
 } from "#lib/native-actions";
+import { buildPregunta, buildPreguntaNativa } from "#lib/preguntas";
+import { buildTarjeta, prepararImagen, sendCarousel } from "#lib/carousel";
 
 const COVERS = path.join(process.cwd(), "media", "covers");
 
@@ -671,6 +673,48 @@ export const EXPERIMENTOS = [
       });
       await sock.relayMessage(ctx.jid, generado.message, { messageId: generado.key.id });
       return { ok: true };
+    },
+  },
+
+  deContenido("pregunta", "Pregunta nativa del grupo (isQuestion)",
+    "El texto sale con la etiqueta oficial de «pregunta»; las respuestas se agrupan solas.",
+    (ctx) => buildPregunta({ texto: ctx.texto || "¿Qué anime maratoneamos este finde?" })),
+
+  deContenido("preguntabox", "Pregunta en contenedor nativo",
+    "La caja oficial questionMessage: la pregunta envuelta a pantalla propia.",
+    (ctx) => buildPreguntaNativa({ texto: ctx.texto || "¿Equipo subtítulos o doblaje?" })),
+
+  {
+    clave: "carrusel",
+    titulo: "Carrusel de tarjetas con imagen",
+    mira: "Tarjetas que se pasan con el dedo, cada una con su foto y sus dos botones.",
+    async ejecutar(sock, ctx) {
+      const fotos = portadasDisponibles(3);
+      const demos = [
+        { titulo: "Zero Two ★5", cuerpo: "Darling in the FranXX · 480 🪙" },
+        { titulo: "Mikasa ★4", cuerpo: "Shingeki no Kyojin · 260 🪙" },
+        { titulo: "Nezuko ★4", cuerpo: "Kimetsu no Yaiba · 300 🪙" },
+      ];
+      const tarjetas = [];
+      for (const [i, d] of demos.entries()) {
+        const imagen = fotos[i] ? await prepararImagen(sock, fs.readFileSync(fotos[i])) : null;
+        tarjetas.push(buildTarjeta({
+          ...d,
+          pie: "反魂 · gacha",
+          imagen,
+          botones: [
+            { texto: "💖 Reclamar", id: ".claim" },
+            { texto: "⭐ Favorita", id: ".setfavourite" },
+          ],
+        }));
+      }
+      const r = await sendCarousel(sock, ctx.jid, {
+        texto: `🎴 *RollWaifu* · te salieron ${tarjetas.length} cartas — desliza →`,
+        respaldo: demos.map((d, i) => `${i + 1}. ${d.titulo} — ${d.cuerpo}`).join("\n"),
+        quoted: ctx.quoted,
+        tarjetas,
+      });
+      return r.sent ? { ok: true } : { ok: false, motivo: String(r.error?.message || r.error) };
     },
   },
 ];

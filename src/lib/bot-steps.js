@@ -43,6 +43,32 @@ export const TIPO_EDICION = 14;
 /** BotPlanningSearchSourceProvider: 0 desconocido, 1 otro, 2 Google, 3 Bing. */
 export const PROVEEDOR = Object.freeze({ DESCONOCIDO: 0, OTRO: 1, GOOGLE: 2, BING: 3 });
 
+/** BotSourcesMetadata.SourceProvider (el panel de fuentes CON favicon). */
+export const PROVEEDOR_FUENTE = Object.freeze({ DESCONOCIDO: 0, BING: 1, GOOGLE: 2, SOPORTE: 3 });
+
+/**
+ * Pasa las fuentes cómodas al BotSourcesMetadata del protocolo: la
+ * lista de «fuentes consultadas» con favicon que Meta AI cuelga bajo
+ * su respuesta. OJO: en esta revisión del proto los favicons viven
+ * AQUÍ (richResponseSourcesMetadata), no en los pasos — el campo de
+ * favicon de los pasos solo existe en el árbol interno de Meta AI y
+ * se pierde si lo enviamos, así que no se envía.
+ * Entrada: [{ proveedor, url, favicon, imagen, consulta }]
+ */
+export function normalizarFuentes(fuentes = []) {
+  return (Array.isArray(fuentes) ? fuentes : []).map((f, i) => {
+    const fuente = {
+      provider: Number.isInteger(f?.proveedor) ? f.proveedor : PROVEEDOR_FUENTE.DESCONOCIDO,
+      citationNumber: i + 1,
+    };
+    if (f?.url) fuente.sourceProviderUrl = String(f.url);
+    if (f?.consulta) fuente.sourceQuery = String(f.consulta);
+    if (f?.favicon) fuente.faviconCdnUrl = String(f.favicon);   // el favicon real
+    if (f?.imagen) fuente.thumbnailCdnUrl = String(f.imagen);   // miniatura grande
+    return fuente;
+  });
+}
+
 /**
  * Pasa una lista cómoda a la forma del protocolo.
  * Entrada: [{ titulo, detalle, estado, razonando, fuentes, secciones }]
@@ -78,7 +104,7 @@ export function normalizarPasos(pasos = []) {
  * Contenido completo: panel de pasos + texto de respaldo.
  * El texto SIEMPRE va: si el cliente no dibuja el panel, se lee igual.
  */
-export function buildStepsContent({ texto = "", descripcion = "", pasos = [], disclaimer = "" } = {}) {
+export function buildStepsContent({ texto = "", descripcion = "", pasos = [], disclaimer = "", fuentes = [] } = {}) {
   const lista = normalizarPasos(pasos);
   if (!lista.length) throw new Error("hacen falta pasos");
 
@@ -89,6 +115,8 @@ export function buildStepsContent({ texto = "", descripcion = "", pasos = [], di
     },
   };
   if (disclaimer) botMetadata.messageDisclaimerText = String(disclaimer);
+  const srcs = normalizarFuentes(fuentes);
+  if (srcs.length) botMetadata.richResponseSourcesMetadata = { sources: srcs };
 
   return {
     messageContextInfo: { botMetadata },
