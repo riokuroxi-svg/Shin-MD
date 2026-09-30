@@ -6,18 +6,7 @@
  */
 import fetch from 'node-fetch';
 import FormData from 'form-data';
-
-/**
- * Comando de IA con Google Gemini.
- * Aliases: ai, ia, chatgpt, gemini, chat
- *
- * Características:
- *  - Usa Gemini (gemini-flash-latest = Gemini 3.6 Flash) con la key del settings.js
- *  - Mantiene memoria de conversación por chat (últimos 10 mensajes)
- *  - .ai reset / .ia limpiar → borra la memoria del chat
- *  - Responde a imágenes citadas (usa litterbox para subir la imagen a URL pública)
- *  - Sin console.log extra — solo el log estándar del main.js
- */
+import { sendAiResponse } from '../../src/lib/aiFormatter.js';
 
 // Memoria por chat: { chatId: [ {role:'user'|'model', text:string} ] }
 const memoria = {};
@@ -25,10 +14,9 @@ const MEM_MAX = 10;
 const URL_GEMINI = (key, model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
-// Reutilizamos el uploader a litterbox (mismo que .tourl)
 async function subirLitterbox(buffer, mime) {
   const ext = (mime || 'image/jpeg').split('/')[1]?.split(';')[0] || 'jpg';
-  const filename = `ginko_${Date.now()}.${ext}`;
+  const filename = `shin_${Date.now()}.${ext}`;
   for (const t of ['1h', '12h', '24h', '72h']) {
     try {
       const form = new FormData();
@@ -54,7 +42,6 @@ async function geminiPedir(key, model, contents, sysPrompt) {
     { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
   ];
 
-  // Inserta system prompt como primer par user/model
   const arr = [];
   if (sysPrompt) {
     arr.push({ role: 'user', parts: [{ text: sysPrompt }] });
@@ -89,29 +76,20 @@ async function geminiPedir(key, model, contents, sysPrompt) {
 export default {
   command: ['ai', 'ia', 'chatgpt', 'gemini', 'chat'],
   category: 'utils',
-  description: 'Chatear con la IA (Gemini) con memoria.',
+  description: 'Chatear con la IA con memoria conversacional y formato Meta AI.',
   run: async ({ msg, sock, args, usedPrefix, command, text }) => {
-    const key = global.geminiKey;
-    const model = global.geminiModel || 'gemini-flash-latest';
+    const key = global.geminiKey || process.env.GEMINI_KEY;
+    const model = global.geminiModel || 'gemini-1.5-flash';
     const chatId = msg.chat;
-
-    if (!key || key === 'tu_key_aqui') {
-      return msg.reply(
-        '《✧》 No hay *key de Gemini* configurada.\n'
-        + '> Consíguela gratis en aistudio.google.com/apikey\n'
-        + '> y ponla en settings.js como global.geminiKey'
-      );
-    }
 
     const comando = (text || '').trim().toLowerCase();
 
     // Reset de memoria
     if (['reset', 'limpiar', 'clear', 'borrar'].includes(comando)) {
       delete memoria[chatId];
-      return msg.reply('🧠 *Memoria borrada.* Empezamos de cero.');
+      return msg.reply('🧠 *Memoria conversacional borrada.* Empezamos de cero.');
     }
 
-    // Obtener texto (del mensaje directo o del citado si no hay texto)
     let texto = text?.trim() || '';
     let imageUrl = null;
     const q = msg.quoted || null;
@@ -129,28 +107,32 @@ export default {
 
     if (!texto && !imageUrl) {
       return msg.reply(
-        `《✧》 Escribe una *petición* para que la IA responda.\n\n`
-        + `Ejemplos:\n`
-        + `• ${usedPrefix}ai ¿cuál es la capital de Japón?\n`
-        + `• Responde a una *imagen* con ${usedPrefix}ai ¿qué se ve aquí?\n`
-        + `• ${usedPrefix}ai reset → borra la memoria del chat`
+        `╭──〔 🤖 *SHIN-MD AI* 〕──⬣\n` +
+        `│ Escribe una pregunta o petición.\n` +
+        `│ \n` +
+        `│ 💡 *Uso:* \`${usedPrefix}ai <pregunta>\`\n` +
+        `│ 🖼️ *Con imagen:* Responde a una foto con \`${usedPrefix}ai ¿qué ves aquí?\`\n` +
+        `│ 🗑️ *Borrar:* \`${usedPrefix}ai reset\`\n` +
+        `╰─────────────────────────⬣`
       );
     }
 
-    // Reacción de espera
-    try { await msg.react('🕒'); } catch (_) {}
-    let statusKey = null;
-    try {
-      const s = await sock.sendMessage(msg.chat, { text: 'ꕥ *Gemini* está pensando...' }, { quoted: msg });
-      statusKey = s.key;
-    } catch (_) {}
+    if (!key || key === 'tu_key_aqui') {
+      return msg.reply(
+        '《✧》 No hay *key de Gemini* configurada.\n'
+        + '> Consíguela gratis en aistudio.google.com/apikey\n'
+        + '> y configúrala como `GEMINI_KEY` en tu archivo `.env` o `settings.js`.'
+      );
+    }
+
+    try { await msg.react('💭'); } catch (_) {}
+    const startTime = Date.now();
 
     try {
-      // Construir historial
       const historial = memoria[chatId] || [];
       const systemPrompt =
-        'Eres Ginko, el asistente de WhatsApp. Responde siempre en español, '
-        + 'de forma clara, amigable y breve (máximo 600 caracteres a menos que pidan más detalle). '
+        'Eres Shin-MD, un asistente inteligente de WhatsApp creado por riokuroxi-svg. '
+        + 'Responde siempre en español, de forma clara, educada, concisa y con formato markdown pulido. '
         + 'Si te envían una imagen, descríbela con precisión.';
 
       const parts = [];
@@ -163,37 +145,31 @@ export default {
       contenido.push({ role: 'user', parts });
 
       const respuesta = await geminiPedir(key, model, contenido, systemPrompt);
+      const latencyMs = Date.now() - startTime;
 
-      // Guardar en memoria (solo el texto para no inflar con imágenes)
       if (!memoria[chatId]) memoria[chatId] = [];
       memoria[chatId].push({ role: 'user', parts: [{ text: reqText }] });
       memoria[chatId].push({ role: 'model', parts: [{ text: respuesta }] });
-      // Mantener límite
-      while (memoria[chatId].length > MEM_MAX) memoria[chatId].shift();
-
-      // Enviar respuesta (edita el msj de "pensando" si existe)
-      try { await msg.react('✔️'); } catch (_) {}
-      if (statusKey) {
-        try {
-          await sock.sendMessage(msg.chat, { text: respuesta, edit: statusKey });
-        } catch (_) {
-          await msg.reply(respuesta);
-        }
-      } else {
-        await msg.reply(respuesta);
+      if (memoria[chatId].length > MEM_MAX * 2) {
+        memoria[chatId] = memoria[chatId].slice(-MEM_MAX * 2);
       }
+
+      try { await msg.react('✨'); } catch (_) {}
+
+      await sendAiResponse(sock, chatId, {
+        model: "Gemini 1.5 Flash",
+        query: reqText,
+        answer: respuesta,
+        latencyMs,
+        senderId: msg.sender,
+        senderName: msg.pushName || "Usuario",
+        quoted: msg,
+      });
+
+      return null;
     } catch (e) {
       try { await msg.react('❌'); } catch (_) {}
-      if (statusKey) {
-        try {
-          await sock.sendMessage(msg.chat, {
-            text: `《✧》 No se pudo obtener respuesta.\n> ${e.message || 'error desconocido'}`,
-            edit: statusKey,
-          });
-          return;
-        } catch (_) {}
-      }
-      msg.reply(`《✧》 No se pudo obtener respuesta.\n> ${e.message || 'error desconocido'}`);
+      return msg.reply(`❌ *Error en la IA:* ${e.message}`);
     }
   },
 };
