@@ -200,61 +200,55 @@ export default {
     const banner = getBanner();
 
     // ── VARIANTES DE RENDERIZADO ──
-    switch (menuVariant) {
-      case 1: {
-        // Variante 1: Desplegable Interactivo Single Select (Bottom Sheet) + Tarjeta Rica
-        const interactiveBody = headerText +
-          `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
-          `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
-          `│ 🅖 Grupos • 🅛 Límite\n` +
-          `╰─────────────────────────⬣\n\n` +
-          `_Selecciona una categoría en el botón desplegable de abajo para ver sus comandos._`;
+    // En grupos de WhatsApp (@g.us), los servidores de WhatsApp descartan los
+    // interactiveMessage / nativeFlow buttons para cuentas estándar.
+    // Por tanto, en grupos siempre se envía el formato estético garantizado (100% visible).
+    if (ctx.isGroup || menuVariant === 2) {
+      const finalContent = headerText +
+        `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
+        readMore +
+        fullCategoriesList +
+        `\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`;
 
-        const sent = await sendInteractive(sock, ctx.chatId, {
-          title: "✨ SHIN-MD " + version,
-          body: interactiveBody,
-          footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
-          image: banner,
-          buttons: [
-            singleSelect("📂 Explorar Categorías", [{ title: "反魂 · Categorías", rows: categoryRows }]),
-            quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
-            quickReply("🏓 Ping", "ping"),
-            ctaUrl("📢 Canal Oficial", "https://whatsapp.com/channel/0029Vb8dmsUElagkVPIw9X2P"),
-          ],
-          quoted: verifiedQuoted,
-          fallbackText: headerText + readMore + fullCategoriesList,
-        });
-
-        if (sent) return null;
-        break;
-      }
-
-      case 2:
-      default: {
-        // Variante 2: Banner de Imagen + ReadMore + Cajas Unicode Estéticas
-        const finalContent = headerText +
-          `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
-          readMore +
-          fullCategoriesList +
-          `\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`;
-
-        if (banner) {
-          await sock.sendMessage(
-            ctx.chatId,
-            { image: banner, caption: finalContent, contextInfo: channelCtx },
-            { quoted: verifiedQuoted }
-          );
-          return null;
-        }
-
+      if (banner) {
         await sock.sendMessage(
           ctx.chatId,
-          { text: finalContent, contextInfo: channelCtx },
-          { quoted: verifiedQuoted }
+          { image: banner, caption: finalContent, contextInfo: channelCtx },
+          { quoted: ctx.full }
         );
         return null;
       }
+
+      await sock.sendMessage(
+        ctx.chatId,
+        { text: finalContent, contextInfo: channelCtx },
+        { quoted: ctx.full }
+      );
+      return null;
     }
+
+    // En chat privado (DM), enviar la tarjeta interactiva con selector desplegable
+    const interactiveBody = headerText +
+      `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
+      `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
+      `│ 🅖 Grupos • 🅛 Límite\n` +
+      `╰─────────────────────────⬣\n\n` +
+      `_Selecciona una categoría en el botón desplegable de abajo para ver sus comandos._`;
+
+    const sent = await sendInteractive(sock, ctx.chatId, {
+      title: "✨ SHIN-MD " + version,
+      body: interactiveBody,
+      footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
+      image: banner,
+      buttons: [
+        singleSelect("📂 Explorar Categorías", [{ title: "反魂 · Categorías", rows: categoryRows }]),
+        quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
+        quickReply("🏓 Ping", "ping"),
+        ctaUrl("📢 Canal Oficial", "https://whatsapp.com/channel/0029Vb8dmsUElagkVPIw9X2P"),
+      ],
+      quoted: ctx.full,
+      fallbackText: headerText + readMore + fullCategoriesList,
+    });
 
     return null;
   },

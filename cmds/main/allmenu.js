@@ -84,10 +84,7 @@ export default {
     }
 
     const fullText = header + readMore + body + `\n_Shin-MD • Desarrollado por riokuroxi-svg_`;
-    const verifiedQuote = getVerifiedQuoted({ botName: "Shin-MD", sender: ctx.senderId, senderNum: senderNumber });
-    const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
-
-    await sock.sendMessage(ctx.chatId, { text: fullText, contextInfo: channelCtx }, { quoted: verifiedQuote });
+    await sock.sendMessage(ctx.chatId, { text: fullText, contextInfo: channelCtx }, { quoted: ctx.full });
     return null;
   },
 };

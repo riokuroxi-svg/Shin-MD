@@ -76,8 +76,7 @@ export default {
     text += `\nTotal: *${list.length}* comandos en esta categoría.\n`;
     text += `_Leyenda: 🅞 Dueño • 🅟 Premium • 🅐 Admin • 🅖 Grupos • 🅛 Límite_`;
 
-    const verifiedQuote = getVerifiedQuoted({ botName: "Shin-MD", sender: ctx.senderId });
-    await sock.sendMessage(ctx.chatId, { text }, { quoted: verifiedQuote });
+    await sock.sendMessage(ctx.chatId, { text }, { quoted: ctx.full });
     return null;
   },
 };
