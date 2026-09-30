@@ -276,7 +276,7 @@ async function main() {
     const v = parseInt(process.env[nombre] || "", 10);
     return Number.isFinite(v) && v > 0 ? v : null;
   };
-  const warmupOff = /^(0|off|no|false)$/i.test((process.env.WARMUP || "").trim());
+  const warmupOff = /^(0|off|no|false)$/i.test((process.env.WARMUP || "").trim()) || /^(0|off|no|false)$/i.test((process.env.WARMUP_LIMIT || "").trim());
   if (warmupOff) {
     throttlerOpts.warmUpStartMsgsPerDay = Number.MAX_SAFE_INTEGER;
     throttlerOpts.warmUpMaxMsgsPerDay = Number.MAX_SAFE_INTEGER;
