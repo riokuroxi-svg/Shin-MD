@@ -13,6 +13,17 @@ import { getChannelContext } from "../../src/lib/contextBuilder.js";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
+function parseDurationSeconds(durationStr, ms) {
+  if (typeof ms === "number" && ms > 0) return Math.round(ms / 1000);
+  if (typeof durationStr === "number" && durationStr > 0) return Math.round(durationStr);
+  if (typeof durationStr === "string" && durationStr.includes(":")) {
+    const parts = durationStr.split(":").map(Number);
+    if (parts.length === 2) return (parts[0] * 60) + parts[1];
+    if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  }
+  return 0;
+}
+
 async function searchSpotify(query) {
   try {
     const res = await axios.get(`https://my.izuka-api.xyz/api/search/spotify-search?query=${encodeURIComponent(query)}`, {
@@ -49,6 +60,7 @@ async function downloadSpotifyTrack(trackUrl) {
         title: res.data.result.title,
         artist: res.data.result.artist,
         cover: res.data.result.cover_url,
+        duration: res.data.result.duration,
         provider: "Izuka Spotify",
       };
     }
@@ -65,6 +77,7 @@ async function downloadSpotifyTrack(trackUrl) {
         title: res.data.result.title,
         artist: res.data.result.artist,
         cover: null,
+        duration: null,
         provider: "Nexray Spotify",
       };
     }
@@ -103,7 +116,7 @@ export default {
       contextInfo: channelCtx,
     }, { quoted: ctx.full });
 
-    let key = waitMsg?.key;
+    const key = waitMsg?.key;
 
     if (!isSpotifyUrl) {
       try {
@@ -132,8 +145,9 @@ export default {
 
       const title = dl.title || trackMeta?.title || "Pista Spotify";
       const artist = dl.artist || trackMeta?.artist || "Spotify";
-      const duration = trackMeta?.duration || "N/A";
+      const duration = trackMeta?.duration || (dl.duration ? `${Math.floor(dl.duration / 60)}:${String(dl.duration % 60).padStart(2, "0")}` : "N/A");
       const cover = dl.cover || trackMeta?.thumb || trackMeta?.thumbnail;
+      const trackSeconds = parseDurationSeconds(duration, (dl.duration || 0) * 1000);
 
       let cardText = `╭┈┈⫹⫺ *SPOTIFY DOWNLOADER* ⫹⫺┈┈╮\n`;
       cardText += `│ ◈ *Título* : *${title}*\n`;
@@ -159,6 +173,8 @@ export default {
         audio: { url: dl.url },
         mimetype: "audio/mpeg",
         fileName: safeFileName,
+        seconds: trackSeconds,
+        ptt: false,
         contextInfo: channelCtx,
       }, { quoted: ctx.full });
 

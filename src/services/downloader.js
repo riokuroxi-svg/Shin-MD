@@ -5,11 +5,11 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  downloader.js (TURBO V3.2) — Motor de Descarga Ultrarrápido Multifuente
+//  downloader.js (TURBO V3.3) — Motor de Descarga Ultrarrápido Multifuente
 //  · Caché en memoria + disco (0ms en hits repetidos)
 //  · Carrera concurrente (Promise.any) entre los CDNs más rápidos
-//  · Soporte yt-dlp Turbo (-N 8) local si está disponible en VPS
-//  · Fallback en cascada infalible (Spotify -> SoundCloud -> YouTube)
+//  · Filtro estricto antipanas (rechaza HLS / m3u8, solo audio binario)
+//  · Cálculo exacto de duración (seconds) para evitar el bug de 0:00
 // ═══════════════════════════════════════════════════════════════════
 
 import log from "#logger";
@@ -20,11 +20,11 @@ import { promisify } from "node:util";
 import { searchYouTube, getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
 
 const exec = promisify(execFile);
-const FETCH_TIMEOUT = 8000;
+const FETCH_TIMEOUT = 7000;
 const YT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const SC_CLIENT_ID = "KKzJxmw11tYpCs6T24P4uUYhqmjalG6M";
 
-// ── Caché Turbo en Memoria y Disco ──────────────────────────
+// ── Caché Turbo en Memoria ──────────────────────────────────
 const _memoryCache = new Map();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -48,6 +48,17 @@ function setToCache(key, data) {
     const firstKey = _memoryCache.keys().next().value;
     _memoryCache.delete(firstKey);
   }
+}
+
+function parseDurationSeconds(durationStr, ms) {
+  if (typeof ms === "number" && ms > 0) return Math.round(ms / 1000);
+  if (typeof durationStr === "number" && durationStr > 0) return Math.round(durationStr);
+  if (typeof durationStr === "string" && durationStr.includes(":")) {
+    const parts = durationStr.split(":").map(Number);
+    if (parts.length === 2) return (parts[0] * 60) + parts[1];
+    if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  }
+  return 0;
 }
 
 // ── B3: Cookies de YouTube ──────────────────────────────────
@@ -101,11 +112,14 @@ async function resolveSpotifyIzuka(query) {
       throw new Error("No download url");
     }
 
+    const durSec = parseDurationSeconds(track.duration, dlData.result.duration * 1000);
+
     return {
       url: dlData.result.download_url,
       title: track.title || dlData.result.title,
       author: track.artist || dlData.result.artist || "Spotify Artist",
-      duration: track.duration || null,
+      duration: track.duration || `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, "0")}`,
+      seconds: durSec,
       thumbnail: track.thumb || dlData.result.cover_url || null,
       provider: "Spotify Turbo CDN",
     };
@@ -140,11 +154,14 @@ async function resolveSpotifyNexray(query) {
       throw new Error("No Nexray download URL");
     }
 
+    const durSec = parseDurationSeconds(track.duration, 0);
+
     return {
       url: dlData.result.url,
       title: track.title || dlData.result.title,
       author: track.artist || dlData.result.artist || "Spotify Artist",
-      duration: track.duration || null,
+      duration: track.duration || `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, "0")}`,
+      seconds: durSec,
       thumbnail: track.thumbnail || null,
       provider: "Nexray Turbo CDN",
     };
@@ -154,7 +171,7 @@ async function resolveSpotifyNexray(query) {
 }
 
 /**
- * ⚡ Proveedor 3: SoundCloud CDN Direct Progressive Stream
+ * ⚡ Proveedor 3: SoundCloud CDN Direct Progressive Stream (Rechaza HLS/m3u8)
  */
 async function resolveSoundCloud(query) {
   const ctrl = new AbortController();
@@ -168,27 +185,34 @@ async function resolveSoundCloud(query) {
     const items = (data?.collection || []).filter(item => item.media?.transcodings?.length > 0);
     if (!items.length) throw new Error("No SC collection");
 
-    const track = items[0];
-    for (const t of track.media.transcodings) {
-      try {
-        const streamRes = await fetch(`${t.url}?client_id=${SC_CLIENT_ID}`, {
+    for (const track of items) {
+      // ⚠️ CRÍTICO: SOLO PROTOCOLO PROGRESSIVE (MP3/M4A DIRECTO)
+      // Rechazamos HLS (.m3u8) porque no es un audio binario reproducible en WhatsApp
+      const progressive = track.media.transcodings.find(
+        t => t.format?.protocol === "progressive" && (t.format?.mime_type?.includes("mpeg") || t.preset?.includes("mp3"))
+      );
+
+      if (progressive) {
+        const streamRes = await fetch(`${progressive.url}?client_id=${SC_CLIENT_ID}`, {
           headers: { "User-Agent": YT_UA },
           signal: ctrl.signal,
         });
         const streamData = await streamRes.json();
-        if (streamData?.url && /^https?:\/\//i.test(streamData.url)) {
+        if (streamData?.url && /^https?:\/\//i.test(streamData.url) && !streamData.url.includes(".m3u8")) {
+          const durSec = track.duration ? Math.round(track.duration / 1000) : 0;
           return {
             url: streamData.url,
             title: track.title,
             author: track.user?.username || "SoundCloud",
-            duration: track.duration ? `${Math.floor(track.duration / 60000)}:${String(Math.floor((track.duration % 60000) / 1000)).padStart(2, "0")}` : null,
+            duration: `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, "0")}`,
+            seconds: durSec,
             thumbnail: track.artwork_url || track.user?.avatar_url || null,
-            provider: "SoundCloud Turbo CDN",
+            provider: "SoundCloud Progressive CDN",
           };
         }
-      } catch {}
+      }
     }
-    throw new Error("No playable SC stream");
+    throw new Error("No progressive SC stream");
   } finally {
     clearTimeout(timer);
   }
@@ -232,7 +256,7 @@ async function resolveYtdlpLocal(videoUrl) {
 }
 
 /**
- * Función Principal Turbo: Resuelve audio a máxima velocidad
+ * Función Principal Turbo: Resuelve audio a máxima velocidad sin panics
  */
 export async function getAudioUrl(query) {
   query = (query || "").trim();
@@ -258,28 +282,13 @@ export async function getAudioUrl(query) {
         title: info?.title || "Audio YouTube",
         author: info?.author?.name || "YouTube",
         duration: info?.timestamp || null,
+        seconds: parseDurationSeconds(info?.timestamp, 0),
         thumbnail: info?.thumbnail || info?.image || null,
         views: info?.views || null,
       };
     } catch {
       ytMetadata = { title: "Audio YouTube", author: "YouTube", duration: null, thumbnail: null };
     }
-  } else if (!/^https?:\/\//i.test(query)) {
-    try {
-      const searchRes = await searchYouTube(query, { limit: 1 });
-      const list = searchRes?.videos || (Array.isArray(searchRes) ? searchRes : []);
-      if (list.length > 0) {
-        const top = list[0];
-        videoUrl = top.url || `https://youtu.be/${top.videoId}`;
-        ytMetadata = {
-          title: top.title,
-          author: top.author?.name || "YouTube Artist",
-          duration: top.timestamp || null,
-          thumbnail: top.thumbnail || top.image || null,
-          views: top.views || null,
-        };
-      }
-    } catch {}
   }
 
   const cleanQuery = ytMetadata?.title || query.replace(/https?:\/\/[^\s]+/gi, "").trim() || query;
@@ -294,7 +303,8 @@ export async function getAudioUrl(query) {
           provider: localRes.provider,
           title: ytMetadata?.title || "Audio YouTube",
           author: ytMetadata?.author || "YouTube",
-          duration: ytMetadata?.duration || null,
+          duration: ytMetadata?.duration || "0:00",
+          seconds: ytMetadata?.seconds || 0,
           thumbnail: ytMetadata?.thumbnail || null,
           views: ytMetadata?.views || null,
         };
@@ -319,7 +329,8 @@ export async function getAudioUrl(query) {
         provider: winner.provider,
         title: ytMetadata?.title || winner.title,
         author: winner.author || ytMetadata?.author || "Artista",
-        duration: winner.duration || ytMetadata?.duration || null,
+        duration: winner.duration || ytMetadata?.duration || `${Math.floor((winner.seconds || 0) / 60)}:${String((winner.seconds || 0) % 60).padStart(2, "0")}`,
+        seconds: winner.seconds || ytMetadata?.seconds || 0,
         thumbnail: winner.thumbnail || ytMetadata?.thumbnail || null,
         views: ytMetadata?.views || null,
       };

@@ -9,8 +9,17 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { getAudioUrl } from "#downloader";
-import { searchYouTube } from "#lib/youtubeSearch";
 import { getChannelContext } from "../../src/lib/contextBuilder.js";
+
+function parseDurationSeconds(durationStr) {
+  if (typeof durationStr === "number" && durationStr > 0) return Math.round(durationStr);
+  if (typeof durationStr === "string" && durationStr.includes(":")) {
+    const parts = durationStr.split(":").map(Number);
+    if (parts.length === 2) return (parts[0] * 60) + parts[1];
+    if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  }
+  return 0;
+}
 
 export default {
   name: "play",
@@ -18,7 +27,7 @@ export default {
   category: "downloads",
   description: "Busca, reproduce y descarga música en alta calidad 🎵",
   usage: ".play <canción o link>",
-  cooldown: 10,
+  cooldown: 8,
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,
@@ -27,49 +36,42 @@ export default {
     if (!ctx.arg) {
       return "🎵 *SHIN MUSIC PLAYER*\n\n" +
         "Uso: `" + (ctx.usedPrefix || ".") + "play <canción o link>`\n" +
-        "Ej: `" + (ctx.usedPrefix || ".") + "play bad bunny monaco`\n\n" +
+        "Ej: `" + (ctx.usedPrefix || ".") + "play Funk Mambo Super slowed`\n\n" +
         "💡 _También puedes usar `" + (ctx.usedPrefix || ".") + "spotify <canción>` o `" + (ctx.usedPrefix || ".") + "playsc <canción>`._";
     }
 
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
 
-    // Si es un link de SoundCloud, redirigir al handler de SoundCloud
+    // Si es un link de SoundCloud directo, redirigir al handler de SoundCloud
     if (/^https?:\/\/(soundcloud\.com|on\.soundcloud\.com)\//i.test(ctx.arg.trim())) {
       const scHandler = (await import("./soundcloud.js")).default;
       return scHandler.handler(sock, ctx, engine);
     }
-
-    // Buscar metadata visual antes de descargar
-    let searchMeta = null;
-    try {
-      const s = await searchYouTube(ctx.arg);
-      const list = s?.videos || (Array.isArray(s) ? s : []);
-      if (list.length > 0) searchMeta = list[0];
-    } catch {}
 
     const waitMsg = await sock.sendMessage(ctx.chatId, {
       text: "⏳ *Buscando y procesando audio...*\n_" + ctx.arg.slice(0, 45) + "_",
       contextInfo: channelCtx,
     }, { quoted: ctx.full });
 
-    let key = waitMsg?.key;
+    const key = waitMsg?.key;
 
     try {
       const result = await getAudioUrl(ctx.arg);
-      const { url, provider, title, duration, author, thumbnail, views } = result;
+      const { url, provider, title, duration, author, thumbnail, views, seconds } = result;
 
-      const trackTitle = title || searchMeta?.title || "Audio Shin-MD";
-      const trackAuthor = author || searchMeta?.author?.name || "YouTube Music";
-      const trackDuration = duration || searchMeta?.timestamp || "0:00";
-      const trackViews = views ? views.toLocaleString() : (searchMeta?.views ? searchMeta.views.toLocaleString() : "N/A");
-      const trackThumbnail = thumbnail || searchMeta?.thumbnail || searchMeta?.image;
+      const trackTitle = title || "Audio Shin-MD";
+      const trackAuthor = author || "Artista";
+      const trackDuration = duration || "0:00";
+      const trackSeconds = (typeof seconds === "number" && seconds > 0) ? seconds : parseDurationSeconds(trackDuration);
+      const trackViews = views ? (typeof views === "number" ? views.toLocaleString() : String(views)) : "N/A";
+      const trackThumbnail = thumbnail || null;
 
       let cardText = `╭┈┈⫹⫺ *SHIN MUSIC PLAYER* ⫹⫺┈┈╮\n`;
       cardText += `│ ◈ *Título* : *${trackTitle}*\n`;
       cardText += `│ ◈ *Artista* : *${trackAuthor}*\n`;
       cardText += `│ ◈ *Duración* : *${trackDuration}*\n`;
       cardText += `│ ◈ *Vistas* : *${trackViews}*\n`;
-      cardText += `│ ◈ *Servidor* : \`${provider || "Multi-API Engine"}\`\n`;
+      cardText += `│ ◈ *Servidor* : \`${provider || "Multi-CDN Engine"}\`\n`;
       cardText += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n`;
       cardText += `_⏳ Enviando archivo de audio..._`;
 
@@ -85,12 +87,17 @@ export default {
 
       const safeFileName = `${trackAuthor} - ${trackTitle}`.replace(/[/\\?*:<>|"]/g, "").slice(0, 75) + ".mp3";
 
-      const audioMsg = await sock.sendMessage(ctx.chatId, {
+      // Intentar enviar con URL remota; si WhatsApp requiere binary buffer, descargar con timeout
+      const audioPayload = {
         audio: { url },
         mimetype: "audio/mpeg",
         fileName: safeFileName,
+        seconds: trackSeconds,
+        ptt: false,
         contextInfo: channelCtx,
-      }, { quoted: ctx.full });
+      };
+
+      const audioMsg = await sock.sendMessage(ctx.chatId, audioPayload, { quoted: ctx.full });
 
       if (key) {
         try {
@@ -102,7 +109,7 @@ export default {
     } catch (err) {
       const errTxt = err.message && err.message.length < 400
         ? err.message
-        : "❌ Error al descargar el audio. Intenta con `.playsc <nombre>` o prueba otra canción.";
+        : "❌ Error al descargar el audio. Intenta con `.spotify <nombre>` o `.playsc <nombre>`.";
       if (key) {
         try {
           await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, { _priority: true });
