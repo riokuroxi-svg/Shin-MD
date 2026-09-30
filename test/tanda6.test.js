@@ -554,3 +554,69 @@ test(".ytsearch resume los vídeos y deja respaldo legible", async () => {
   assert.match(lista, /\.play/, "el respaldo dice cómo descargar");
   assert.ok(RESULTADOS >= 3 && RESULTADOS <= 10);
 });
+
+// ── 13. El kit: que cualquier comando tenga cara de premium ──────
+test("el ui-kit arma la ficha y los atajos", async () => {
+  const { renderFicha, atajo, enlace, copiar, sendFicha, VISIBLES } = await import("../src/lib/ui-kit.js");
+
+  const texto = renderFicha({
+    titulo: "Cartera de Rio",
+    filas: [["Cartera", "¥12,400"], ["Banco", "¥80,000"]],
+    nota: "El dinero del banco no te lo roban.",
+  });
+  assert.match(texto, /Cartera/);
+  assert.match(texto, /¥12,400/);
+  assert.match(texto, /^┌─/m, "usa la caja de datos del sistema");
+  assert.match(texto, /^> El dinero/m, "la nota va como cita");
+
+  // el atajo es lo que hace que un botón lance otro comando
+  const a = atajo("🎁 Diaria", "daily", ".");
+  assert.equal(JSON.parse(a.buttonParamsJson).id, ".daily", "con prefijo: lo recoge el router de siempre");
+  assert.equal(JSON.parse(atajo("x", ".balance", "#").buttonParamsJson).id, "#balance", "no duplica el prefijo");
+  assert.equal(enlace("ir", "https://x").name, "cta_url");
+  assert.equal(copiar("copiar", "abc").name, "cta_copy");
+  assert.equal(VISIBLES, 3);
+});
+
+test("la ficha manda tarjeta con botones y texto sin ellos", async () => {
+  const { sendFicha, atajo } = await import("../src/lib/ui-kit.js");
+
+  const conBotones = socketFalso();
+  const r1 = await sendFicha(conBotones, "1203630000@g.us", {
+    titulo: "X", filas: [["a", "b"]],
+    botones: [atajo("uno", "daily"), atajo("dos", "balance"), atajo("tres", "top"), atajo("cuatro", "casino")],
+  });
+  assert.equal(r1.sent, true);
+  const inter = conBotones.enviados[0].message.interactiveMessage;
+  assert.equal(inter.nativeFlowMessage.buttons.length, 4);
+  const hoja = JSON.parse(inter.nativeFlowMessage.messageParamsJson);
+  assert.equal(hoja.bottom_sheet.in_thread_buttons_limit, 3, "el cuarto botón se va a la hoja");
+  assert.equal(hoja.has_multiple_buttons, true);
+
+  // sin botones no se gasta una tarjeta: texto y ya
+  const soloTexto = {
+    enviados: [], user: { id: "1@s.whatsapp.net" },
+    async sendMessage(jid, c) { this.enviados.push(c); return { key: { id: "T" } }; },
+  };
+  const r2 = await sendFicha(soloTexto, "1203630000@g.us", { titulo: "X", filas: [["a", "b"]] });
+  assert.equal(r2.respaldo, true);
+  assert.match(soloTexto.enviados[0].text, /┌─/);
+});
+
+test("las familias cableadas usan el kit de verdad", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const esperado = {
+    "../cmds/economy/balance.js": ["sendFicha", "atajo"],
+    "../cmds/economy/economyboard.js": ["sendFicha", "atajo"],
+    "../cmds/profile/profile.js": ["sendInteractive", "atajo"],
+    "../cmds/profile/level.js": ["sendInteractive", "atajo"],
+    "../cmds/downloads/apk.js": ["sendFicha", "enlace"],
+    "../cmds/downloads/mediafire.js": ["sendFicha", "enlace"],
+  };
+  for (const [f, señales] of Object.entries(esperado)) {
+    const src = await readFile(new URL(f, import.meta.url), "utf8");
+    for (const s of señales) assert.ok(src.includes(s), `${f} debería usar ${s}`);
+    assert.ok(!src.includes("An unexpected error occurred"),
+      `${f} tenía un error en inglés: los mensajes del bot van en español`);
+  }
+});

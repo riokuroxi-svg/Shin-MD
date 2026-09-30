@@ -8,6 +8,8 @@ import moment from 'moment-timezone';
 import db from '../../src/services/ginko-db.js';
 import defaultAvatar from '../../lib/default-avatar.js';
 import { generateProfileCard } from '../../src/lib/cardGenerator.js';
+import { sendInteractive } from "#interactive";
+import { atajo } from "#lib/ui-kit";
 
 const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 0.75;
 
@@ -114,17 +116,25 @@ export default {
         });
       } catch {}
 
-      if (cardBuffer) {
-        await sock.sendMessage(msg.chat, { image: cardBuffer, caption: profileText }, { quoted: msg });
-        return null;
-      }
+      // La ficha ya se dibujaba bonita; lo que le faltaba eran los
+      // atajos. Los botones lanzan otros comandos del bot tal cual,
+      // así que desde el perfil se llega al nivel o al saldo sin
+      // escribir nada. Si la tarjeta no se dibuja, sale la imagen
+      // con el mismo texto de siempre: no se pierde nada.
+      const atajosPerfil = [
+        atajo('📊 Mi nivel', 'level', usedPrefix),
+        atajo('💰 Mi saldo', 'balance', usedPrefix),
+        atajo('✏️ Editar descripción', 'setdesc', usedPrefix),
+      ];
 
-      if (perfilUrl) {
-        await sock.sendMessage(msg.chat, { image: { url: perfilUrl }, caption: profileText }, { quoted: msg });
-        return null;
-      }
-
-      await sock.sendMessage(msg.chat, { text: profileText }, { quoted: msg });
+      await sendInteractive(sock, msg.chat, {
+        body: profileText,
+        footer: 'Perfil · Shin-MD',
+        buttons: atajosPerfil,
+        image: cardBuffer || (perfilUrl || null),
+        quoted: msg.full || msg,
+        fallbackText: profileText,
+      });
       return null;
     } catch (e) {
       return msg.reply(`> Error al mostrar el perfil: *${e.message}*`);

@@ -5,6 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { getBuffer } from "#serialize"
+import { sendFicha, enlace, copiar } from '#lib/ui-kit';
+import { state } from '#lib/theme';
 // aptoide-scraper se importa de forma PESA dentro del handler: al cargarlo
 // crea un setInterval interno que impediría la salida limpia del proceso
 // (tests/shutdown) y tardaría en importar sin usarse nunca.
@@ -31,11 +33,19 @@ export default {
       const caption = `✰ ᩧ　𓈒　ׄ　Aptoide 　ׅ　✿\n\n➩ *Nombre ›* ${name}\n❖ *Paquete ›* ${id}\n✿ *Última actualización ›* ${lastup}\n☆ *Tamaño ›* ${size}`
       const sizeBytes = parseSize(size)
       if (sizeBytes > 524288000) {
-        return msg.reply(`《✧》 El archivo es demasiado grande (${size}).\n> Descárgalo directamente desde aquí:\n${downloadUrl}`)
+        // Antes te dejaba tirado con una url larguísima que había que
+        // seleccionar a mano en el móvil. Ahora se abre o se copia.
+        return sendFicha(sock, msg.chat, {
+          titulo: name,
+          filas: [['Peso', size], ['Estado', 'demasiado grande para mandarlo por aquí']],
+          nota: 'WhatsApp no deja adjuntar archivos de este tamaño.',
+          botones: [enlace('⬇️ Descargar del origen', downloadUrl), copiar('📋 Copiar enlace', downloadUrl)],
+          quoted: msg.full || msg,
+        })
       }
       await sock.sendMessage(msg.chat, { document: { url: downloadUrl }, mimetype: 'application/vnd.android.package-archive', fileName: `${name}.apk`, caption }, { quoted: msg })
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`)
+      await msg.reply(state('error', { detail: e?.message }))
     }
   },
 }

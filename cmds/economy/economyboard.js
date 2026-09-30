@@ -5,6 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { sendFicha, atajo } from '#lib/ui-kit';
+import { state } from '#lib/theme';
 export default {
   command: ['economyboard', 'eboard', 'baltop'],
   category: 'economy',
@@ -49,9 +51,18 @@ export default {
       if (page < totalPages) {
         text += `\n> Para ver la siguiente página › *${usedPrefix + command} ${page + 1}*`;
       }      
-      await sock.sendMessage(chatId, { text }, { quoted: msg });
+      await sendFicha(sock, chatId, {
+        titulo: `Ranking · página ${page} de ${totalPages}`,
+        filas: [text],
+        botones: [
+          ...(page < totalPages ? [atajo('▶️ Siguiente página', `economyboard ${page + 1}`, usedPrefix)] : []),
+          atajo('💰 Mi saldo', 'balance', usedPrefix),
+          atajo('🎁 Diaria', 'daily', usedPrefix),
+        ],
+        quoted: msg.full || msg,
+      });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e?.message }));
     }
   }
 };

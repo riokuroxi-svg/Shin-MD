@@ -8,6 +8,8 @@ import axios from 'axios';
 import path from 'path';
 import { lookup } from 'mime-types';
 import * as cheerio from 'cheerio';
+import { sendFicha, enlace, copiar } from '#lib/ui-kit';
+import { state } from '#lib/theme';
 
 export default {
   command: ['mediafire', 'mf'],
@@ -15,11 +17,12 @@ export default {
   description: 'Descargar un archivo de MediaFire.',
   run: async ({ msg, sock, args, usedPrefix, command, text }) => {
     if (!text) return msg.reply('《✧》 Por favor, ingresa el enlace de Mediafire.')
+    let scraped = null
     try {
       if (!/^https?:\/\/(www\.)?mediafire\.com\/.+/i.test(text)) {
         return msg.reply('《✧》 Por favor, ingresa un enlace válido de Mediafire.')
       }      
-      const scraped = await mediafireDl(text)
+      scraped = await mediafireDl(text)
       if (!scraped?.downloadLink) return msg.reply(`《✧》 No se pudo obtener el archivo.`)      
       const title = (scraped.filename || 'archivo').trim()
       const ext = path.extname(title) || (scraped.type ? `.${scraped.type}` : '')
@@ -31,7 +34,19 @@ export default {
       if (scraped.uploaded) info += `ׄ ﹙ׅ✿﹚ּ *Subido* › ${scraped.uploaded}\n`      
       await sock.sendMessage(msg.chat, { document: { url: scraped.downloadLink }, mimetype: tipo, fileName: title, caption: info, mentions: [msg.sender] }, { quoted: msg })
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`)
+      // Si el envío falla (suele ser por tamaño), al menos que se
+      // lleve el enlace en un botón en vez de un error en inglés.
+      const directo = typeof scraped?.downloadLink === 'string' ? scraped.downloadLink : ''
+      if (directo) {
+        return sendFicha(sock, msg.chat, {
+          titulo: 'No se pudo adjuntar el archivo',
+          filas: [['Motivo', e?.message || 'error al subirlo a WhatsApp']],
+          nota: 'El enlace directo sigue siendo válido.',
+          botones: [enlace('⬇️ Descargar del origen', directo), copiar('📋 Copiar enlace', directo)],
+          quoted: msg.full || msg,
+        })
+      }
+      return msg.reply(state('error', { detail: e?.message }))
     }
   },
 }

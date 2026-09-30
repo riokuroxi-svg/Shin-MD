@@ -73,7 +73,7 @@ const PROMESAS = [
   ["maquetas", "Carrusel de tarjetas", "sendCarousel"],
   ["maquetas", "Menú que cambia con la hora", "pickBanner"],
   ["maquetas", "Miniatura en el audio/documento", "jpegThumbnail"],
-  ["maquetas", "Tarjetas dibujadas por el bot (canvas)", "createCanvas"],
+  ["maquetas", "Tarjetas dibujadas por el bot", "generateProfileCard"],
   ["diseño", "Las tres cajas", "boxNotice|boxMain|boxData"],
   ["diseño", "Estados unificados del sistema", 'state("'],
   ["diseño", "Iconos por categoría", "categoryIcon"],

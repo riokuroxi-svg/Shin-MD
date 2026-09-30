@@ -6,6 +6,8 @@
  */
 import db from '../../src/services/ginko-db.js';
 import { generateProfileCard } from '../../src/lib/cardGenerator.js';
+import { sendInteractive } from "#interactive";
+import { atajo } from "#lib/ui-kit";
 
 const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 0.75;
 
@@ -21,7 +23,7 @@ export default {
   command: ['level', 'lvl', 'nivel', 'xp'],
   category: 'profile',
   description: 'Ver tu nivel y experiencia actual con tarjeta gráfica.',
-  run: async ({ msg, sock, text }) => {
+  run: async ({ msg, sock, text, usedPrefix }) => {
     const chatId = msg.chat;
     const who = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     const user = db.getUser(who);
@@ -66,12 +68,19 @@ export default {
       });
     } catch {}
 
-    if (cardBuffer) {
-      await sock.sendMessage(chatId, { image: cardBuffer, caption: txt, mentions: [who] }, { quoted: msg });
-      return null;
-    }
-
-    await sock.sendMessage(chatId, { text: txt, mentions: [who] }, { quoted: msg });
+    await sendInteractive(sock, chatId, {
+      body: txt,
+      footer: 'Nivel · Shin-MD',
+      buttons: [
+        atajo('🏆 Tabla de niveles', 'lboard', usedPrefix),
+        atajo('👤 Mi perfil', 'profile', usedPrefix),
+        atajo('💰 Mi saldo', 'balance', usedPrefix),
+      ],
+      image: cardBuffer || null,
+      quoted: msg.full || msg,
+      fallbackText: txt,
+      contextInfo: { mentionedJid: [who] },
+    });
     return null;
   }
 };

@@ -347,6 +347,31 @@ const anotar = (comando, donde, esperado, envs, nota = "") =>
     "antes era una foto y un ladrillo de texto con todos los resultados pegados");
 }
 
+// ── Las familias recién cableadas con el kit ──────────────────────
+{
+  const { sendFicha, atajo, enlace, copiar } = await import("../src/lib/ui-kit.js");
+
+  const sock1 = socketFalso();
+  await sendFicha(sock1, GRUPO, {
+    titulo: "Cartera de Rio",
+    filas: [["Cartera", "¥12,400 monedas"], ["Banco", "¥80,000 monedas"], ["Total", "¥92,400 monedas"]],
+    nota: "El dinero de la cartera te lo pueden robar; el del banco no.",
+    botones: [atajo("🎁 Diaria", "daily"), atajo("🏦 Depositar", "deposit"), atajo("🏆 Ranking", "economyboard")],
+  });
+  anotar(".balance", "grupo", "ficha con atajos: los botones lanzan otros comandos", sock1.enviados,
+    "antes era texto suelto y había que escribir el siguiente comando a mano");
+
+  const sock2 = socketFalso();
+  await sendFicha(sock2, GRUPO, {
+    titulo: "WhatsApp Plus 17.60",
+    filas: [["Peso", "78.4 MB"], ["Estado", "demasiado grande para mandarlo por aquí"]],
+    nota: "WhatsApp no deja adjuntar archivos de este tamaño.",
+    botones: [enlace("⬇️ Descargar del origen", "https://apk/x.apk"), copiar("📋 Copiar enlace", "https://apk/x.apk")],
+  });
+  anotar(".apk · .mediafire", "grupo", "cuando el archivo no cabe, el enlace en un botón", sock2.enviados,
+    "antes te dejaba una url larguísima que había que seleccionar a mano");
+}
+
 // ── Los estados del sistema, antes y después ───────────────────────
 //  Lo que más se ve de un bot no son sus tarjetas: son sus "no",
 //  sus "te falta algo" y sus "se rompió". Aquí están, peinados.

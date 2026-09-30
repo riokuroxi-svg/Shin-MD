@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { sendFicha, atajo } from '#lib/ui-kit';
 export default {
   command: ['balance', 'bal', 'coins', 'bank'],
   category: 'economy',
@@ -25,13 +26,23 @@ export default {
     }
     const users = db.getUser(who);
     const total = (user.coins || 0) + (user.bank || 0);
-    const bal = `✿ Usuario \`<${users?.name || who.split('@')[0]}>\`
-
-⛀ Cartera › *¥${user.coins?.toLocaleString() || 0} ${monedas}*
-⚿ Banco › *¥${user.bank?.toLocaleString() || 0} ${monedas}*
-⛁ Total › *¥${total.toLocaleString()} ${monedas}*
-
-> _Para proteger tu dinero, ¡depósitalo en el banco usando ${usedPrefix}deposit!_`;
-    await sock.sendMessage(chatId, { text: bal }, { quoted: msg });
+    // Ficha con atajos: los botones lanzan otros comandos del bot,
+    // así que desde el saldo se llega al banco o al ranking sin
+    // volver a escribir nada.
+    await sendFicha(sock, chatId, {
+      titulo: `Cartera de ${users?.name || who.split('@')[0]}`,
+      filas: [
+        ['Cartera', `¥${user.coins?.toLocaleString() || 0} ${monedas}`],
+        ['Banco', `¥${user.bank?.toLocaleString() || 0} ${monedas}`],
+        ['Total', `¥${total.toLocaleString()} ${monedas}`],
+      ],
+      nota: 'El dinero de la cartera te lo pueden robar; el del banco no.',
+      botones: [
+        atajo('🎁 Diaria', 'daily', usedPrefix),
+        atajo('🏦 Depositar', 'deposit', usedPrefix),
+        atajo('🏆 Ranking', 'economyboard', usedPrefix),
+      ],
+      quoted: msg.full || msg,
+    });
   }
 };
