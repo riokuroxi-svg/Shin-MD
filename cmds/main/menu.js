@@ -304,8 +304,15 @@ export default {
       return null;
     }
 
-    // Variante 2 (o en Grupos de WhatsApp): Formato visual estético garantizado 100% visible
-    if (ctx.isGroup || menuVariant === 2) {
+    // Variante 2: menú en texto, sin botones.
+    //
+    // Antes esta rama se comía TAMBIÉN todos los grupos (`ctx.isGroup ||`),
+    // así que en un grupo el menú nunca llegaba a la tarjeta interactiva:
+    // daba igual cuántos botones se le pusieran, salía como imagen con
+    // texto. Ya no: el grupo recibe la tarjeta igual que un privado, y si
+    // el envío nativo fallara, sendInteractive cae solo a este mismo texto
+    // (va como fallbackText más abajo).
+    if (menuVariant === 2) {
       const finalContent = headerText +
         `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
         readMore +

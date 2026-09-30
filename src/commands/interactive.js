@@ -78,15 +78,25 @@ async function prepareMedia(sock, bufferOrUrl, isVideo = false, gifPlayback = fa
  * meowguck-art/baileys-buttons. Ninguno instalado: solo la forma.
  */
 export function nodosInteractivos(jid, { ai = true } = {}) {
-  const esPrivado = typeof jid === "string" && jid.endsWith("@s.whatsapp.net");
+  // Ojo con el JID: WhatsApp ya usa @lid además de @s.whatsapp.net para
+  // los chats privados. Si solo se mira el viejo, el nodo `bot` no se
+  // pone y el mensaje sale sin la chispita (o no sale).
+  const esPrivado = typeof jid === "string" && (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid"));
   const nodos = [{
     tag: "biz",
-    attrs: {},
-    content: [{
-      tag: "interactive",
-      attrs: { type: "native_flow", v: "1" },
-      content: [{ tag: "native_flow", attrs: { v: "9", name: "mixed" }, content: [] }],
-    }],
+    attrs: {
+      actual_actors: "2",
+      host_storage: "2",
+      privacy_mode_ts: Math.floor(Date.now() / 1000).toString(),
+    },
+    content: [
+      {
+        tag: "interactive",
+        attrs: { type: "native_flow", v: "1" },
+        content: [{ tag: "native_flow", attrs: { v: "9", name: "mixed" } }],
+      },
+      { tag: "quality_control", attrs: { source_type: "third_party" } },
+    ],
   }];
   if (esPrivado && ai) nodos.push({ tag: "bot", attrs: { biz_bot: "1" } });
   return nodos;
@@ -275,9 +285,16 @@ export async function sendInteractive(sock, jid, opts = {}) {
   const hasMedia = !!(imageMessage || videoMessage);
 
   try {
-    const content = {
-      viewOnceMessage: {
-        message: {
+    // ── viewOnce: por qué YA NO se envuelve ────────────────────────
+    // Envolver el interactivo en viewOnceMessage es lo que copia todo
+    // el mundo desde 2022, y es justo lo que hace que los botones
+    // salgan grises o directamente no salgan en WhatsApp Web y en
+    // clientes nuevos. En este mismo bot, `native-reply` (el del .play,
+    // el único cuyos botones SÍ se ven) nunca envolvió nada.
+    // Con SHIN_INTERACTIVO_VIEWONCE=1 se vuelve al envoltorio de antes.
+    const envolver = process.env.SHIN_INTERACTIVO_VIEWONCE === "1";
+
+    const mensajeInteractivo = {
           messageContextInfo: {
             deviceListMetadata: {},
             deviceListMetadataVersion: 2,
@@ -307,9 +324,9 @@ export async function sendInteractive(sock, jid, opts = {}) {
             }),
             contextInfo: opts.contextInfo || undefined,
           }),
-        },
-      },
     };
+
+    const content = envolver ? { viewOnceMessage: { message: mensajeInteractivo } } : mensajeInteractivo;
 
     const msg = generateWAMessageFromContent(jid, content, {
       userJid: sock.user?.id,
