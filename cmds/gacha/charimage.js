@@ -8,6 +8,7 @@ import axios from 'axios';
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
+import { formatTag } from "#lib/gacha-shared";
 
 const FILE_PATH = './core/characters.json';
 
@@ -29,9 +30,6 @@ function getSeriesNameByCharacter(db, id) {
   return Object.entries(db).find(([, serie]) => Array.isArray(serie.characters) && serie.characters.some(c => String(c.id) === String(id)))?.[1]?.name || 'Desconocido';
 }
 
-function formatTag(tag) {
-  return String(tag).trim().toLowerCase().replace(/\s+/g, '_');
-}
 
 function getRefererForUrl(url) {
   if (url.includes('safebooru.org')) return 'https://safebooru.org/';

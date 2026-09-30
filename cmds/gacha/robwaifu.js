@@ -6,6 +6,7 @@
  */
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
+import { flattenCharacters } from "#lib/gacha-shared";
 const charactersFilePath = './core/characters.json';
 
 async function loadCharacters() {
@@ -13,9 +14,6 @@ async function loadCharacters() {
   return JSON.parse(data);
 }
 
-function flattenCharacters(structure) {
-  return Object.values(structure).flatMap(s => Array.isArray(s.characters) ? s.characters : []);
-}
 
 export default {
   command: ['robwaifu', 'robarwaifu'],

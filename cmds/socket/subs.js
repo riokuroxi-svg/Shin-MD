@@ -7,7 +7,6 @@
 import makeWASocket, { Browsers, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, DisconnectReason, jidDecode } from 'baileys';
 import { useSQLiteAuthState } from '#lib/sqliteAuth';
 import NodeCache from 'node-cache';
-import main from '#main';
 import events from '#events';
 import qrcode from 'qrcode';
 import pino from 'pino';
@@ -154,7 +153,6 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
         if ((raw.messageTimestamp * 1000) < bootTime - 15_000) continue;
         if (raw.message.ephemeralMessage) raw.message = raw.message.ephemeralMessage.message;
         const m = await smsg(socks, raw);
-        if (typeof main === 'function') main(socks, m, messages).catch((err) => console.error('[ ✿  ]  Main Sub »', err?.message || err));
       } catch (e) { console.log(e); }
     }
   });

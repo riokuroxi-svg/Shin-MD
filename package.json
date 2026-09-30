@@ -33,13 +33,9 @@
     "#downloader": "./src/services/downloader.js",
     "#cooldown": "./src/commands/middleware/cooldown.js",
     "#permissions": "./src/commands/middleware/permissions.js",
-    "#fastsaver": "./src/services/fastsaver.js",
     "#economy": "./src/services/economy.js",
-    "#games/engine": "./src/games/engine.js",
-    "#main": "./src/services/ginko-stubs.js",
     "#events": "./cmds/events.js",
     "#core/exif": "./src/lib/exif.js",
-    "#system/commands": "./src/lib/commands-data.js",
     "#lib/*": "./src/lib/*.js"
   },
   "engines": {

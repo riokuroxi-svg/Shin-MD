@@ -20,7 +20,6 @@ import {
   boxMain, boxData, boxNotice, state, stateKinds,
   bannerMode, listBanners, pickBanner,
 } from "../src/lib/theme.js";
-import { buildNativeMenuContent } from "../src/lib/native-menu.js";
 import pinCmd, { parseDuracion, buildPinPayload } from "../cmds/group/pin.js";
 import ownerCmd, { buildOwnerVCard, buildOwnerButtons, ownerDigits } from "../cmds/main/owner.js";
 
@@ -113,28 +112,6 @@ test("theme: hay banner de día y de noche, y son imágenes válidas", () => {
       assert.ok(jpeg || png, `${p} no es JPEG/PNG`);
     }
     assert.ok(lista.includes(pickBanner(modo)));
-  }
-});
-
-// ── menú nativo: el bug del viewOnce ────────────────────────────────
-
-const FILAS_DEMO = [{ id: "gkmenu:main", title: "Principal", description: "🏠 Comandos generales · 9 comandos" }];
-
-test("menú nativo: por defecto YA NO se envuelve en viewOnce", () => {
-  delete process.env.GINKO_NATIVE_MENU_VIEW_ONCE;
-  const c = buildNativeMenuContent({ body: "hola", footer: "pie", rows: FILAS_DEMO });
-  assert.equal(c.viewOnceMessage, undefined, "envolver mata los botones en WhatsApp Web");
-  assert.ok(c.interactiveMessage, "el interactivo debe quedar al desnudo");
-  assert.equal(c.interactiveMessage.nativeFlowMessage.buttons[0].name, "single_select");
-});
-
-test("menú nativo: se puede recuperar el comportamiento viejo con =1", () => {
-  process.env.GINKO_NATIVE_MENU_VIEW_ONCE = "1";
-  try {
-    const c = buildNativeMenuContent({ body: "hola", rows: FILAS_DEMO });
-    assert.ok(c.viewOnceMessage?.message?.interactiveMessage, "con =1 debe volver a envolver");
-  } finally {
-    delete process.env.GINKO_NATIVE_MENU_VIEW_ONCE;
   }
 });
 
