@@ -245,3 +245,49 @@ test("las encuestas relayeadas a mano llevan la marca que pone baileys", async (
   assert.deepEqual(nodos, [{ tag: "meta", attrs: { polltype: "creation" } }],
     "sin esta marca el servidor no la registra como encuesta nueva");
 });
+
+// ── 7. Por qué el .menu seguía saliendo en texto dentro del grupo ──
+test("el menú ya no se salta la tarjeta cuando el chat es un grupo", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../cmds/main/menu.js", import.meta.url), "utf8");
+  assert.ok(!src.includes("if (ctx.isGroup || menuVariant === 2)"),
+    "esa condición mandaba TODOS los grupos a la rama de texto, antes de llegar a los botones");
+  assert.ok(src.includes("if (menuVariant === 2)"));
+});
+
+test("el interactivo ya no se envuelve en viewOnce (era lo que mataba los botones)", async () => {
+  const sock = socketFalso();
+  await sendInteractive(sock, "1203630000@g.us", { body: "menú", buttons: [quickReply("A", "a")] });
+  const enviado = sock.enviados[0].message;
+  // Recordatorio: los campos ausentes del proto salen como null, no
+  // como undefined. Por eso se comprueba el valor, no el tipo exacto.
+  assert.ok(!enviado.viewOnceMessage, "envolver deja los botones grises o los borra");
+  assert.ok(enviado.interactiveMessage, "el interactivo va en la raíz, como en native-reply");
+});
+
+test("con SHIN_INTERACTIVO_VIEWONCE=1 se puede volver al envoltorio viejo", async () => {
+  const sock = socketFalso();
+  process.env.SHIN_INTERACTIVO_VIEWONCE = "1";
+  try {
+    await sendInteractive(sock, "1203630000@g.us", { body: "x", buttons: [quickReply("A", "a")] });
+    assert.ok(sock.enviados[0].message.viewOnceMessage?.message?.interactiveMessage);
+  } finally {
+    delete process.env.SHIN_INTERACTIVO_VIEWONCE;
+  }
+});
+
+test("el envoltorio binario es el MISMO que usa el .play, que sí se ve", () => {
+  // native-reply.js es el único camino cuyos botones aparecían en el
+  // grupo del usuario. sendInteractive ahora manda nodos idénticos.
+  const n = nodosInteractivos("1203630000@g.us")[0];
+  assert.equal(n.attrs.actual_actors, "2");
+  assert.equal(n.attrs.host_storage, "2");
+  assert.match(n.attrs.privacy_mode_ts, /^\d+$/);
+  assert.deepEqual(n.content.map((c) => c.tag), ["interactive", "quality_control"]);
+  assert.equal(n.content[1].attrs.source_type, "third_party");
+});
+
+test("los chats @lid también cuentan como privados", () => {
+  assert.equal(nodosInteractivos("52155@lid").length, 2, "WhatsApp ya usa @lid en privados");
+  assert.equal(nodosInteractivos("1203630000@g.us").length, 1);
+});
