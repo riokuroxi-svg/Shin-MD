@@ -7,6 +7,7 @@
 import moment from 'moment-timezone';
 import db from '../../src/services/ginko-db.js';
 import defaultAvatar from '../../lib/default-avatar.js';
+import { generateProfileCard } from '../../src/lib/cardGenerator.js';
 
 const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 0.75;
 
@@ -21,11 +22,10 @@ function xpRange(level, multiplier = global.multiplier || 2) {
 export default {
   command: ['profile', 'perfil'],
   category: 'profile',
-  description: 'Ver tu perfil o el de un usuario.',
+  description: 'Ver tu perfil con tarjeta gráfica personalizada de estadísticas.',
   run: async ({ msg, sock, usedPrefix, command }) => {
     const userId = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     db.setCreate('chat_users', [msg.chat, userId], 'favorite', '');
-    const chat = db.getChat(msg.chat) || {};
     let user = db.getChatUser(msg.chat, userId);    
     if (!user) {
       return msg.reply('✎ El usuario *mencionado* no está *registrado* en el bot');
@@ -34,7 +34,7 @@ export default {
     const settings = db.getSettings(idBot) || {};
     const currency = settings.currency || '';
     const user2 = db.getUser(userId) || {};
-    const name = user2.name || '';
+    const name = user2.name || msg.pushName || 'Usuario';
     const birth = user2.birth || 'Sin especificar';
     const genero = user2.genre || 'Oculto';
     const comandos = user2.usedcommands || '0';    
@@ -44,7 +44,7 @@ export default {
       pareja = partner?.name || 'Alguien';
     }
     const estadoCivil = genero === 'Mujer' ? 'Casada con' : genero === 'Hombre' ? 'Casado con' : 'Casadx con';
-    const desc = user2.description ? `\n${user2.description}` : '';
+    const desc = user2.description ? `\n> ${user2.description}` : '';
     const pasatiempo = user2.pasatiempo ? `${user2.pasatiempo}` : 'No definido';
     const exp = user2.exp || 0;
     const nivel = user2.level || 0;
@@ -68,34 +68,66 @@ export default {
       }
     }    
     const haremCount = ownedIDs.length;
-    const perfil = await sock.profilePictureUrl(userId, 'image').catch(() => defaultAvatar());
+    let perfilUrl = null;
+    try {
+      perfilUrl = await sock.profilePictureUrl(userId, 'image');
+    } catch {
+      perfilUrl = null;
+    }
+
     const allUsers = db.getUser() || [];
     const users = Array.isArray(allUsers) ? allUsers.map(u => ({ ...u, jid: u.id })) : [];
     const sortedLevel = users.sort((a, b) => (b.level || 0) - (a.level || 0));    
+
     try {
-      const rank = sortedLevel.findIndex((u) => u.jid === userId) + 1;
-      const { min, xp } = xpRange(nivel, global.multiplier);
-      const progreso = exp - min;
-      const porcentaje = xp > 0 ? Math.floor((progreso / xp) * 100) : 0;      
-      const profileText = `「✿」 *Perfil* ◢ ${name} ◤${desc}
+      const rankPos = sortedLevel.findIndex((u) => u.jid === userId) + 1;
+      const { min, max, xp } = xpRange(nivel, global.multiplier);
+      const progreso = Math.max(0, exp - min);
+      const porcentaje = xp > 0 ? Math.min(100, Math.floor((progreso / xp) * 100)) : 0;      
+      
+      const userRank = user2.isOwner ? "Owner" : (user2.isPremium ? "Premium" : "Miembro");
 
-♛ Cumpleaños › *${birth}*
-⸙ Pasatiempo › *${pasatiempo}*
-⚥ Género › *${genero}*
-♡ ${estadoCivil} › *${pareja}*
+      let profileText = `╭┈┈⫹⫺ *PERFIL DE USUARIO* ⫹⫺┈┈╮\n`;
+      profileText += `│ ◈ *Nombre* : *${name}*\n`;
+      profileText += `│ ◈ *Rango* : *${userRank}* (Top #${rankPos || 1})\n`;
+      profileText += `│ ◈ *Nivel* : *${nivel}* (${porcentaje}%)\n`;
+      profileText += `│ ◈ *EXP* : *${exp.toLocaleString()}* / ${max.toLocaleString()}\n`;
+      profileText += `│ ◈ *Monedas* : *¥${totalCoins.toLocaleString()} ${currency}*\n`;
+      profileText += `│ ◈ *Harem* : *${haremCount} personajes* (¥${haremValue.toLocaleString()})\n`;
+      profileText += `│ ◈ *Cumpleaños* : *${birth}*\n`;
+      profileText += `│ ◈ *Pasatiempo* : *${pasatiempo}*\n`;
+      profileText += `│ ◈ *Estado Civil* : *${estadoCivil} ${pareja}*\n`;
+      profileText += `│ ◈ *Comandos Usados* : *${comandos.toLocaleString()}*\n`;
+      profileText += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯${desc}${favLine}`;
 
-✿ Nivel › *${nivel}*
-❀ Experiencia › *${exp.toLocaleString()}*
-➨ Progreso › *${progreso} => ${xp}* _(${porcentaje}%)_
-☆ Puesto › *#${rank}*
+      // Generar tarjeta vectorial estética
+      let cardBuffer = null;
+      try {
+        cardBuffer = await generateProfileCard({
+          name,
+          rank: userRank,
+          level: nivel,
+          exp: progreso,
+          maxExp: xp || 100,
+          coins: totalCoins,
+          avatarUrl: perfilUrl,
+        });
+      } catch {}
 
-ꕥ Harem › *${haremCount}*
-♤ Valor total › *${haremValue.toLocaleString()}*${favLine}
-⛁ Coins totales › *¥${totalCoins.toLocaleString()} ${currency}*
-❒ Comandos ejecutados › *${comandos.toLocaleString()}*`;     
-      await sock.sendMessage(msg.chat, { image: { url: perfil }, caption: profileText }, { quoted: msg });
+      if (cardBuffer) {
+        await sock.sendMessage(msg.chat, { image: cardBuffer, caption: profileText }, { quoted: msg });
+        return null;
+      }
+
+      if (perfilUrl) {
+        await sock.sendMessage(msg.chat, { image: { url: perfilUrl }, caption: profileText }, { quoted: msg });
+        return null;
+      }
+
+      await sock.sendMessage(msg.chat, { text: profileText }, { quoted: msg });
+      return null;
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      return msg.reply(`> Error al mostrar el perfil: *${e.message}*`);
     }
-  }
+  },
 };

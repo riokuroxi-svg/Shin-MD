@@ -20,10 +20,12 @@ import {
   getChannelContext,
   getVerifiedQuoted,
 } from "../src/lib/contextBuilder.js";
+import { generateProfileCard, generateWelcomeCard } from "../src/lib/cardGenerator.js";
 import menuCmd from "../cmds/main/menu.js";
 import menucatCmd from "../cmds/main/menucat.js";
 import allmenuCmd from "../cmds/main/allmenu.js";
 import setmenuCmd from "../cmds/owner/setmenu.js";
+import deepseekCmd from "../cmds/utils/deepseek.js";
 
 test("Aesthetic Formatter: toSmallCaps y toMathSansBold", () => {
   const sc = toSmallCaps("hello world");
@@ -54,6 +56,37 @@ test("ContextBuilder: getChannelContext y getVerifiedQuoted", () => {
 
   const vQuote = getVerifiedQuoted({ botName: "Shin-MD" });
   assert.ok(vQuote.message.contactMessage.displayName.includes("Shin-MD"));
+});
+
+test("Canvas Card Generator: generateProfileCard y generateWelcomeCard", async () => {
+  const pCard = await generateProfileCard({
+    name: "RioKuroxi",
+    rank: "OWNER",
+    level: 10,
+    exp: 500,
+    maxExp: 1000,
+    coins: 25000,
+  });
+  assert.ok(Buffer.isBuffer(pCard));
+  assert.ok(pCard.length > 5000);
+
+  const wCard = await generateWelcomeCard({
+    groupName: "Shin-MD Community",
+    memberName: "Alex",
+    memberCount: 42,
+  });
+  assert.ok(Buffer.isBuffer(wCard));
+  assert.ok(wCard.length > 5000);
+});
+
+test("DeepSeek AI Command: maneja argumentos vacíos con guía explicativa", async () => {
+  let replyText = "";
+  const fakeMsg = {
+    reply: (txt) => { replyText = txt; return true; }
+  };
+  await deepseekCmd.run({ msg: fakeMsg, usedPrefix: ".", command: "deepseek", text: "" });
+  assert.ok(replyText.includes("DEEPSEEK-R1 REASONING"));
+  assert.ok(replyText.includes(".deepseek <pregunta o problema>"));
 });
 
 test("Menu Commands: menucat devuelve catálogo o categoría", async () => {
