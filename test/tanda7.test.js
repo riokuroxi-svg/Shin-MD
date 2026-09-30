@@ -417,3 +417,46 @@ test("laboratorio: las preguntas nuevas también codifican contra el proto real"
     }
   }
 });
+
+// ════════════════════════ DUEÑO CON @lid ════════════════════════
+// WhatsApp ya direcciona muchos remitentes como @lid (X-LID) en vez
+// del número real; baileys 6.7.24 pega el número en key.participantPn.
+// Si el serialize no lo usa, el dueño sale «no reconocido» en grupos.
+
+import { serializeMessage } from "../src/serialize.js";
+
+function mensajeGrupoDeLid(extraKey = {}) {
+  return {
+    key: {
+      remoteJid: "120363000000@g.us",
+      fromMe: false,
+      id: "AX" + Math.floor(Math.random() * 1e5),
+      participant: "101234567890123@lid",
+      ...extraKey,
+    },
+    message: { conversation: ".lab" },
+    messageTimestamp: 1_700_000_000,
+  };
+}
+
+const DUENO = "525574370309@s.whatsapp.net";
+
+test("dueño @lid: con el número pegado (participantPn), SÍ se reconoce", () => {
+  const ctx = serializeMessage(mensajeGrupoDeLid({ participantPn: DUENO }), {});
+  assert.equal(ctx.senderId, DUENO, "hay que usar el número real, no el @lid");
+  assert.equal(ctx.isOwner(DUENO), true, "el dueño debe pasar todos los candados");
+});
+
+test("dueño @lid: sin número pegado cae al @lid y NADIE es dueño (anti-suplantación)", () => {
+  const ctx = serializeMessage(mensajeGrupoDeLid(), {});
+  assert.equal(ctx.senderId, "101234567890123@lid");
+  assert.equal(ctx.isOwner(DUENO), false, "un @lid desconocido no puede pasar por el dueño");
+});
+
+test("dueño @lid: en privado (remoteJid normal) nada cambia", () => {
+  const msg = mensajeGrupoDeLid({ participantPn: DUENO });
+  msg.key = { remoteJid: DUENO, fromMe: false, id: "AX999" };
+  const ctx = serializeMessage(msg, {});
+  assert.equal(ctx.senderId, DUENO);
+  assert.equal(ctx.isOwner(DUENO), true);
+});
