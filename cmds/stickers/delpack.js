@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['delpack'],
   category: 'stickers',
@@ -27,9 +28,9 @@ export default {
       const deletedPack = packs[packIndex]
       packs.splice(packIndex, 1)
       db.setStickersPack(msg.sender, 'packs', packs);
-      msg.reply(`❀ El paquete de stickers \`${deletedPack.name}\` ha sido eliminado.`)
+      await msg.reply(`❀ El paquete de stickers \`${deletedPack.name}\` ha sido eliminado.`)
     } catch (e) {
-      msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   }
 }

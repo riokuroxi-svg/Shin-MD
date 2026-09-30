@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['buyc', 'buycharacter', 'buychar'],
   category: 'gacha',
@@ -72,9 +73,9 @@ export default {
       const compradorGlobal = db.getUser(userId);
       let vendedorNombre = vendedorGlobal?.name?.trim() || venta.user.split('@')[0];
       let compradorNombre = compradorGlobal?.name?.trim() || userId.split('@')[0];
-      msg.reply(`❀ *${venta.name}* ha sido comprado por *${compradorNombre}*!\n> Se han transferido *¥${venta.price.toLocaleString()} ${currency}* a *${vendedorNombre}*`);
+      await msg.reply(`❀ *${venta.name}* ha sido comprado por *${compradorNombre}*!\n> Se han transferido *¥${venta.price.toLocaleString()} ${currency}* a *${vendedorNombre}*`);
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

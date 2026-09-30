@@ -70,7 +70,7 @@ export default {
       await msg.react('✔️');
     } catch (e) {
       await msg.react('❌');
-      msg.reply(`《✧》 Error al buscar la letra.\n> ${e.message}`);
+      await msg.reply(`《✧》 Error al buscar la letra.\n> ${e.message}`);
     }
   },
 };

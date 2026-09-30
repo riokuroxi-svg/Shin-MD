@@ -25,7 +25,7 @@ export default {
         caption: `📱 *QR generado*\n\n> Contenido: ${text.slice(0, 200)}`,
       }, { quoted: msg });
     } catch (e) {
-      msg.reply(`《✧》 No pude generar el QR.\n> ${e.message || 'error'}`);
+      await msg.reply(`《✧》 No pude generar el QR.\n> ${e.message || 'error'}`);
     }
   },
 };

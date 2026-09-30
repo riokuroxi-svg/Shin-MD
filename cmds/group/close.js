@@ -1,4 +1,5 @@
 /**
+import { state } from '#lib/theme';
  * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
  * Copyright (C) 2026 riokuroxi-svg
  * SPDX-License-Identifier: AGPL-3.0-only
@@ -38,7 +39,7 @@ export default {
         await applyAction();
       }
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
   },
 };

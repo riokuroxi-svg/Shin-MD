@@ -8,6 +8,7 @@ import fetch from "node-fetch";
 import * as cheerio from "cheerio";
 import { getBuffer } from "#serialize";
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 export default {
   command: ["xvideos"],
@@ -42,7 +43,7 @@ export default {
       const caption = `乂 ¡XVIDEOS - SEARCH! 乂\n\n${list}\n\n> » Usa directamente la URL de uno de los vídeos para descargarlo.`;
       await sock.sendMessage(msg.chat, { text: caption }, { quoted: msg });
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
   },
 };

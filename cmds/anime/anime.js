@@ -71,12 +71,12 @@ export default {
       if (m.coverImage?.large) {
         await sock.sendMessage(msg.chat, { image: { url: m.coverImage.large }, caption: txt }, { quoted: msg });
       } else {
-        msg.reply(txt);
+        await msg.reply(txt);
       }
       await msg.react('✔️').catch(() => {});
     } catch (e) {
       await msg.react('❌').catch(() => {});
-      msg.reply(`《✧》 No pude buscar el anime.\n> ${e.message}`);
+      await msg.reply(`《✧》 No pude buscar el anime.\n> ${e.message}`);
     }
   },
 };

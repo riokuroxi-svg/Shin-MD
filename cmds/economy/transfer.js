@@ -7,7 +7,8 @@
 // Transferir monedas a otro usuario
 import { getUserCoins } from "#economy"; import { getDatabase } from "#db";
 export default {
-  name: "transfer", aliases: ["pay","givecoins"], category: "economy", description: "Transferir monedas 💸", cooldown: 5,
+  // "pay" y "givecoins" son de cmds/economy/givecoins.js
+  name: "transfer", aliases: ["transferir", "enviarcoins"], category: "economy", description: "Transferir monedas 💸", cooldown: 5,
   async handler(sock, ctx) {
     if(!ctx.arg||!ctx.mentions?.length) return "💸 .transfer @user <cant>";
     const db=getDatabase(); const currency=db.settings.get("currency")||"🪙";

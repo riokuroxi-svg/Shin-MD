@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['setstickermeta', 'setmeta'],
   category: 'stickers',
@@ -31,7 +32,7 @@ export default {
       db.setUser(msg.sender, 'metadatos2', metadatos02);
       await sock.sendMessage(msg.chat, { text: `✎ Los metadatos de tus stickers se han actualizado correctamente.` }, { quoted: msg });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

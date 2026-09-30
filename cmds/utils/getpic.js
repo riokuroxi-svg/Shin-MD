@@ -1,4 +1,5 @@
 /**
+import { state } from '#lib/theme';
  * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
  * Copyright (C) 2026 riokuroxi-svg
  * SPDX-License-Identifier: AGPL-3.0-only
@@ -20,7 +21,7 @@ export default {
       }
       await sock.sendMessage(msg.chat, { image: { url: img }, caption: null }, { quoted: msg });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

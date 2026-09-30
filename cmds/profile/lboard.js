@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 0.75;
 
 function xpRange(level, multiplier = global.multiplier || 2) {
@@ -53,7 +54,7 @@ export default {
       }
       await sock.sendMessage(msg.chat, { text }, { quoted: msg });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   }
 };

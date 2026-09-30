@@ -110,7 +110,7 @@ export default {
         await msg.reply(txt, { mentions: [who] });
       }
     } catch (e) {
-      msg.reply(`《✧》 No pude consultar el número.\n> ${e.message || 'error'}`);
+      await msg.reply(`《✧》 No pude consultar el número.\n> ${e.message || 'error'}`);
     }
   },
 };

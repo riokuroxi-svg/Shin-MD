@@ -8,6 +8,7 @@ import ws from 'ws';
 import fs from 'fs';
 import db from '../../src/services/ginko-db.js';
 import defaultAvatar from '../../lib/default-avatar.js';
+import { state } from '#lib/theme';
 
 export default {
   command: ['gp', 'groupinfo'],
@@ -93,7 +94,7 @@ export default {
       const mentions = [rawPrimary, mentionOw].filter(Boolean);
       await sock.sendMessage(msg.chat, { text: message.trim(), mentions });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   }
 };

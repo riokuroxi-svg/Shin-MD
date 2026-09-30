@@ -42,7 +42,7 @@ export default {
         fallbackText: cuerpo,
       });
     } catch (e) {
-      msg.reply(`《✧》 Error al acortar.\n> ${e.message || 'error'}`);
+      await msg.reply(`《✧》 Error al acortar.\n> ${e.message || 'error'}`);
     }
   },
 };

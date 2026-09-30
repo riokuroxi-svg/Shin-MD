@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['wshop', 'haremshop', 'tiendawaifus'],
   category: 'gacha',
@@ -59,9 +60,9 @@ export default {
         const valorFinal = character?.value || 0;
         listado.push(`❀ *${venta.name}* (✰ ${valorFinal.toLocaleString()}):\n⛁ Precio » *${precios}*\n❖ Vendedor » *${vendedor}*\nⴵ Expira en » *${d}d ${h}h ${m_}m ${s}s*`);
       }
-      msg.reply(`*☆ HaremShop \`≧◠ᴥ◠≦\`*\n❏ Personajes en venta <${ventas.length}>:\n\n` + listado.join('\n\n') + `\n\n> • Paginá *${page}* de *${totalPaginas}*`);
+      await msg.reply(`*☆ HaremShop \`≧◠ᴥ◠≦\`*\n❏ Personajes en venta <${ventas.length}>:\n\n` + listado.join('\n\n') + `\n\n> • Paginá *${page}* de *${totalPaginas}*`);
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

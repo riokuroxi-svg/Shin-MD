@@ -62,7 +62,8 @@ async function renderTrivia(question, opts, score, qNum, total) {
 
 export default {
   name: "trivia",
-  aliases: ["quiz", "preguntas"],
+  // "quiz" lo usa .encuesta, que hace el quiz NATIVO de WhatsApp
+  aliases: ["preguntas", "trivial"],
   category: "games",
   description: "Juego de preguntas y respuestas 🧠",
   usage: ".trivia",
@@ -115,20 +116,36 @@ async function showQuestion(sock, ctx, state) {
   const q = state.questions[state.current];
   const img = await renderTrivia(q.q, q.opts, state.score, state.current + 1, state.questions.length);
 
-  const buttons = q.opts.map((_, i) =>
-    quickReply(String.fromCharCode(65 + i), `trivia:${i}`)
+  // Los botones llevan la respuesta escrita, no solo la letra. Antes
+  // ponía "A" y "B" a secas: con la hoja desplegable abierta tenías
+  // que adivinar a qué correspondía cada una.
+  const buttons = q.opts.map((texto, i) =>
+    quickReply(`${String.fromCharCode(65 + i)}) ${String(texto).slice(0, 22)}`, `trivia:${i}`)
   );
   buttons.push(quickReply('❌ Salir', 'trivia:stop'));
 
+  // Y la pregunta va en el TEXTO del mensaje, no solo dibujada dentro
+  // de la imagen. El SVG escribe con las fuentes del sistema y en un
+  // teléfono sin ellas la tarjeta sale preciosa… y completamente en
+  // blanco. Eso es justo lo que pasaba: cuatro barras de colores y
+  // ni una letra. La imagen ahora es adorno; lo que se lee, se lee.
+  const cuerpo = [
+    `🧠 *Pregunta ${state.current + 1}/${state.questions.length}*  ·  🏆 ${state.score}`,
+    '',
+    `*${q.q}*`,
+    '',
+    ...q.opts.map((texto, i) => `${String.fromCharCode(65 + i)}) ${texto}`),
+  ].join('\n');
+
   await sendInteractive(sock, ctx.chatId, {
     image: img,
-    body: `🧠 Pregunta ${state.current + 1}/${state.questions.length}`,
+    body: cuerpo,
     footer: '🎮 Trivia · Shin-MD',
     buttons,
     // Son cinco botones (A, B, C, D y salir) y WhatsApp solo dibuja
     // tres: sin la hoja inferior, las dos últimas respuestas
     // desaparecían y no se podían elegir.
-    hoja: { titulo: 'Elige tu respuesta', boton: 'Ver respuestas', divisiones: [4] },
+    hoja: { titulo: q.q.slice(0, 60), boton: 'Ver todas las respuestas', divisiones: [q.opts.length] },
     quoted: ctx.full,
   });
   return null;

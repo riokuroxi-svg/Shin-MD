@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['shop', 'tienda', 'buy', 'comprar', 'inventory', 'inv', 'inventario'],
   category: 'economy',
@@ -124,9 +125,9 @@ export default {
           listado.push(`❀ *${item.name}* (${item.tipo}):\n> ⛁ Precio » *¥${item.price.toLocaleString()} ${currency}*\n> ❖ Descripcion » *${descripcion}*\n> ${durabilidadText}`);
         }
         const mensaje = `*☆ Item Shop \`≧◠ᴥ◠≦\`*\n❏ Objetos disponibles <${itemsDisponibles.length}>:\n\n` + listado.join('\n\n') + `\n\n> • Paginá *${page}* de *${totalPaginas}*`;
-        msg.reply(mensaje);
+        await msg.reply(mensaje);
       } catch (e) {
-        await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+        await msg.reply(state('error', { detail: e.message }));
       }
       return;
     }

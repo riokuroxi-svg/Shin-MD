@@ -63,7 +63,7 @@ export default {
       await msg.react('✔️');
     } catch (e) {
       await msg.react('❌');
-      msg.reply(`《✧》 Error en Deezer.\n> ${e.message}`);
+      await msg.reply(`《✧》 Error en Deezer.\n> ${e.message}`);
     }
   },
 };

@@ -50,6 +50,6 @@ export default {
       .split('')
       .map(c => (c === ' ' ? '/' : MORSE[c] ?? c))
       .join(' ');
-    msg.reply(`📡 *CÓDIGO MORSE*\n\n\`\`\`${out}\`\`\`\n\n_Para decodificar usa: ${usedPrefix}demorse ${out}_`);
+    await msg.reply(`📡 *CÓDIGO MORSE*\n\n\`\`\`${out}\`\`\`\n\n_Para decodificar usa: ${usedPrefix}demorse ${out}_`);
   },
 };

@@ -6,6 +6,7 @@
  */
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 const file = './core/characters.json';
 
@@ -125,7 +126,7 @@ export default {
       db.setChat(chatId, 'timeTrade', Date.now() + 60000);
       await sock.sendMessage(chatId, { text: `「✿」 *${receiverName}*, *${senderName}* te ha enviado una solicitud de intercambio.\n\n✦ [${receiverName}] *${pB.name}* (${valueB.toLocaleString()})\n✦ [${senderName}] *${pA.name}* (${valueA.toLocaleString()})\n\n✐ Para aceptar responde con *aceptar*, la solicitud expira en 60 segundos.`, mentions: [userId, receiverId] }, { quoted: msg });
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
   }
 };

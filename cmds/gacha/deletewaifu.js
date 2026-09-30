@@ -6,6 +6,7 @@
  */
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 const charactersFilePath = './core/characters.json';
 
@@ -61,7 +62,7 @@ export default {
       }
       await sock.sendMessage(msg.chat, { text: `❀ *${character.name}* ha sido eliminado de tu lista de reclamados.` }, { quoted: msg });      
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

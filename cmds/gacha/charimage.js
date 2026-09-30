@@ -7,6 +7,7 @@
 import axios from 'axios';
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 const FILE_PATH = './core/characters.json';
 
@@ -92,7 +93,7 @@ export default {
       const buffer = Buffer.from(imgRes.data);
       await sock.sendMessage(msg.chat, { image: buffer, caption: caption }, { quoted: msg });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   }
 };

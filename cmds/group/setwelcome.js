@@ -45,6 +45,6 @@ export default {
     const texto = args.join(' ');
     chat.sWelcome = texto;
     db.setChat(chatId, 'sWelcome', texto);
-    msg.reply(`ꕥ Has establecido el mensaje de bienvenida correctamente.`);
+    await msg.reply(`ꕥ Has establecido el mensaje de bienvenida correctamente.`);
   }
 };

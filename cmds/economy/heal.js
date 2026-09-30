@@ -117,6 +117,6 @@ export default {
     } else if (faltanteStamina > 0) {
       detallesCosto = `\n> Costo stamina: *¥${costoSt.toLocaleString()}*`;
     }    
-    msg.reply(info + detallesCosto + `\n> Salud actual: ${target.health}/100\n> Stamina actual: ${target.stamina}/100`);
+    await msg.reply(info + detallesCosto + `\n> Salud actual: ${target.health}/100\n> Stamina actual: ${target.stamina}/100`);
   }
 };

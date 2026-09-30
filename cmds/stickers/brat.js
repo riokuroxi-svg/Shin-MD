@@ -8,6 +8,7 @@ import axios from 'axios';
 import fs from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { runGuarded } from '#lib/apiBreaker';
+import { state } from '#lib/theme';
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -50,7 +51,7 @@ export default {
       await msg.react('✔️');
     } catch (e) {
       await msg.react('✖️');
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
   }
 };

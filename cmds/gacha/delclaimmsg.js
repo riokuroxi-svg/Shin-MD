@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['delclaimmsg', 'resetclaimmsg'],
   category: 'gacha',
@@ -19,9 +20,9 @@ export default {
       if (user.claimMessage) {
         db.setUser(msg.sender, 'claimMessage', '');
       }      
-      msg.reply('❀ Mensaje de reclamación restablecido.');      
+      await msg.reply('❀ Mensaje de reclamación restablecido.');      
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };
