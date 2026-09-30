@@ -24,6 +24,7 @@ import { fastFetch, globalFetchCache, isYtdlpAvailable, resolveYtdlpBinary } fro
 import { downloadAudioSourceYtdlp, processMp3ForWhatsApp, isMp3Valid } from "#lib/mp3Utils";
 import { getSelectedResponse } from "#lib/interactive-response";
 import { sendNativeQuickReply } from "#lib/native-reply";
+import { buildBottomSheet, buildMessageParams } from "#lib/native-params";
 import { createProgress } from "#lib/progress";
 import { getChannelContext } from "../../src/lib/contextBuilder.js";
 import log from "#logger";
@@ -648,7 +649,7 @@ export default {
         `> ❒ Enlace › ${url}\n\n`;
 
       const caption = usarBotones
-        ? infoTxt + `🟢 *Toca un botón:*\n\n🔵 *Si no funciona, cita el mensaje y escribe:*\n*1* = audio 🎵\n*2* = video 🎬\n*3* = video como doc 📁\n*4* = audio como doc 📄`
+        ? infoTxt + `_Elige abajo. Si tu WhatsApp no pinta los botones, cita este mensaje y escribe *1* (audio) o *2* (vídeo)._`
         : infoTxt + `🟡 *Reacciona:* 👍 = audio 🎵, ❤️ = video 🎬`;
 
       const cardToken = `sn_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -656,6 +657,25 @@ export default {
         { buttonId: `${cardToken}_pa`, buttonText: { displayText: ytdlpDisponible ? "🎵 Audio ⚡" : "🎵 Audio MP3" }, type: 1 },
         { buttonId: `${cardToken}_pv`, buttonText: { displayText: "🎬 Video MP4" }, type: 1 },
       ] : [];
+
+      // Los dos primeros se ven en el chat; el resto vive en la hoja
+      // desplegable. Sin la hoja, WhatsApp se comería los de más.
+      const botonesExtra = usarBotones ? [
+        { text: "📄 Audio como documento", id: `${cardToken}_pad` },
+        { text: "▶️ Abrir en YouTube", url },
+        { text: "📋 Copiar enlace", copy_code: url },
+      ] : [];
+
+      const paramsTarjeta = usarBotones
+        ? buildMessageParams({
+            bottomSheet: buildBottomSheet({
+              inThreadLimit: 2,
+              dividers: [2],
+              listTitle: title.slice(0, 60),
+              buttonTitle: "Más opciones",
+            }),
+          })
+        : "";
 
       const job = {
         cardId: null,
@@ -689,7 +709,11 @@ export default {
           footer: "❦ Shin-MD",
           title: "❦ Shin-MD",
           quoted: ctx.full,
-          buttons: botones.map(b => ({ text: b.buttonText.displayText, id: b.buttonId })),
+          buttons: [
+            ...botones.map(b => ({ text: b.buttonText.displayText, id: b.buttonId })),
+            ...botonesExtra,
+          ],
+          params: paramsTarjeta,
           imageBuffer: imgBuf,
         });
         card = r?.sent ? { key: r.key } : null;

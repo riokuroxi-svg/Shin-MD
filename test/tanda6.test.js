@@ -82,15 +82,23 @@ test("el progreso con pasos manda UN mensaje y lo edita, como antes", async () =
   assert.equal(panel.stepsMetadata.length, 3);
   assert.equal(panel.progressDescription, "Yoasobi · Idol");
 
-  // Regla de oro: toda imagen (o panel) con respaldo en texto.
+  // Regla de oro: toda imagen (o panel) con respaldo en texto. Y ese
+  // texto es la LISTA DE PASOS, no la barra vieja: en grupos WhatsApp
+  // no admite el nodo `bot`, así que puede que el panel no se dibuje
+  // y lo único que quede sea este texto. Tiene que valerse solo.
   const texto = sock.enviados[0].message.extendedTextMessage.text;
-  assert.match(texto, /Descargando audio/);
-  assert.match(texto, /20%/);
+  assert.match(texto, /Yoasobi · Idol/, "lleva de qué va");
+  assert.match(texto, /◐ Buscando/, "el paso en marcha, marcado");
+  assert.match(texto, /○ Descargando/, "y los que faltan");
 
   const edicion = sock.enviados[1].message.protocolMessage;
   assert.equal(edicion.type, 14, "la edición es protocolMessage tipo 14");
   const fin = edicion.editedMessage.messageContextInfo.botMetadata.progressIndicatorMetadata;
   assert.ok(fin.stepsMetadata.every((p) => p.status === 3), "todos los pasos acaban completados");
+  // El cierre también se lee: pasos en ● y el resumen debajo.
+  const textoFinal = edicion.editedMessage.extendedTextMessage.text;
+  assert.match(textoFinal, /● Enviando/);
+  assert.match(textoFinal, /✅ Listo/);
 });
 
 test("si el panel nativo no sale, el progreso vuelve solo a la barra de texto", async () => {
@@ -290,4 +298,37 @@ test("el envoltorio binario es el MISMO que usa el .play, que sí se ve", () => 
 test("los chats @lid también cuentan como privados", () => {
   assert.equal(nodosInteractivos("52155@lid").length, 2, "WhatsApp ya usa @lid en privados");
   assert.equal(nodosInteractivos("1203630000@g.us").length, 1);
+});
+
+// ── 8. El panel de pasos también necesitaba el envoltorio ─────────
+test("el panel de pasos viaja con sus nodos binarios", async () => {
+  const { createProgress } = await import("../src/lib/progress.js");
+  const enGrupo = socketFalso();
+  const p1 = createProgress(enGrupo, "1203630000@g.us", { pasos: [{ titulo: "Uno" }, { titulo: "Dos" }] });
+  await p1.start({ title: "x", pct: 10 });
+  assert.deepEqual(enGrupo.enviados[0].opts.additionalNodes.map((n) => n.tag), ["biz"]);
+
+  const enPrivado = socketFalso();
+  const p2 = createProgress(enPrivado, "52155@s.whatsapp.net", { pasos: [{ titulo: "Uno" }, { titulo: "Dos" }] });
+  await p2.start({ title: "x", pct: 10 });
+  assert.deepEqual(enPrivado.enviados[0].opts.additionalNodes.map((n) => n.tag), ["biz", "bot"],
+    "el nodo bot es el que hace que el cliente lea botMetadata");
+});
+
+test("la hoja inferior de native-params pide has_multiple_buttons", async () => {
+  const { buildBottomSheet, buildMessageParams } = await import("../src/lib/native-params.js");
+  const j = JSON.parse(buildMessageParams({ bottomSheet: buildBottomSheet({ inThreadLimit: 2, buttonTitle: "Más" }) }));
+  assert.equal(j.has_multiple_buttons, true, "sin esto WhatsApp ignora la hoja");
+  assert.equal(j.bottom_sheet.in_thread_buttons_limit, 2);
+  // y sin hoja no se manda nada: un JSON vacío pinta una franja gris
+  assert.equal(buildMessageParams({}), "");
+});
+
+test("la tarjeta del .play ya no pide que cites el mensaje con cuatro números", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../cmds/downloads/play.js", import.meta.url), "utf8");
+  assert.ok(!src.includes("*3* = video como doc"), "aquel bloque de instrucciones sobraba");
+  assert.ok(src.includes("Abrir en YouTube") && src.includes("Copiar enlace"),
+    "la tarjeta estrena botones de enlace y de copiar");
+  assert.ok(src.includes("buildBottomSheet"), "y la hoja para los que no caben");
 });

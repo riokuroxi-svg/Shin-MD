@@ -92,7 +92,12 @@ export function buildBottomSheet({
 export function buildMessageParams({ limitedTimeOffer = null, bottomSheet = null } = {}) {
   const params = {};
   if (limitedTimeOffer) params.limited_time_offer = limitedTimeOffer;
-  if (bottomSheet) params.bottom_sheet = bottomSheet;
+  if (bottomSheet) {
+    params.bottom_sheet = bottomSheet;
+    // Sin esta bandera WhatsApp ignora la hoja y se come los botones
+    // que no caben. Va junto al bottom_sheet, nunca sola.
+    params.has_multiple_buttons = true;
+  }
   if (!Object.keys(params).length) return "";
   return JSON.stringify(params);
 }

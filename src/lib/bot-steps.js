@@ -119,6 +119,36 @@ export function renderPasosTexto(pasos = [], descripcion = "") {
 }
 
 /**
+ * Los mismos nodos binarios que usa `native-reply` (el único camino
+ * cuyos botones se ven de verdad en el móvil). Sin ellos WhatsApp
+ * recibe el panel pero no lo dibuja: se queda solo el texto.
+ *
+ * El nodo `bot` (biz_bot=1) es el que marca el mensaje como "de un
+ * bot", que es justo lo que hace que el cliente se moleste en leer
+ * botMetadata. En grupos WhatsApp no lo admite, así que ahí el panel
+ * puede no pintarse — y por eso el texto de respaldo va SIEMPRE
+ * dentro del mismo mensaje.
+ */
+function nodosDePanel(jid) {
+  const esPrivado = typeof jid === "string" && (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid"));
+  const nodos = [{
+    tag: "biz",
+    attrs: {
+      actual_actors: "2",
+      host_storage: "2",
+      privacy_mode_ts: Math.floor(Date.now() / 1000).toString(),
+    },
+    content: [
+      { tag: "interactive", attrs: { type: "native_flow", v: "1" },
+        content: [{ tag: "native_flow", attrs: { v: "9", name: "mixed" } }] },
+      { tag: "quality_control", attrs: { source_type: "third_party" } },
+    ],
+  }];
+  if (esPrivado) nodos.push({ tag: "bot", attrs: { biz_bot: "1" } });
+  return nodos;
+}
+
+/**
  * Manda el panel. Nunca lanza.
  * @returns {Promise<{sent:boolean, key?:object, error?:any}>}
  */
@@ -134,7 +164,10 @@ export async function sendSteps(sock, jid, datos, { quoted } = {}) {
     });
     if (!generado?.key?.id) throw new Error("no se generó el panel");
 
-    await sock.relayMessage(jid, generado.message, { messageId: generado.key.id });
+    await sock.relayMessage(jid, generado.message, {
+      messageId: generado.key.id,
+      additionalNodes: nodosDePanel(jid),
+    });
     return { sent: true, key: generado.key };
   } catch (error) {
     return { sent: false, error };
@@ -164,7 +197,9 @@ export function createNativeSteps(sock, jid, { quoted = null, minGapMs = 1200, d
 
     try {
       const contenido = buildStepsContent({ texto, descripcion, pasos });
-      await sock.relayMessage(jid, buildStepsEdit(key, contenido, ahora), {});
+      await sock.relayMessage(jid, buildStepsEdit(key, contenido, ahora), {
+        additionalNodes: nodosDePanel(jid),
+      });
       return true;
     } catch {
       return false;
@@ -197,10 +232,16 @@ export function createNativeSteps(sock, jid, { quoted = null, minGapMs = 1200, d
       return pintar(renderPasosTexto(pasos, descripcion));
     },
 
-    /** Cierra el panel con todo hecho. */
-    async finish(texto = "") {
+    /**
+     * Cierra el panel con todo hecho.
+     * @param {string} [texto] Si se pasa, sustituye a la lista de pasos.
+     * @param {object} [op]
+     * @param {string} [op.cola] Línea que se añade al final (el resumen).
+     */
+    async finish(texto = "", { cola = "" } = {}) {
       pasos = pasos.map((p) => ({ ...p, estado: PASO.HECHO }));
-      const ok = await pintar(texto || renderPasosTexto(pasos, descripcion), true);
+      const cuerpo = (texto || renderPasosTexto(pasos, descripcion)) + (cola ? `\n${cola}` : "");
+      const ok = await pintar(cuerpo, true);
       cerrado = true;
       return ok;
     },
