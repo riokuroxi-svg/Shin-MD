@@ -58,49 +58,9 @@ async function prepareMedia(sock, bufferOrUrl, isVideo = false, gifPlayback = fa
   return { imageMessage: null, videoMessage: null };
 }
 
-/**
- * Los NODOS BINARIOS que WhatsApp espera alrededor de un mensaje
- * interactivo. Sin ellos, el servidor acepta el mensaje y el teléfono
- * lo tira a la basura sin dibujar nada: ni error, ni aviso, ni pista.
- *
- * Es justo por esto que los botones "no funcionaban en grupos" y se
- * acabó mandando texto plano: faltaba el envoltorio, no el permiso.
- *
- * Estructura (la misma que emite el cliente oficial):
- *   biz → interactive(type=native_flow, v=1) → native_flow(v=9, name=mixed)
- *   + bot(biz_bot=1)  SOLO en chats privados
- *
- * El nodo `bot` es el que enciende la chispita ✨ de IA en el mensaje;
- * en grupos no se pone (WhatsApp no lo admite ahí).
- *
- * Comprobado contra cuatro paquetes independientes que reproducen el
- * mismo envoltorio: baileys_helpers, flow-buttons, zq_baileys_helper y
- * meowguck-art/baileys-buttons. Ninguno instalado: solo la forma.
- */
-export function nodosInteractivos(jid, { ai = true } = {}) {
-  // Ojo con el JID: WhatsApp ya usa @lid además de @s.whatsapp.net para
-  // los chats privados. Si solo se mira el viejo, el nodo `bot` no se
-  // pone y el mensaje sale sin la chispita (o no sale).
-  const esPrivado = typeof jid === "string" && (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid"));
-  const nodos = [{
-    tag: "biz",
-    attrs: {
-      actual_actors: "2",
-      host_storage: "2",
-      privacy_mode_ts: Math.floor(Date.now() / 1000).toString(),
-    },
-    content: [
-      {
-        tag: "interactive",
-        attrs: { type: "native_flow", v: "1" },
-        content: [{ tag: "native_flow", attrs: { v: "9", name: "mixed" } }],
-      },
-      { tag: "quality_control", attrs: { source_type: "third_party" } },
-    ],
-  }];
-  if (esPrivado && ai) nodos.push({ tag: "bot", attrs: { biz_bot: "1" } });
-  return nodos;
-}
+// El envoltorio binario vive en #lib/wa-nodes: lo comparten todos.
+export { nodosInteractivos } from "#lib/wa-nodes";
+import { nodosInteractivos } from "#lib/wa-nodes";
 
 /**
  * Construye el botón nativo quick_reply.

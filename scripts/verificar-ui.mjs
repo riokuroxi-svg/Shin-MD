@@ -232,6 +232,77 @@ const anotar = (comando, donde, esperado, envs, nota = "") =>
   anotar(".trivia", "grupo", "cinco botones: tres a la vista y dos en la hoja", sock.enviados);
 }
 
+
+// ── .acortar y .tourl: enlaces que se copian de un toque ───────────
+{
+  const { sendInteractive, ctaCopy, ctaUrl } = await import("../src/commands/interactive.js");
+  const sock = socketFalso();
+  await sendInteractive(sock, GRUPO, {
+    body: "🔗 *Enlace acortado:*\n\n> https://tinyurl.com/shinmd\n\n_Original:_ https://github.com/riokuroxi-svg/Shin-MD",
+    footer: "TinyURL · Shin-MD",
+    buttons: [ctaCopy("📋 Copiar el corto", "https://tinyurl.com/shinmd"), ctaUrl("🌐 Abrirlo", "https://tinyurl.com/shinmd")],
+  });
+  anotar(".acortar · .tourl", "grupo", "el enlace, copiable sin seleccionarlo a mano", sock.enviados);
+}
+
+// ── .guardar: rescatar un mensaje temporal ─────────────────────────
+{
+  const { buildKeep, sendNative } = await import("../src/lib/native-actions.js");
+  const sock = socketFalso();
+  await sendNative(sock, GRUPO, buildKeep({ id: "ABC", remoteJid: GRUPO, fromMe: false }));
+  anotar(".guardar", "grupo", "keepInChatMessage: el mensaje deja de caducar", sock.enviados);
+}
+
+// ── .pin: fijar arriba del grupo ───────────────────────────────────
+{
+  const { buildPinPayload } = await import("../cmds/group/pin.js");
+  const sock = socketFalso();
+  await sock.sendMessage(GRUPO, buildPinPayload({ id: "ABC", remoteJid: GRUPO }, { segundos: 604800 }));
+  anotar(".pin", "grupo", "fijado de 7 días (WhatsApp solo admite 24h, 7d o 30d)", sock.enviados);
+}
+
+// ── .evento ────────────────────────────────────────────────────────
+{
+  const { buildEventContent } = await import("../cmds/group/evento.js");
+  const sock = socketFalso();
+  const inicio = new Date(Date.now() + 86400000);
+  await sock.relayMessage(GRUPO, buildEventContent({ nombre: "Noche de trivia", descripcion: "Traed café", inicio }), { messageId: "E1" });
+  anotar(".evento", "grupo", "tarjeta de evento con voy / no voy / quizá", sock.enviados);
+}
+
+// ── .translate ─────────────────────────────────────────────────────
+{
+  const { sendTraduccion } = await import("../src/lib/translate.js");
+  const sock = socketFalso();
+  await sendTraduccion(sock, GRUPO, {
+    original: "Good morning everyone", traduccion: "Buenos días a todos", de: "en", a: "es", fuente: "Google",
+  });
+  anotar(".translate · .autotraducir", "grupo", "tarjeta con el original, la traducción y las banderas", sock.enviados);
+}
+
+// ── .ia / .chatgpt / .deepseek ─────────────────────────────────────
+{
+  const { sendAiResponse } = await import("../src/lib/aiFormatter.js");
+  const sock = socketFalso();
+  await sendAiResponse(sock, GRUPO, {
+    model: "DeepSeek-R1", query: "qué es el protocolo de WhatsApp",
+    answer: "Es el idioma en el que hablan los teléfonos con los servidores de Meta.",
+    latencyMs: 420, senderName: "Rio",
+  });
+  anotar(".ia · .chatgpt · .deepseek", "grupo", "respuesta con copiar, regenerar y limpiar memoria", sock.enviados);
+}
+
+// ── .daily (recompensa diaria) ─────────────────────────────────────
+{
+  const { sendNativeQuickReply } = await import("../src/lib/native-reply.js");
+  const sock = socketFalso();
+  await sendNativeQuickReply({
+    sock, jid: GRUPO, title: "❦ Shin-MD", body: "🎁 Recompensa diaria: 500 monedas", footer: "Vuelve mañana",
+    buttons: [{ text: "💰 Mi saldo", id: "balance" }, { text: "🏆 Ranking", id: "economyboard" }],
+  });
+  anotar(".daily", "grupo", "tarjeta de recompensa con atajos", sock.enviados);
+}
+
 // ── salida ─────────────────────────────────────────────────────────
 const destino = process.argv.includes("--json") ? process.argv[process.argv.indexOf("--json") + 1] : null;
 if (destino) {

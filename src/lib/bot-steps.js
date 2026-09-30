@@ -34,6 +34,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 /** PlanningStepStatus del proto. */
+import { nodosInteractivos } from "#lib/wa-nodes";
 export const PASO = Object.freeze({ PLANEADO: 1, EJECUTANDO: 2, HECHO: 3 });
 
 /** ProtocolMessage.Type.MESSAGE_EDIT */
@@ -129,24 +130,7 @@ export function renderPasosTexto(pasos = [], descripcion = "") {
  * puede no pintarse — y por eso el texto de respaldo va SIEMPRE
  * dentro del mismo mensaje.
  */
-function nodosDePanel(jid) {
-  const esPrivado = typeof jid === "string" && (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid"));
-  const nodos = [{
-    tag: "biz",
-    attrs: {
-      actual_actors: "2",
-      host_storage: "2",
-      privacy_mode_ts: Math.floor(Date.now() / 1000).toString(),
-    },
-    content: [
-      { tag: "interactive", attrs: { type: "native_flow", v: "1" },
-        content: [{ tag: "native_flow", attrs: { v: "9", name: "mixed" } }] },
-      { tag: "quality_control", attrs: { source_type: "third_party" } },
-    ],
-  }];
-  if (esPrivado) nodos.push({ tag: "bot", attrs: { biz_bot: "1" } });
-  return nodos;
-}
+const nodosDePanel = (jid) => nodosInteractivos(jid);
 
 /**
  * Manda el panel. Nunca lanza.

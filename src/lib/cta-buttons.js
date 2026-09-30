@@ -21,6 +21,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { nodosInteractivos } from "#lib/wa-nodes";
 
 export const CTA = Object.freeze({
   RAPIDO: "quick_reply",
@@ -206,7 +207,12 @@ export async function sendCta(sock, jid, datos = {}, { quoted } = {}) {
       quoted,
       timestamp: new Date(),
     });
-    await sock.relayMessage(jid, generado.message, { messageId: generado.key.id });
+    await sock.relayMessage(jid, generado.message, {
+      messageId: generado.key.id,
+      // Sin estos nodos WhatsApp se traga el mensaje y no dibuja los
+      // botones. Lo cazó el verificador: esta tarjeta salía pelada.
+      additionalNodes: nodosInteractivos(jid),
+    });
     return { sent: true, key: generado.key };
   } catch (error) {
     return { sent: false, error };
