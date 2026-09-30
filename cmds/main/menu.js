@@ -24,7 +24,7 @@ import {
   getVerifiedQuoted,
 } from "../../src/lib/contextBuilder.js";
 import { resolveChannel } from "../../src/lib/channel.js";
-import { sendInteractive, singleSelect, quickReply, ctaUrl } from "#interactive";
+import { sendInteractive, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
 import db from "../../src/services/ginko-db.js";
 import { pickBanner } from "#lib/theme";
 
@@ -234,6 +234,46 @@ export default {
       fullCategoriesList += createBracketBox(label, cmdLines, emoji);
     }
 
+    // ── Botonera ──────────────────────────────────────────────────
+    // WhatsApp solo dibuja TRES botones: el cuarto se caía sin avisar.
+    // Ahora los de más viajan en la hoja desplegable (bottom_sheet),
+    // y la lista lleva una primera sección destacada con lo que de
+    // verdad usa la gente, para no obligar a bajar por categorías.
+    const POPULARES = [
+      { cmd: "play", titulo: "🎵 Descargar música", desc: "Pásame un nombre o un enlace" },
+      { cmd: "sticker", titulo: "🖼️ Hacer sticker", desc: "Responde a una foto o vídeo" },
+      { cmd: "traducir", titulo: "🌐 Traducir", desc: "Responde a un mensaje en otro idioma" },
+      { cmd: "ia", titulo: "🤖 Preguntar a la IA", desc: "Escribe tu pregunta" },
+    ];
+    const existentes = new Set();
+    for (const list of cats.values()) for (const c of (list || [])) {
+      existentes.add(c.name);
+      for (const a of (c.aliases || [])) existentes.add(a);
+    }
+    const popularRows = POPULARES
+      .filter(p => existentes.has(p.cmd))
+      .map(p => ({ id: p.cmd, title: p.titulo, description: p.desc }));
+
+    const menuSections = [];
+    if (popularRows.length) {
+      menuSections.push({ title: "Lo más usado", highlight_label: "TOP", rows: popularRows });
+    }
+    menuSections.push({ title: "反魂 · Categorías", rows: categoryRows });
+
+    const menuButtons = [
+      singleSelect("📂 Explorar Categorías", menuSections),
+      quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
+      quickReply("🏓 Ping", "ping"),
+      ctaUrl("📢 Canal Oficial", channelUrl),
+      ctaCopy("📋 Copiar prefijo", prefix),
+      ctaUrl("⭐ Código fuente", "https://github.com/riokuroxi-svg/Shin-MD"),
+    ];
+    const menuHoja = {
+      titulo: "Shin-MD · más opciones",
+      boton: "Ver todo",
+      divisiones: [2],
+    };
+
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
     const banner = getRandomBanner();
     const videoAsset = getVideoAsset();
@@ -256,12 +296,8 @@ export default {
         footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
         video: videoAsset,
         gifPlayback: true,
-        buttons: [
-          singleSelect("📂 Explorar Categorías", [{ title: "反魂 · Categorías", rows: categoryRows }]),
-          quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
-          quickReply("🏓 Ping", "ping"),
-          ctaUrl("📢 Canal Oficial", channelUrl),
-        ],
+        buttons: menuButtons,
+        hoja: menuHoja,
         quoted: ctx.full,
         fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
       });
@@ -307,12 +343,8 @@ export default {
       body: interactiveBody,
       footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
       image: banner,
-      buttons: [
-        singleSelect("📂 Explorar Categorías", [{ title: "反魂 · Categorías", rows: categoryRows }]),
-        quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
-        quickReply("🏓 Ping", "ping"),
-        ctaUrl("📢 Canal Oficial", channelUrl),
-      ],
+      buttons: menuButtons,
+      hoja: menuHoja,
       quoted: ctx.full,
       fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
     });

@@ -7,6 +7,10 @@
 // TTS (Texto a nota de voz) con voz femenina Dalia (Microsoft Edge, GRATIS, sin key).
 // Uso: .tts <texto>
 import { synthesize } from '#lib/edgeTTS';
+// Onda propia: WhatsApp dibuja la rayita plana cuando el audio no
+// trae waveform. Aquí se firma la onda a partir del propio texto, así
+// que cada nota de voz sale con un dibujo distinto y reconocible.
+import { sendVoiceArt } from '#lib/voice-art';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -32,11 +36,21 @@ export default {
       const tmp = path.join(os.tmpdir(), `ginko_tts_${Date.now()}.mp3`);
       fs.writeFileSync(tmp, mp3Buf);
 
-      await sock.sendMessage(msg.chat, {
+      const arte = await sendVoiceArt(sock, msg.chat, {
         audio: { url: tmp },
         mimetype: 'audio/mpeg',
-        ptt: true
-      }, { quoted: msg });
+        patron: 'firma',
+        semilla: raw,
+        quoted: msg.full || msg,
+      });
+      if (!arte.sent) {
+        // Si la onda no sale, la nota de voz se manda igual.
+        await sock.sendMessage(msg.chat, {
+          audio: { url: tmp },
+          mimetype: 'audio/mpeg',
+          ptt: true
+        }, { quoted: msg });
+      }
 
       fs.unlinkSync(tmp);
       await msg.react('✅');

@@ -125,6 +125,10 @@ async function showQuestion(sock, ctx, state) {
     body: `🧠 Pregunta ${state.current + 1}/${state.questions.length}`,
     footer: '🎮 Trivia · Shin-MD',
     buttons,
+    // Son cinco botones (A, B, C, D y salir) y WhatsApp solo dibuja
+    // tres: sin la hoja inferior, las dos últimas respuestas
+    // desaparecían y no se podían elegir.
+    hoja: { titulo: 'Elige tu respuesta', boton: 'Ver respuestas', divisiones: [4] },
     quoted: ctx.full,
   });
   return null;

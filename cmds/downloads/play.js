@@ -458,7 +458,20 @@ async function ejecutarDescarga(sock, job, modo, m) {
   // se queda de recibo con el título y la duración en vez de parpadear.
   // Importante: NO se edita mientras se descarga; el único retoque va
   // DESPUÉS del audio, para no meter ni un segundo de espera antes.
-  const prog = createProgress(sock, chat, { quoted: m });
+  // Panel de pasos NATIVO (el mismo que enseña Meta AI mientras
+  // piensa). Sigue siendo UN mensaje que se edita: mismo coste de
+  // cuota que la barra de antes, pero se ve como parte de WhatsApp.
+  // El texto de la barra clásica viaja dentro del propio mensaje, así
+  // que quien no lo dibuje lo ve exactamente igual que siempre.
+  const prog = createProgress(sock, chat, {
+    quoted: m,
+    descripcion: job.title,
+    pasos: [
+      { titulo: `Buscando el ${tipo}`, detalle: job.title },
+      { titulo: comoDoc ? "Preparando el archivo" : `Descargando ${tipo}` },
+      { titulo: "Enviando" },
+    ],
+  });
   await prog.start({
     title: `Descargando ${tipo}`,
     detail: job.title,

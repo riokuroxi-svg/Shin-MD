@@ -7,6 +7,11 @@
 import axios from 'axios';
 import db from '../../src/services/ginko-db.js';
 import { withLimit } from '#lib/limits';
+// El álbum de verdad: un mensaje padre albumMessage y los medios
+// colgados de él con messageAssociation. Antes este comando llamaba
+// a un método de álbum que NO EXISTE en el bot, así que se caía
+// siempre al catch y no mandaba ni una sola imagen.
+import { sendAlbum } from '#lib/album';
 
 export default {
   command: ['imagen', 'img', 'image'],
@@ -34,8 +39,14 @@ export default {
       if (validResults.length < 2) {
         return sock.reply(msg.chat, `《✧》 Se requieren al menos 2 imágenes válidas para mostrar un álbum.`, msg);
       }
-      const medias = validResults.slice(0, 10).map(r => ({ type: 'image', data: { url: r.url }, caption: `ㅤ۟∩　ׅ　★　ׅ　🅖oogle 🅘mage 🅢earch　ׄᰙ　\n\n${r.title ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Título* › ${r.title}\n` : ''}` + `${r.domain ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Fuente* › ${r.domain}\n` : ''}` + `${r.resolution ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Resolución* › ${r.resolution}\n` : ''}` + `𖣣ֶㅤ֯⌗ ☆  ⬭ *Búsqueda* › ${text}` }));
-      await sock.sendAlbumMessage(msg.chat, medias, { quoted: msg });
+      const medias = validResults.slice(0, 10).map(r => ({ image: { url: r.url }, caption: `ㅤ۟∩　ׅ　★　ׅ　🅖oogle 🅘mage 🅢earch　ׄᰙ　\n\n${r.title ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Título* › ${r.title}\n` : ''}` + `${r.domain ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Fuente* › ${r.domain}\n` : ''}` + `${r.resolution ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Resolución* › ${r.resolution}\n` : ''}` + `𖣣ֶㅤ֯⌗ ☆  ⬭ *Búsqueda* › ${text}` }));
+      const album = await sendAlbum(sock, msg.chat, medias, { quoted: msg.full || msg });
+      if (!album.sent) {
+        // Sin álbum, pero con imágenes: mejor sueltas que nada.
+        for (const medio of medias.slice(0, 5)) {
+          await sock.sendMessage(msg.chat, { image: medio.image, caption: medio.caption }, { quoted: msg.full || msg });
+        }
+      }
     } catch (e) {
       await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
     }

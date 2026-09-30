@@ -28,6 +28,8 @@
 //   · Si el mensaje inicial no se pudo enviar, todo lo demás es un
 //     no-op silencioso.
 // ═══════════════════════════════════════════════════════════════════
+import { createNativeSteps } from "#lib/bot-steps";
+
 
 const LLENO = "▰";
 const VACIO = "▱";
@@ -69,7 +71,20 @@ export function renderProgress({ title, detail = "", pct = null } = {}) {
  * @param {number} [opts.minGapMs=1500] Tiempo mínimo entre ediciones.
  * @returns {{start:Function, update:Function, finish:Function, fail:Function, key:Function, alive:Function}}
  */
-export function createProgress(sock, jid, { quoted = null, minGapMs = 1500 } = {}) {
+export function createProgress(sock, jid, { quoted = null, minGapMs = 1500, pasos = null, descripcion = "" } = {}) {
+  // ── Modo nativo ──────────────────────────────────────────────────
+  // Si el comando pasa la lista de pasos, en vez de la barra de texto
+  // se usa el panel de pasos de WhatsApp (el mismo que enseña Meta AI
+  // mientras piensa): messageContextInfo.botMetadata
+  // .progressIndicatorMetadata, que se actualiza con una edición.
+  //
+  // El panel SIEMPRE lleva dentro el texto de la barra de siempre, así
+  // que en el cliente que no lo dibuje se ve exactamente igual que
+  // antes. Y si el envío nativo falla, se cae solo a la barra clásica.
+  if (Array.isArray(pasos) && pasos.length) {
+    return crearProgresoNativo(sock, jid, { quoted, minGapMs, pasos, descripcion });
+  }
+
   let key = null;
   let ultimo = 0;
   let ultimoTexto = "";
@@ -134,3 +149,65 @@ export function createProgress(sock, jid, { quoted = null, minGapMs = 1500 } = {
 }
 
 export default { createProgress, renderProgress, renderBar };
+
+/**
+ * Panel de pasos nativo con la misma interfaz que createProgress, para
+ * que un comando pase de la barra al panel cambiando una línea.
+ *
+ * El reparto de pasos se hace por porcentaje: con tres pasos, 0-33 es
+ * el primero, 34-66 el segundo y 67+ el tercero.
+ */
+function crearProgresoNativo(sock, jid, { quoted, minGapMs, pasos, descripcion }) {
+  const lista = pasos.map((p) => (typeof p === "string" ? { titulo: p } : p));
+  const panel = createNativeSteps(sock, jid, { quoted, minGapMs, descripcion });
+  let respaldo = null;   // barra clásica si el panel no sale
+  let cerrado = false;
+
+  const indicePorPct = (pct) => {
+    if (!Number.isFinite(pct)) return 0;
+    const n = Math.max(0, Math.min(100, pct));
+    return Math.min(lista.length - 1, Math.floor((n / 100) * lista.length));
+  };
+
+  async function caerARespaldo(datos) {
+    if (respaldo) return respaldo;
+    respaldo = createProgress(sock, jid, { quoted, minGapMs });
+    await respaldo.start(datos);
+    return respaldo;
+  }
+
+  return {
+    async start(datos) {
+      const texto = typeof datos === "string" ? datos : renderProgress(datos);
+      const ok = await panel.start(lista, texto);
+      if (!ok) { await caerARespaldo(datos); return respaldo.key(); }
+      return panel.key();
+    },
+
+    async update(datos) {
+      if (cerrado) return false;
+      if (respaldo) return respaldo.update(datos);
+      const pct = typeof datos === "object" && datos ? datos.pct : null;
+      const detalle = typeof datos === "object" && datos ? datos.detail : "";
+      return panel.avanzar(indicePorPct(pct), detalle ? { detalle } : {});
+    },
+
+    async finish(datos) {
+      cerrado = true;
+      if (respaldo) return respaldo.finish(datos);
+      const texto = typeof datos === "string" ? datos : renderProgress(datos);
+      return panel.finish(texto);
+    },
+
+    async fail(motivo) {
+      cerrado = true;
+      if (respaldo) return respaldo.fail(motivo);
+      return panel.fail(motivo);
+    },
+
+    key() { return respaldo ? respaldo.key() : panel.key(); },
+    alive() { return respaldo ? respaldo.alive() : panel.alive(); },
+    /** Para las pruebas: ¿acabó usando el panel nativo o la barra vieja? */
+    modo() { return respaldo ? "texto" : "nativo"; },
+  };
+}

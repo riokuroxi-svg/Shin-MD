@@ -12,6 +12,12 @@
  */
 if (!global.ginkoRecordatorios) global.ginkoRecordatorios = [];
 
+// Además del temporizador del bot (que se pierde si el bot se
+// reinicia), se ofrece el RECORDATORIO NATIVO de WhatsApp: el botón
+// cta_reminder deja que sea la propia app la que avise. Eso sobrevive
+// a cualquier caída del bot.
+import { sendInteractive, ctaReminder, quickReply } from "#interactive";
+
 export default {
   command: ['recordar', 'recordatorio', 'reminder', 'alarma'],
   category: 'utils',
@@ -48,6 +54,18 @@ export default {
       global.ginkoRecordatorios = global.ginkoRecordatorios.filter(r => r.timer !== timer);
     }, delay);
     global.ginkoRecordatorios.push({ timer, jid, msg: mensaje, mins });
-    msg.reply(`✅ *Recordatorio programado* para dentro de *${mins} min*.\n\n📝 » ${mensaje}`);
+
+    const cuerpo = `✅ *Recordatorio programado* para dentro de *${mins} min*.\n\n📝 » ${mensaje}`;
+    // Un solo mensaje: el aviso de siempre, con el botón nativo encima.
+    await sendInteractive(sock, jid, {
+      body: cuerpo,
+      footer: "Si el bot se reinicia, el recordatorio de WhatsApp sigue en pie.",
+      buttons: [
+        ctaReminder("⏰ Que me avise WhatsApp", "recordatorio"),
+        quickReply("📋 Mis recordatorios", "recordar lista"),
+      ],
+      quoted: msg.full || msg,
+      fallbackText: cuerpo,
+    });
   },
 };
