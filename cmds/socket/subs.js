@@ -173,6 +173,11 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       if (conss !== -1) { global.conns[conss] = socks; } else { global.conns.push(socks); }
       delete reintentos[socks.userId || id];
       console.log(chalk.gray(`[ ✿  ]  SUB-BOT conectado: ${socks.userId}`));
+      
+      // Guardar credenciales de forma inmediata y síncrona
+      clearTimeout(saveCredsTimer);
+      try { await saveCredsDB(); } catch {}
+
       const sentFlagFile = path.join(socks.sessionFolder, 'msg_sent.flag');
       const hasSentMessage = fs.existsSync(sentFlagFile);
       if (msg && socks.isCommand && !hasSentMessage && socks.client && socks.chatId) {
@@ -186,21 +191,37 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       const botId = socks.userId || id;
       const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.reason || 0;
       remove(socks);
+      const isRegistered = Boolean(state.creds?.registered);
       const intentos = reintentos[botId] || 0;
       reintentos[botId] = intentos + 1;
       const delay = backoffDelay(intentos, 4000, 30000, 1500);
+
+      // Si es un sub-bot YA registrado, NUNCA borrar la sesión por cortes de red o reinicios
+      if (isRegistered) {
+        if ([401, 403].includes(reason) && reason === 401 && String(lastDisconnect?.error?.message || '').includes('logged out')) {
+          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Sesión cerrada desde el teléfono. Limpiando.`));
+          try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch {}
+          delete reintentos[botId];
+          return;
+        }
+        console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} reconectando sesión existente en ${Math.round(delay/1000)}s...`));
+        setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
+        return;
+      }
+
+      // Si estaba en fase de pairing (aún no registrado)
       if ([401, 403].includes(reason)) {
         if (intentos < 5) {
-          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Conexión cerrada (código ${reason}) intento ${intentos}/5 → Reintentando en ${Math.round(delay/1000)}s...`));
+          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Pairing en progreso (${reason}) intento ${intentos}/5 → Reintentando en ${Math.round(delay/1000)}s...`));
           setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
         } else {
-          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Falló tras 5 intentos. Eliminando sesión.`));
-          try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (e) { console.error(`[ ✿  ] No se pudo eliminar ${sessionFolder}:`, e); }
+          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Código de pairing expirado. Limpiando temporales.`));
+          try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (e) {}
           delete reintentos[botId];
         }
         return;
       }
-      console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} desconectado (código ${reason}), reconectando en ${Math.round(delay/1000)}s...`));
+      console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} desconectado (${reason}), reconectando en ${Math.round(delay/1000)}s...`));
       setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
     }
 

@@ -210,8 +210,8 @@ export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = 'Gink
   const hasCover = fs.existsSync(coverPath);
   const safeTitle = String(titulo || 'Audio').slice(0, 200);
 
-  // ── Vía rápida: remux para audio local ya limpio ──
-  if (origen === 'local') {
+  // ── Vía rápida: remux para audio limpio o CDN válido ──
+  if (origen === 'local' || origen === 'cdn' || origen === 'turbo-cdn' || isMp3Valid(inputBuffer)) {
     const rapido = await remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secondsHint);
     if (rapido) return rapido;
     console.log('[mp3Utils] remux no válido → recodificación completa de respaldo');
