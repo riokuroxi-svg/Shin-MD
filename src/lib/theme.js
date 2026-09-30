@@ -130,6 +130,62 @@ export function boxNotice(icon, lines = []) {
   return `${icon} ─────────────\n${body}\n─────────────────`;
 }
 
+
+// ── El pase de estilo ───────────────────────────────────────────────
+//  El sistema de diseño estaba montado… y lo usaban 9 comandos de 212.
+//  Los otros 101 seguían con su «《✧》» a mano, cada uno a su manera.
+//  Reescribirlos de uno en uno es pedir que se rompa algo, así que el
+//  pase se da en el punto único de envío: entra texto, sale texto con
+//  la cara de la casa.
+//
+//  Reglas, a propósito cobardes (si hay duda, NO se toca):
+//   · lo que ya usa una caja de la casa se deja tal cual
+//   · lo que lleva bloques de código ``` se deja tal cual
+//   · lo largo (más de 700 letras) se deja: son fichas, no avisos
+//   · solo se reescribe el ADORNO de la primera línea, nunca el texto
+
+/** Adornos que los comandos usaban de propia cosecha. */
+const ADORNOS = /^\s*(《✧》|ꕥ|𖹭 ❀|𖹭|✎|✧|◈|❀|『.*?』|\[!\]|>>)\s*/u;
+
+/** ¿Ya lleva la cara de la casa? */
+export function yaTieneEstilo(texto = "") {
+  return /^[╭┌]|^[^\n]{0,4}─────/.test(texto) || texto.includes("┃ ") || texto.includes("│ ❖");
+}
+
+/** Elige el icono por lo que dice el mensaje, no por lo que traía. */
+function iconoPara(texto = "") {
+  const t = texto.toLowerCase();
+  if (/no se pudo|error|fall|inválid|invalid|no pude|no parece|no es válid/.test(t)) return "❌";
+  if (/solo|permiso|admin|dueñ|owner|bloquead/.test(t)) return "🔒";
+  if (/espera|aguarda|cooldown|demasiado rápido/.test(t)) return "🕐";
+  if (/eliminad|guardad|actualizad|establecid|añadid|listo|hecho/.test(t)) return "✅";
+  if (/responde a|envía|manda|escribe|ejemplo|se usa/.test(t)) return "💡";
+  return "✦";
+}
+
+/**
+ * Da el estilo de la casa a un texto suelto. Pura y sin sorpresas:
+ * si no está segura de mejorar el mensaje, lo devuelve intacto.
+ *
+ * @param {string} texto
+ * @returns {string}
+ */
+export function estilizar(texto) {
+  if (typeof texto !== "string") return texto;
+  const limpio = texto.trim();
+  if (!limpio) return texto;
+  if (limpio.length > 700) return texto;          // fichas y menús: suyos son
+  if (limpio.includes("```")) return texto;        // código: ni tocarlo
+  if (yaTieneEstilo(limpio)) return texto;         // ya es de la casa
+  if (!ADORNOS.test(limpio)) return texto;         // sin adorno: no es un aviso
+
+  const lineas = limpio.replace(ADORNOS, "").split("\n");
+  const cabeza = lineas[0].trim();
+  if (!cabeza) return texto;
+  const resto = lineas.slice(1).map(l => l.trim()).filter(Boolean);
+  return boxNotice(iconoPara(limpio), [cabeza, ...resto]);
+}
+
 // ── Estados del sistema ─────────────────────────────────────────────
 // Antes cada comando redactaba su propio error. Ahora hay UNA forma de
 // decir cada cosa, en español, corta y cálida (nunca "ERROR: invalid
@@ -217,6 +273,7 @@ export default {
   COLORS, CATEGORY_ICONS, BRAND,
   categoryIcon, title, label, kv, note, footer,
   boxMain, boxData, boxNotice,
+  estilizar, yaTieneEstilo,
   state, stateKinds,
   bannerMode, listBanners, pickBanner,
 };
