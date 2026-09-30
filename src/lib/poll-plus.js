@@ -35,6 +35,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { randomBytes } from "node:crypto";
+import { nodosEncuesta } from "#lib/wa-nodes";
 
 /** WhatsApp admite hasta 12 opciones por encuesta. */
 export const MAX_OPCIONES = 12;
@@ -173,7 +174,7 @@ export async function sendQuiz(sock, jid, datos, { quoted } = {}) {
       // baileys marca así las encuestas cuando las manda él; al
       // relayear a mano hay que ponerlo o el servidor no la registra
       // como encuesta nueva y los votos se pierden.
-      additionalNodes: [{ tag: "meta", attrs: { polltype: "creation" } }],
+      additionalNodes: nodosEncuesta(),
     });
     return { sent: true, key: generado.key };
   } catch (error) {
@@ -202,7 +203,7 @@ export async function sendImagePoll(sock, jid, { pregunta, items = [], multiple 
 
     await sock.relayMessage(jid, padre.message, {
       messageId: padre.key.id,
-      additionalNodes: [{ tag: "meta", attrs: { polltype: "creation" } }],
+      additionalNodes: nodosEncuesta(),
     });
 
     let fotos = 0;

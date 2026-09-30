@@ -7,6 +7,7 @@
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import db from '../../src/services/ginko-db.js';
+import { sendInteractive, ctaCopy, ctaUrl } from "#interactive";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -106,14 +107,23 @@ export default {
       const { url, tiempo } = await uploadConReintentos(media, mime);
       const user = db.getUser(msg.sender);
 
-      await sock.reply(msg.chat,
+      const cuerpo =
         `𖹭 ❀ *Upload To URL*\n\n` +
         `ׅ  ׄ  ✿   ׅ り *Enlace ›* ${url}\n` +
         `ׅ  ׄ  ✿   ׅ り *Expira ›* ${tiempo}\n` +
         `ׅ  ׄ  ✿   ׅ り *Peso ›* ${formatBytes(media.length)}\n` +
         `ׅ  ׄ  ✿   ׅ り *Tipo ›* ${(mime.split("/")[1] || "desconocido").toUpperCase()}\n` +
-        `ׅ  ׄ  ✿   ׅ り *Solicitado por ›* ${user?.name || msg.pushName || 'Usuario'}`,
-        msg);
+        `ׅ  ׄ  ✿   ׅ り *Solicitado por ›* ${user?.name || msg.pushName || 'Usuario'}`;
+
+      // El enlace, copiable de un toque: es lo único que el usuario
+      // quiere de este comando y antes había que seleccionarlo a mano.
+      await sendInteractive(sock, msg.chat, {
+        body: cuerpo,
+        footer: `Caduca en ${tiempo}`,
+        buttons: [ctaCopy("📋 Copiar el enlace", url), ctaUrl("🌐 Abrirlo", url)],
+        quoted: msg.full || msg,
+        fallbackText: cuerpo,
+      });
       await msg.react('✔️');
     } catch (e) {
       console.error('[tourl] error:', e);

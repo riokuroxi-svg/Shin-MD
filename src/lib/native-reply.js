@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { nodosInteractivos } from "#lib/wa-nodes";
 
 /**
  * Envío de una tarjeta interactiva nativa con botones (quick_reply, cta_copy, cta_url).
@@ -24,24 +25,9 @@ function isPrivateChat(jid = '') {
   return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
 }
 
-function buildBizNode() {
-  return {
-    tag: 'biz',
-    attrs: {
-      actual_actors: '2',
-      host_storage: '2',
-      privacy_mode_ts: Math.floor(Date.now() / 1000).toString(),
-    },
-    content: [
-      {
-        tag: 'interactive',
-        attrs: { type: 'native_flow', v: '1' },
-        content: [{ tag: 'native_flow', attrs: { v: '9', name: 'mixed' } }],
-      },
-      { tag: 'quality_control', attrs: { source_type: 'third_party' } },
-    ],
-  };
-}
+// El envoltorio vive en #lib/wa-nodes desde que la traducción se
+// quedó sin botones por tener su propia copia a medias.
+const buildBizNode = () => nodosInteractivos("")[0];
 
 /**
  * Envía una tarjeta con botones nativos.

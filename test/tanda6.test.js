@@ -332,3 +332,75 @@ test("la tarjeta del .play ya no pide que cites el mensaje con cuatro números",
     "la tarjeta estrena botones de enlace y de copiar");
   assert.ok(src.includes("buildBottomSheet"), "y la hoja para los que no caben");
 });
+
+// ── 9. Barrido: ningún interactivo puede salir sin envoltorio ─────
+//
+//  Esta es la prueba que faltaba. El verificador pilló que la tarjeta
+//  de traducción se mandaba pelada y por eso sus botones no salían.
+//  Ahora, si alguien añade otro sitio que relaye un interactivo sin
+//  additionalNodes, la suite se queja aquí y no en el móvil de nadie.
+test("todo módulo que relaye un interactivo pasa los nodos binarios", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const dir = new URL("../src/lib/", import.meta.url);
+  const ficheros = (await readdir(dir)).filter((f) => f.endsWith(".js"));
+  const culpables = [];
+
+  for (const f of ficheros) {
+    const src = await readFile(new URL(f, dir), "utf8");
+    const mandaInteractivo = src.includes("interactiveMessage") && src.includes("relayMessage");
+    if (!mandaInteractivo) continue;
+    if (!src.includes("additionalNodes")) culpables.push(f);
+  }
+  assert.deepEqual(culpables, [], "estos mandan botones que nadie va a ver");
+});
+
+test("el envoltorio está definido UNA vez y lo usan todos", async () => {
+  const { readdir, readFile } = await import("node:fs/promises");
+  const dir = new URL("../src/lib/", import.meta.url);
+  const ficheros = (await readdir(dir)).filter((f) => f.endsWith(".js"));
+  const copias = [];
+  for (const f of ficheros) {
+    if (f === "wa-nodes.js") continue;
+    const src = await readFile(new URL(f, dir), "utf8");
+    if (src.includes('tag: "biz"') || src.includes("tag: 'biz'")) copias.push(f);
+  }
+  assert.deepEqual(copias, [],
+    "copiar el envoltorio es cómo se quedó la traducción sin botones");
+});
+
+test("#lib/wa-nodes hace lo que promete", async () => {
+  const { nodosInteractivos, nodosEncuesta, esPrivado } = await import("../src/lib/wa-nodes.js");
+  assert.equal(esPrivado("52155@s.whatsapp.net"), true);
+  assert.equal(esPrivado("52155@lid"), true);
+  assert.equal(esPrivado("1203630000@g.us"), false);
+  assert.equal(nodosInteractivos("1203630000@g.us").length, 1);
+  assert.equal(nodosInteractivos("52155@lid").length, 2);
+  assert.equal(nodosInteractivos("52155@lid", { ai: false }).length, 1);
+  assert.deepEqual(nodosEncuesta(), [{ tag: "meta", attrs: { polltype: "creation" } }]);
+});
+
+// ── 10. Los comandos recién cableados ─────────────────────────────
+test(".guardar arma el keepInChatMessage correcto", async () => {
+  const { puedeGuardarse, caducidadDelMensaje, enPalabras } = await import("../cmds/group/guardar.js");
+  assert.equal(puedeGuardarse(null, 604800).motivo, "sin-cita");
+  assert.equal(puedeGuardarse({ key: { id: "X" } }, 0).motivo, "sin-temporales");
+  assert.equal(puedeGuardarse({ key: { id: "X" } }, 604800).si, true);
+
+  const citado = { key: { id: "X" }, message: { extendedTextMessage: { contextInfo: { expiration: 604800 } } } };
+  assert.equal(caducidadDelMensaje(citado), 604800);
+  assert.equal(enPalabras(604800), "7 días");
+  assert.equal(enPalabras(86400), "24 horas");
+
+  const { buildKeep, GUARDAR } = await import("../src/lib/native-actions.js");
+  assert.equal(buildKeep({ id: "X" }).keepInChatMessage.keepType, GUARDAR.GUARDAR);
+  assert.equal(buildKeep({ id: "X" }, { deshacer: true }).keepInChatMessage.keepType, GUARDAR.DESHACER);
+});
+
+test(".acortar y .tourl entregan el enlace listo para copiar", async () => {
+  const { readFile } = await import("node:fs/promises");
+  for (const f of ["../cmds/utils/acortar.js", "../cmds/utils/tourl.js"]) {
+    const src = await readFile(new URL(f, import.meta.url), "utf8");
+    assert.ok(src.includes("ctaCopy"), f + " debería dejar copiar el enlace");
+    assert.ok(src.includes("fallbackText"), f + " necesita respaldo en texto");
+  }
+});

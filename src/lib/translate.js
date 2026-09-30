@@ -23,6 +23,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 /** Tope de texto por traducción: más que esto lo corta el proveedor. */
+import { nodosInteractivos } from "#lib/wa-nodes";
 export const MAX_TEXTO = 1800;
 /** Tiempo máximo esperando al traductor. */
 export const TIMEOUT_MS = 8000;
@@ -461,7 +462,12 @@ export async function sendTraduccion(sock, jid, datos = {}, { quoted } = {}) {
       quoted,
       timestamp: new Date(),
     });
-    await sock.relayMessage(jid, generado.message, { messageId: generado.key.id });
+    await sock.relayMessage(jid, generado.message, {
+      messageId: generado.key.id,
+      // Sin estos nodos WhatsApp se traga el mensaje y no dibuja los
+      // botones. Lo cazó el verificador: esta tarjeta salía pelada.
+      additionalNodes: nodosInteractivos(jid),
+    });
     return { sent: true, key: generado.key, modo: "tarjeta" };
   } catch (error) {
     try {
