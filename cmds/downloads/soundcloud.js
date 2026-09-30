@@ -13,6 +13,7 @@ import { getChannelContext } from "../../src/lib/contextBuilder.js";
 
 const SC_SEARCH_API = "https://api-mobi.soundcloud.com/search";
 const SC_CLIENT_ID = "KKzJxmw11tYpCs6T24P4uUYhqmjalG6M";
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 function formatDuration(ms) {
   if (!ms) return "0:00";
@@ -25,39 +26,43 @@ function formatDuration(ms) {
 async function searchSoundCloud(query) {
   const res = await axios.get(SC_SEARCH_API, {
     params: { q: query, client_id: SC_CLIENT_ID, limit: 5 },
-    headers: { "User-Agent": "Mozilla/5.0" },
+    headers: { "User-Agent": UA },
     timeout: 10000,
   });
   return res.data?.collection || [];
 }
 
-async function getSoundCloudDownload(url) {
-  // 1. Probar API Vreden SoundCloud
+async function getSoundCloudDirectProgressive(track) {
+  if (!track?.media?.transcodings?.length) return null;
+  const progressive = track.media.transcodings.find(
+    t => t.format?.protocol === "progressive" && (t.format?.mime_type?.includes("mpeg") || t.preset?.includes("mp3"))
+  );
+  if (progressive?.url) {
+    const res = await axios.get(`${progressive.url}?client_id=${SC_CLIENT_ID}`, {
+      headers: { "User-Agent": UA },
+      timeout: 8000,
+    });
+    if (res.data?.url && /^https?:\/\//i.test(res.data.url) && !res.data.url.includes(".m3u8")) {
+      return res.data.url;
+    }
+  }
+  return null;
+}
+
+async function getSoundCloudDownload(url, track = null) {
+  // 1. Probar extracción progresiva directa
+  if (track) {
+    try {
+      const direct = await getSoundCloudDirectProgressive(track);
+      if (direct) return direct;
+    } catch {}
+  }
+
+  // 2. Probar API Vreden SoundCloud
   try {
     const vRes = await axios.get(`https://api.vreden.my.id/api/soundcloud?url=${encodeURIComponent(url)}`, { timeout: 8000 });
     const vUrl = vRes.data?.result?.download_url || vRes.data?.result?.url || vRes.data?.result?.download;
     if (vUrl && /^https?:\/\//i.test(vUrl)) return vUrl;
-  } catch {}
-
-  // 2. Probar Convertico
-  try {
-    const base = "https://convertico.com/";
-    const endpoint = base + "soundcloud-downloader/soundcloud-downloader.php";
-    const headers = {
-      accept: "*/*",
-      origin: base,
-      referer: base + "soundcloud-downloader/",
-      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    };
-    const dlRes = await axios.post(
-      endpoint,
-      new URLSearchParams({ action: "download", url, quality: "192", is_playlist: "0" }),
-      { headers, timeout: 10000 }
-    );
-    const dl = dlRes.data;
-    if (dl?.file_url) {
-      return base + "soundcloud-downloader/" + dl.file_url.split("/").map(encodeURIComponent).join("/");
-    }
   } catch {}
 
   // 3. Probar API Siputzx
@@ -76,7 +81,7 @@ export default {
   category: "downloads",
   description: "Busca y descarga canciones desde SoundCloud ☁️",
   usage: ".playsc <nombre o link>",
-  cooldown: 10,
+  cooldown: 8,
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,
@@ -94,33 +99,42 @@ export default {
     let targetUrl = ctx.arg.trim();
     let trackInfo = null;
 
-    if (!isUrl) {
-      const waitMsg = await sock.sendMessage(ctx.chatId, {
-        text: "⏳ *Buscando en SoundCloud...*\n_" + ctx.arg.slice(0, 40) + "_",
-        contextInfo: channelCtx,
-      }, { quoted: ctx.full });
+    const waitMsg = await sock.sendMessage(ctx.chatId, {
+      text: "⏳ *Buscando en SoundCloud...*\n_" + ctx.arg.slice(0, 40) + "_",
+      contextInfo: channelCtx,
+    }, { quoted: ctx.full });
 
+    const key = waitMsg?.key;
+
+    if (!isUrl) {
       try {
         const results = await searchSoundCloud(ctx.arg);
         if (!results || results.length === 0) {
-          return "❌ No se encontraron resultados en SoundCloud para: *" + ctx.arg + "*";
+          const errTxt = "❌ No se encontraron resultados en SoundCloud para: *" + ctx.arg + "*";
+          if (key) await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key });
+          return null;
         }
         trackInfo = results[0];
         targetUrl = trackInfo.permalink_url;
       } catch (err) {
-        return "❌ Error al buscar en SoundCloud: " + (err.message || err);
+        const errTxt = "❌ Error al buscar en SoundCloud: " + (err.message || err);
+        if (key) await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key });
+        return null;
       }
     }
 
     try {
-      const audioUrl = await getSoundCloudDownload(targetUrl);
+      const audioUrl = await getSoundCloudDownload(targetUrl, trackInfo);
       if (!audioUrl) {
-        return "❌ No se pudo extraer el audio de SoundCloud. Intenta con `.play <nombre>` para buscar en YouTube.";
+        const errTxt = "❌ No se pudo extraer el audio de SoundCloud. Intenta con `.play <nombre>`.";
+        if (key) await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key });
+        return null;
       }
 
       const title = trackInfo?.title || "SoundCloud Audio";
       const uploader = trackInfo?.user?.username || trackInfo?.artist || "SoundCloud";
-      const duration = trackInfo ? formatDuration(trackInfo.duration) : "Audio";
+      const duration = trackInfo ? formatDuration(trackInfo.duration) : "0:00";
+      const trackSeconds = trackInfo?.duration ? Math.round(trackInfo.duration / 1000) : 0;
 
       let caption = `╭┈┈⫹⫺ *SOUNDCLOUD MUSIC* ⫹⫺┈┈╮\n`;
       caption += `│ ◈ *Título* : *${title}*\n`;
@@ -143,16 +157,29 @@ export default {
 
       const safeFileName = title.replace(/[/\\?*:<>|"]/g, "").slice(0, 70) + ".mp3";
 
-      await sock.sendMessage(ctx.chatId, {
+      const audioMsg = await sock.sendMessage(ctx.chatId, {
         audio: { url: audioUrl },
         mimetype: "audio/mpeg",
         fileName: safeFileName,
+        seconds: trackSeconds,
+        ptt: false,
         contextInfo: channelCtx,
       }, { quoted: ctx.full });
 
-      return null;
+      if (key) {
+        try {
+          await sock.sendMessage(ctx.chatId, { text: "✅ *Audio entregado con éxito!*", edit: key }, { _priority: true });
+        } catch {}
+      }
+
+      return audioMsg ? null : "⚠️ No se pudo enviar el archivo de audio.";
     } catch (err) {
-      return "❌ Error al descargar de SoundCloud: " + (err.message || err);
+      const errTxt = "❌ Error al descargar de SoundCloud: " + (err.message || err);
+      if (key) {
+        try { await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }); } catch {}
+        return null;
+      }
+      return errTxt;
     }
   },
 };
