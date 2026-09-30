@@ -28,6 +28,17 @@ import log from "#logger";
 
 export { getCachedMeta, setCachedMeta, deleteCachedMeta };
 
+/**
+ * B2.2 — ¿Este envío es "ligero"?
+ * Reacciones, borrados y ediciones no crean un mensaje nuevo en el chat
+ * (no notifican al destinatario), así que no deben gastar la cuota diaria
+ * del warm-up. Sí pasan por la cola y respetan el delay anti-ban.
+ * Exportada aparte para poder probarla sin abrir una sesión real.
+ */
+export function esEnvioLigero(content) {
+  return !!(content && (content.react || content.delete || content.edit));
+}
+
 export function connectSocket(engine, opts) {
   opts = opts || {};
   const sessionDir = opts.sessionDir || "./Sessions/Owner";
@@ -150,11 +161,20 @@ export function connectSocket(engine, opts) {
     const origSM = s.sendMessage.bind(s);
     const sendQueue = engine.getSendQueue();
     s.sendMessage = async (j, c, o) => {
+      // B2.2: reacciones, borrados y ediciones NO son mensajes nuevos para
+      // WhatsApp (no generan notificación ni cuentan como "envío masivo"),
+      // así que NO deben gastar la cuota diaria del warm-up. Siguen pasando
+      // por la cola con su delay (el ritmo anti-ban se conserva intacto),
+      // pero ya no agotan el tope diario ni se quedan bloqueadas detrás de
+      // él. Antes, un solo .play gastaba 9 de los 20 envíos del día 0
+      // porque cada reaccion/borrado contaba igual que un audio.
+      const esLigero = esEnvioLigero(c);
       const qo = {
         messageLength: c?.text?.length || 0,
         // B1.4: prioridad por flag explícito (_priority) o por ventana de
         // prioridad activa (comandos priority: .menu/.ping/.owner).
         isPriority: !!(o && o._priority) || sendQueue.inPriority(),
+        countsForQuota: !esLigero,
       };
       if (o) { delete o._priority; } // no fugarse a Baileys
       const r = await sendQueue.enqueue(() => origSM(j, c, o), qo);
