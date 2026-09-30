@@ -63,7 +63,7 @@ export default {
       if (statusMsg?.key) {
         try { await sock.sendMessage(msg.chat, { text: `《✧》 No pude generar la imagen.\n> ${e.message}`, edit: statusMsg.key }); return; } catch (_) {}
       }
-      msg.reply(`《✧》 No pude generar la imagen.\n> ${e.message}`);
+      await msg.reply(`《✧》 No pude generar la imagen.\n> ${e.message}`);
     }
   },
 };

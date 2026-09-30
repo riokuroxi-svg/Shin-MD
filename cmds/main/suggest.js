@@ -48,7 +48,7 @@ export default {
       } catch {}
     }    
     db.setUser(msg.sender, userKey, now + cooldownMs);
-    msg.reply(`《✧》 Gracias por tu *${esReporte ? 'reporte' : 'sugerencia'}*\n\n> Tu mensaje fue enviado correctamente a los moderadores`);
+    await msg.reply(`《✧》 Gracias por tu *${esReporte ? 'reporte' : 'sugerencia'}*\n\n> Tu mensaje fue enviado correctamente a los moderadores`);
   },
 };
 

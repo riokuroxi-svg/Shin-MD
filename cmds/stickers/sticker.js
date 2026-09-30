@@ -11,6 +11,7 @@ import fetch from 'node-fetch';
 import exif from '#core/exif';
 import db from '../../src/services/ginko-db.js';
 import { withLimit } from '#lib/limits';
+import { state } from '#lib/theme';
 const { writeExif } = exif;
 
 export default {
@@ -163,7 +164,7 @@ export default {
         return sock.reply(msg.chat, `《✧》 Por favor, envía una imagen, video, sticker o URL para hacer un sticker.\n> Usa *${usedPrefix + command} -list* para ver formas y efectos`, msg);
       }
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
     })
   }

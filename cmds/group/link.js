@@ -1,4 +1,5 @@
 /**
+import { state } from '#lib/theme';
  * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
  * Copyright (C) 2026 riokuroxi-svg
  * SPDX-License-Identifier: AGPL-3.0-only
@@ -16,7 +17,7 @@ export default {
       const teks = `﹒⌗﹒🌿 .ৎ˚₊‧  Aquí tienes el link del grupo:\n\n𐚁 ֹ ִ \`GROUP LINK\` ! ୧ ֹ ִ🔗\n☘️ \`Solicitado por :\` @${msg.sender.split('@')[0]}\n\n🌱 \`Enlace :\` ${link}`;
       await sock.reply(msg.chat, teks, msg, { mentions: [msg.sender] });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

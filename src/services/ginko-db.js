@@ -36,6 +36,56 @@ function init(d) {
   try { d.exec("ALTER TABLE g_chats ADD COLUMN autotr TEXT DEFAULT ''"); } catch {}
   try { d.exec("ALTER TABLE g_settings ADD COLUMN menu_variant INTEGER DEFAULT 1"); } catch {}
   try { d.exec("ALTER TABLE g_settings ADD COLUMN instagram TEXT DEFAULT 'https://www.instagram.com/__ikg.05'"); } catch {}
+
+  // ── Columnas que el código escribía sin que existieran ──────────
+  //  El SQL se arma pegando el nombre de la columna, así que escribir
+  //  en una que no está no da un error visible: revienta la consulta
+  //  y, dentro de un hook, se lo traga el catch. Eso llevaba tiempo
+  //  pasando en CADA mensaje ("no such column: maxxp") y, de paso,
+  //  dejaba sin funcionar las rachas de la diaria, los avisos del
+  //  grupo, los enfriamientos de pesca/caza/mina/trabajo y media
+  //  gacha. 124 escrituras en 40 comandos.
+  //
+  //  Se declaran aquí, todas juntas, con su tipo y su valor por
+  //  defecto. El ALTER va en try/catch porque en una base ya migrada
+  //  vuelve a lanzarse y no pasa nada.
+  const EXTRAS = {
+    g_users: [
+      ["minxp", "INTEGER DEFAULT 0"], ["maxxp", "INTEGER DEFAULT 0"],
+      ["streak", "INTEGER DEFAULT 0"], ["lastDailyGlobal", "INTEGER DEFAULT 0"],
+      ["weeklyStreak", "INTEGER DEFAULT 0"], ["lastWeeklyGlobal", "INTEGER DEFAULT 0"],
+      ["monthlyStreak", "INTEGER DEFAULT 0"], ["lastMonthlyGlobal", "INTEGER DEFAULT 0"],
+      ["favorite", "TEXT DEFAULT ''"], ["claimMessage", "TEXT DEFAULT ''"],
+      ["lastVote", "INTEGER DEFAULT 0"], ["jointime", "INTEGER DEFAULT 0"],
+    ],
+    g_chat_users: [
+      ["warnings", "INTEGER DEFAULT 0"], ["favorite", "TEXT DEFAULT ''"],
+      ["weapons", "TEXT DEFAULT '{}'"], ["tools", "TEXT DEFAULT '{}'"],
+      ["inventory", "TEXT DEFAULT '{}'"], ["robVictims", "TEXT DEFAULT '[]'"],
+      ["lastdaily", "INTEGER DEFAULT 0"], ["lastweekly", "INTEGER DEFAULT 0"],
+      ["lastmonthly", "INTEGER DEFAULT 0"], ["lastwork", "INTEGER DEFAULT 0"],
+      ["lastfish", "INTEGER DEFAULT 0"], ["lasthunt", "INTEGER DEFAULT 0"],
+      ["lastmine", "INTEGER DEFAULT 0"], ["lastcrime", "INTEGER DEFAULT 0"],
+      ["laststeal", "INTEGER DEFAULT 0"], ["lastslut", "INTEGER DEFAULT 0"],
+      ["lastadventure", "INTEGER DEFAULT 0"], ["lastdungeon", "INTEGER DEFAULT 0"],
+      ["lastcoffer", "INTEGER DEFAULT 0"], ["lastcoinflip", "INTEGER DEFAULT 0"],
+      ["lastroulette", "INTEGER DEFAULT 0"], ["lastslot", "INTEGER DEFAULT 0"],
+      ["lastppt", "INTEGER DEFAULT 0"], ["lastApuesta", "INTEGER DEFAULT 0"],
+      ["lastinvoke", "INTEGER DEFAULT 0"], ["lastClaim", "INTEGER DEFAULT 0"],
+      ["lastRoll", "INTEGER DEFAULT 0"], ["lastrobwaifu", "INTEGER DEFAULT 0"],
+    ],
+    g_chats: [
+      ["sales", "TEXT DEFAULT '{}'"], ["intercambios", "TEXT DEFAULT '{}'"],
+      ["regalosPendientes", "TEXT DEFAULT '{}'"], ["timeTrade", "INTEGER DEFAULT 0"],
+      ["warnLimit", "INTEGER DEFAULT 3"], ["expulsar", "INTEGER DEFAULT 0"],
+    ],
+  };
+  for (const [tabla, columnas] of Object.entries(EXTRAS)) {
+    for (const [nombre, tipo] of columnas) {
+      try { d.exec(`ALTER TABLE ${tabla} ADD COLUMN ${nombre} ${tipo}`); } catch {}
+    }
+  }
+
 }
 
 const mem = new Map();

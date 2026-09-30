@@ -6,6 +6,7 @@
  */
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 const charactersFilePath = './core/characters.json';
 
@@ -71,7 +72,7 @@ export default {
       let receiverName = targetGlobal?.name?.trim() || targetId.split('@')[0];
       await sock.reply(msg.chat, `❀ *${character.name}* ha sido regalado a *${receiverName}* por *${senderName}*.`, msg, { mentions: [targetId] });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

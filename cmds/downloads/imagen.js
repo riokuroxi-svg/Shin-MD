@@ -12,6 +12,7 @@ import { withLimit } from '#lib/limits';
 // a un método de álbum que NO EXISTE en el bot, así que se caía
 // siempre al catch y no mandaba ni una sola imagen.
 import { sendAlbum } from '#lib/album';
+import { state } from '#lib/theme';
 
 export default {
   command: ['imagen', 'img', 'image'],
@@ -48,7 +49,7 @@ export default {
         }
       }
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
     })
   }

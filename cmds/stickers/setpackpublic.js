@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['setpackpublic', 'setpackpub', 'packpublic'],
   category: 'stickers',
@@ -30,9 +31,9 @@ export default {
       pack.spackpublic = 1
       pack.lastModified = Date.now().toString()
       db.setStickersPack(msg.sender, 'packs', packs);
-      msg.reply(`❀ El paquete de stickers \`${pack.name}\` ha sido establecido como público!`)
+      await msg.reply(`❀ El paquete de stickers \`${pack.name}\` ha sido establecido como público!`)
     } catch (e) {
-      msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   }
 }

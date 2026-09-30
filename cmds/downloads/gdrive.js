@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import fetch from 'node-fetch'
+import { state } from '#lib/theme';
 
 export default {
   command: ['drive', 'gdrive'],
@@ -27,7 +28,7 @@ export default {
       const caption = `۟　ꕥ ᩧ　𓈒　ׄ　𝖦oogle 𝖣𝗋𝗂𝗏𝖾　ׅ　✿۟\n\n ׄ ﹙ׅ☆﹚ּ *Nombre* › ${fileName}\n ׄ ﹙ׅ☆﹚ּ *Tamaño* › ${fileSize}\n ׄ ﹙ׅ☆﹚ּ *Tipo* › ${mimetype}\n\n𖣣ֶㅤ֯⌗ ☆  ⬭ *Enlace* › ${url}`      
       await sock.sendMessage(msg.chat, { document: { url: downloadUrl }, mimetype, fileName, caption }, { quoted: msg })      
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`)
+      return msg.reply(state('error', { detail: e.message }))
     }
   }
 }

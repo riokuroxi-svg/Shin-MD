@@ -45,6 +45,6 @@ export default {
     const texto = args.join(' ');
     chat.sGoodbye = texto;
     db.setChat(chatId, 'sGoodbye', texto);
-    msg.reply(`ꕥ Has establecido el mensaje de despedida correctamente.`);
+    await msg.reply(`ꕥ Has establecido el mensaje de despedida correctamente.`);
   }
 };

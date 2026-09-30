@@ -49,7 +49,7 @@ export default {
       await msg.react('✔️');
     } catch (e) {
       await msg.react('❌');
-      msg.reply(`《✧》 Error al consultar GitHub.\n> ${e.message}`);
+      await msg.reply(`《✧》 Error al consultar GitHub.\n> ${e.message}`);
     }
   },
 };

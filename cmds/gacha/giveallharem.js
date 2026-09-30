@@ -6,6 +6,7 @@
  */
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 const file = './core/characters.json';
 
@@ -97,7 +98,7 @@ export default {
       await sock.reply(chatId, `「✿」 *${nameSender}*, ¿confirmas regalar todo tu harem a *${nameTarget}*?\n\n❏ Personajes a transferir: *${list.length}*\n❏ Valor total: *${total.toLocaleString()}*\n\n✐ Para confirmar responde con *aceptar*.\n> Esta acción no se puede deshacer.`, msg, { mentions: [target] });
       pending[realSender] = { sender: realSender, to: target, ids: list.map(c => c.id), value: total, count: list.length, chat: chatId, timeout: setTimeout(() => delete pending[realSender], 60000) };
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
   }
 };

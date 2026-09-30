@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import fetch from 'node-fetch'
+import { state } from '#lib/theme';
 
 export default {
   command: ['twitter', 'x'],
@@ -29,7 +30,7 @@ export default {
         throw new Error('Contenido no soportado.')
       }
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`)
+      await msg.reply(state('error', { detail: e.message }))
     }
   }
 }

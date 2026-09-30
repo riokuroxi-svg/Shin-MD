@@ -69,7 +69,7 @@ export default {
       message = pickRandom(emptyMessages);
     }
     db.setChatUser(msg.chat, msg.sender, 'lastcoffer', now + gap);
-    msg.reply(message);
+    await msg.reply(message);
   }
 };
 

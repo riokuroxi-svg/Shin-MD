@@ -6,6 +6,7 @@
  */
 import fetch from 'node-fetch';
 import defaultAvatar from '../../lib/default-avatar.js';
+import { state } from '#lib/theme';
 
 const regex = /^(?:https:\/\/|git@)github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/i;
 
@@ -71,7 +72,7 @@ export default {
       await msg.react('✔️');
     } catch (e) {
       await msg.react('✖️');
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
   }
 };

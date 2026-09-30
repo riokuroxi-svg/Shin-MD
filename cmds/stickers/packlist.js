@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 const formatDate = (timestamp) => {
   const date = new Date(parseInt(timestamp))
   return date.toLocaleString('es-CO', { timeZone: 'America/Bogota', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
@@ -33,7 +34,7 @@ export default {
       })
       await sock.sendMessage(msg.chat, { text, mentions: [msg.sender] }, { quoted: msg })
     } catch (e) {
-      msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   }
 }

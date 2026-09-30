@@ -63,9 +63,9 @@ export default {
         lineas.push('');
       }
       lineas.push(`_Fuente: CoinGecko_`);
-      msg.reply(lineas.join('\n').trim());
+      await msg.reply(lineas.join('\n').trim());
     } catch (e) {
-      msg.reply(`《✧》 No pude consultar los precios.\n> ${e.message}`);
+      await msg.reply(`《✧》 No pude consultar los precios.\n> ${e.message}`);
     }
   },
 };

@@ -74,8 +74,11 @@ export function buildPinPayload(key, { desfijar = false, segundos = POR_DEFECTO.
 }
 
 export default {
-  name: "pin",
-  aliases: ["fijar", "unpin", "desfijar"],
+  // Ojo: "pin" a secas ya era de Pinterest desde antes. Dos comandos
+  // con el mismo nombre = el segundo no se ejecuta NUNCA, y era este.
+  // Se queda con los nombres que no chocan.
+  name: "fijar",
+  aliases: ["fijarmsg", "desfijar", "unpin", "pinmsg"],
   category: "grupo",
   description: "Fija (o desfija) el mensaje al que respondes, arriba del grupo",
   usage: ".pin 24h  ·  .pin 7d  ·  .pin 30d  ·  .unpin",

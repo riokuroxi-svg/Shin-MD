@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { jidDecode } from 'baileys';
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 export default {
   command: ['logout'],
@@ -33,11 +34,13 @@ export default {
           console.log(`《✧》 Sesión de ${cleanId} eliminada de ${sessionPath}`);
         }
       }, 2000);
-      setTimeout(() => {
-        msg.reply(`《✧》 Sesión finalizada correctamente.\nPuedes reconectarte usando *${usedPrefix}code*`);
+      // El await va dentro de un setTimeout: la flecha tiene que ser
+      // async o es un error de sintaxis (lo cazó el auditor al cargar).
+      setTimeout(async () => {
+        await msg.reply(`《✧》 Sesión finalizada correctamente.\nPuedes reconectarte usando *${usedPrefix}code*`);
       }, 3000);
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['newpack', 'newstickerpack'],
   category: 'stickers',
@@ -26,10 +27,10 @@ export default {
       const newPack = { id: Date.now().toString(), lastModified: Date.now().toString(), name, author: global.stickerBrand || '🍁 Ginko-MD', desc: `Paquete de stickers creado por ${dev}`, stickers: [], spackpublic: 0 }
       packs.push(newPack)
       db.setStickersPack(msg.sender, 'packs', packs)
-      msg.reply(`《✧》El paquete de stickers \`${name}\` ha sido creado exitosamente!
+      await msg.reply(`《✧》El paquete de stickers \`${name}\` ha sido creado exitosamente!
 > Puedes agregar stickers respondiendo a uno usando *${usedPrefix}addsticker ${name}*!`)
     } catch (e) {
-      msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   }
 }

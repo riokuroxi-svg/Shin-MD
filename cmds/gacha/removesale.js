@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 export default {
   command: ['removesale', 'removerventa'],
   category: 'gacha',
@@ -31,9 +32,9 @@ export default {
       }      
       delete chat.sales[idRemove];
       db.setChat(chatId, 'sales', chat.sales);
-      msg.reply(`❀ *${args.join(' ')}* ha sido eliminado de la lista de ventas.`);      
+      await msg.reply(`❀ *${args.join(' ')}* ha sido eliminado de la lista de ventas.`);      
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };

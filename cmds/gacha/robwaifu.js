@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 const charactersFilePath = './core/characters.json';
 
 async function loadCharacters() {
@@ -120,7 +121,7 @@ export default {
       const charName = characterData.name || `ID:${stolenId}`;
       await msg.reply(`❀ *${robberName}* ha robado a *${charName}* del harem de *${targetName}*.`);      
     } catch (e) {
-      return msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      return msg.reply(state('error', { detail: e.message }));
     }
   },
 };

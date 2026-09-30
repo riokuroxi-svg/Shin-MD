@@ -6,6 +6,7 @@
  */
 import fetch from 'node-fetch';
 import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
 
 const symbols = ['(⁠◠⁠‿⁠◕⁠)', '˃͈◡˂͈', '૮(˶ᵔᵕᵔ˶)ა', '(づ｡◕‿‿◕｡)づ', '(✿◡‿◡)', '(꒪⌓꒪)', '(✿✪‿✪｡)', '(*≧ω≦)', '(✧ω◕)', '˃ 𖥦 ˂', '(⌒‿⌒)', '(¬‿¬)', '(✧ω✧)', '✿(◕ ‿◕)✿', 'ʕ•́ᴥ•̀ʔっ', '(ㅇㅅㅇ❀)', '(∩︵∩)', '(✪ω✪)', '(✯◕‿◕✯)', '(•̀ᴗ•́)و ̑̑'];
 function getRandomSymbol() { return symbols[Math.floor(Math.random() * symbols.length)]; }
@@ -90,7 +91,7 @@ const alias = {
   drunk: ['drunk','ebria','ebrio'],
   cold: ['cold'],
   impregnate:['impregnate','preg','preñar','embarazar'],
-  kisscheek: ['kisscheek','beso','besar'],
+  kisscheek: ['kisscheek','beso','besarmejilla'],
   laugh: ['laugh','reír'],
   love: ['love','amor'],
   pout: ['pout','mueca'],
@@ -104,7 +105,7 @@ const alias = {
   smoke: ['smoke','fumar'],
   spit: ['spit','escupir'],
   step: ['step','pisar'],
-  think: ['think','pensar'],
+  think: ['think','pensativo'],
   walk: ['walk','caminar'],
   hug: ['hug','abrazar'],
   kill: ['kill','matar'],
@@ -142,7 +143,7 @@ const alias = {
   snuggle: ['snuggle','acurrucarse'],
   blowkiss: ['blowkiss','besito'],
   trip: ['trip','tropezar'],
-  stare: ['stare','mirar'],
+  stare: ['stare','mirarfijo'],
   sniff: ['sniff','oler'],
   curious: ['curious','curioso','curiosa'],
   thinkhard: ['thinkhard','pensar'],
@@ -151,7 +152,10 @@ const alias = {
 };
 
 export default {
-  command: ['angry','enojado','enojada','bleh','meh','bored','aburrido','aburrida','clap','aplaudir','coffee','cafe','dramatic','drama','drunk','ebria','ebrio','cold','impregnate','preg','preñar','embarazar','kisscheek','beso','besar','laugh','reír','love','amor','pout','mueca','punch','golpear','run','correr','sad','triste','scared','asustado','asustada','seduce','seducir','shy','timido','timida','sleep','dormir','smoke','fumar','spit','escupir','step','pisar','think','pensar','walk','caminar','hug','abrazar','kill','matar','eat','nom','comer','kiss','muak','besar','wink','guiñar','pat','acariciar','happy','feliz','bully','molestar','bite','morder','blush','sonrojarse','wave','saludar','bath','bañarse','smug','presumir','smile','sonreir','highfive','chocar','handhold','tomar','cringe','avergonzarse','asco','bonk','golpe','cry','llorar','lick','lamer','slap','bofetada','dance','bailar','cuddle','acurrucar','sing','cantar','tickle','cosquillas','scream','gritar','push','empujar','nope','nop','jump','saltar','heat','calor','gaming','jugar','draw','dibujar','call','llamar','snuggle','acurrucarse','blowkiss','besito','trip','tropezar','stare','mirar','sniff','oler','curious','curioso','curiosa','thinkhard','pensar','comfort','consolar','peek','mirar'],
+  // Ojo: 'besar', 'pensar' y 'mirar' estaban DOS veces en esta
+  // lista. El cargador se queda con el primero y el segundo no
+  // se ejecuta jamás; por eso algunas reacciones no respondían.
+  command: ['angry','enojado','enojada','bleh','meh','bored','aburrido','aburrida','clap','aplaudir','coffee','cafe','dramatic','drama','drunk','ebria','ebrio','cold','impregnate','preg','preñar','embarazar','kisscheek','beso','besar','laugh','reír','love','amor','pout','mueca','punch','golpear','run','correr','sad','triste','scared','asustado','asustada','seduce','seducir','shy','timido','timida','sleep','dormir','smoke','fumar','spit','escupir','step','pisar','think','pensar','walk','caminar','hug','abrazar','kill','matar','eat','nom','comer','kiss','muak','wink','guiñar','pat','acariciar','happy','feliz','bully','molestar','bite','morder','blush','sonrojarse','wave','saludar','bath','bañarse','smug','presumir','smile','sonreir','highfive','chocar','handhold','tomar','cringe','avergonzarse','asco','bonk','golpe','cry','llorar','lick','lamer','slap','bofetada','dance','bailar','cuddle','acurrucar','sing','cantar','tickle','cosquillas','scream','gritar','push','empujar','nope','nop','jump','saltar','heat','calor','gaming','jugar','draw','dibujar','call','llamar','snuggle','acurrucarse','blowkiss','besito','trip','tropezar','stare','mirar','sniff','oler','curious','curioso','curiosa','thinkhard','comfort','consolar','peek'],
   category: 'anime',
   description: 'Comandos de reacciones de anime.',
   run: async ({ msg, sock, usedPrefix, command }) => {
@@ -170,7 +174,7 @@ export default {
       if (!result) throw new Error('Sin resultado de la API.');
       await sock.sendMessage(msg.chat, { video: { url: result }, gifPlayback: true, caption, mentions: [who, msg.sender] }, { quoted: msg });
     } catch (e) {
-      await msg.reply(`> An unexpected error occurred while executing command *${usedPrefix + command}*. Please try again or contact support if the issue persists.\n> [Error: *${e.message}*]`);
+      await msg.reply(state('error', { detail: e.message }));
     }
   },
 };
