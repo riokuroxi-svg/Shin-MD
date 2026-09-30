@@ -11,6 +11,7 @@
 
 import express from "express";
 import os from "os";
+import fs from "node:fs";
 import crypto from "node:crypto";
 import log from "#logger";
 
@@ -174,8 +175,16 @@ export function createWebServer(engine, opts) {
   });
 
   function close() {
-    try { server.close(); } catch {}
-    log.gray("Web server closed");
+    return new Promise((resolve) => {
+      try {
+        server.close(() => {
+          log.gray("Web server closed");
+          resolve();
+        });
+      } catch {
+        resolve();
+      }
+    });
   }
 
   return { app, server, close, port, host };

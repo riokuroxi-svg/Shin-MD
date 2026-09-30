@@ -19,7 +19,11 @@ import checkPermissions from "#permissions";
 import { parseButtonResponse } from "#interactive";
 import db from "../services/ginko-db.js";
 
-export const BOT_PREFIX = process.env.BOT_PREFIX || ".";
+export const BOT_PREFIXES = process.env.BOT_PREFIX
+  ? (process.env.BOT_PREFIX.includes(",") ? process.env.BOT_PREFIX.split(",").map(p => p.trim()) : [process.env.BOT_PREFIX.trim()])
+  : [".", "/", "#", "!"];
+
+export const BOT_PREFIX = BOT_PREFIXES[0] || ".";
 
 let selfMode = { value: false, ts: 0 };
 function isSelfMode(sock) {
@@ -44,7 +48,7 @@ export function createRouter(engine, opts) {
 
   async function init() {
     commands = await loadCommands();
-    log.success("Router listo — prefijo '" + BOT_PREFIX + "', " + countUnique() + " comandos únicos");
+    log.success("Router listo — prefijos [" + BOT_PREFIXES.join(" ") + "], " + countUnique() + " comandos únicos");
   }
 
   function countUnique() {
@@ -176,17 +180,41 @@ export function createRouter(engine, opts) {
       const ctx = serializeMessage(msg, sock);
       if (!ctx.text || ctx.chatId === "status@broadcast") return;
 
+      // Detectar prefijo
+      let usedPrefix = "";
+      for (const p of BOT_PREFIXES) {
+        if (ctx.text.startsWith(p)) {
+          usedPrefix = p;
+          break;
+        }
+      }
+
+      ctx.usedPrefix = usedPrefix;
+
+      // Log visual en terminal para todo mensaje recibido (estilo Ginko-MD)
+      if (typeof opts.onMessage === "function") {
+        try { opts.onMessage(ctx, usedPrefix); } catch {}
+      }
+
       // ── Ejecutar middlewares 'before' (anti-link, anti-status, afk...) ──
       await runBefores(sock, ctx, msg);
 
-      if (ctx.isBot && !isSelfMode(sock)) return;
-      if (!ctx.text.startsWith(BOT_PREFIX)) return;
+      // Si está en self mode (solo dueño), rechazar a cualquiera que no sea el owner
+      const ownerJid = engine?.getOwnerJid?.();
+      const isOwnerUser = ctx.isOwner ? ctx.isOwner(ownerJid) : false;
+      if (isSelfMode(sock) && !isOwnerUser && !ctx.fromMe) return;
 
-      const raw = ctx.text.slice(BOT_PREFIX.length).trim();
+      // Si no tiene prefijo, no procesar como comando
+      if (!usedPrefix) return;
+
+      // Evitar responder a mensajes propios enviados por el bot que NO son del owner
+      if (ctx.fromMe && !isSelfMode(sock) && !isOwnerUser) return;
+
+      const raw = ctx.text.slice(usedPrefix.length).trim();
       if (!raw) return;
 
       const [nameRaw] = raw.split(/\s+/);
-      const name = nameRaw.toLowerCase();
+      const name = nameRaw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const cmd = getCommand(name);
       if (!cmd) return;
 
@@ -199,6 +227,13 @@ export function createRouter(engine, opts) {
         await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
         return;
       }
+
+      // Simular estado de escritura en tiempo real ("composing")
+      try {
+        if (typeof sock.sendPresenceUpdate === "function") {
+          sock.sendPresenceUpdate("composing", ctx.chatId).catch(() => {});
+        }
+      } catch {}
 
       // Ejecutar
       const start = Date.now();
@@ -220,6 +255,11 @@ export function createRouter(engine, opts) {
         }
       } finally {
         if (usePriority) sendQueue.exitPriority();
+        try {
+          if (typeof sock.sendPresenceUpdate === "function") {
+            sock.sendPresenceUpdate("paused", ctx.chatId).catch(() => {});
+          }
+        } catch {}
       }
     } catch (err) {
       log.error("Router: " + (err.message || err), err);
@@ -229,7 +269,7 @@ export function createRouter(engine, opts) {
     }
   }
 
-  return { init, handle, reload, getCommand, commandList, countUnique, PREFIX: BOT_PREFIX };
+  return { init, handle, reload, getCommand, commandList, countUnique, PREFIX: BOT_PREFIX, PREFIXES: BOT_PREFIXES };
 }
 
 export default createRouter;

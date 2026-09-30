@@ -37,6 +37,7 @@ export function createEngine(opts) {
   function getThrottler() { return throttler; }
   function getSendQueue() { return sendQueue; }
   function getUptime() { return Date.now() - bootTime; }
+  function resetBootTime() { bootTime = Date.now(); }
 
   function transit(newState) {
     const old = getStateName();
@@ -84,7 +85,7 @@ export function createEngine(opts) {
     getState, getStateName, getSock, setSock,
     setOwnerJid, getOwnerJid,
     setGroupCount, getGroupCount,
-    getHealth, getThrottler, getSendQueue, getUptime,
+    getHealth, getThrottler, getSendQueue, getUptime, resetBootTime,
     transit, emit, on, once, shutdown, LIFECYCLE,
     bootTime,
   };

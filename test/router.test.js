@@ -100,3 +100,58 @@ test("router carga .menu con formato", async () => {
   assert.ok(text.includes("SHIN-MD"), "menu contiene nombre");
   assert.ok(text.includes("ping"), "menu lista comandos");
 });
+
+test("router responde a comandos en grupos modernos y con guiones", async () => {
+  const engine = createEngine();
+  const router = await (async () => { const r = createRouter(engine); await r.init(); return r; })();
+  const sock = makeFakeSock();
+
+  // Grupo moderno
+  const groupMsg1 = makeMessage(".ping", {
+    remoteJid: "120363028383838383@g.us",
+    participant: "5215512345678:2@s.whatsapp.net",
+  });
+  await router.handle(sock, groupMsg1);
+  assert.equal(sock.sent.length, 1, "debe responder en grupo moderno");
+  assert.equal(sock.sent[0].jid, "120363028383838383@g.us");
+
+  // Grupo con guión (legacy)
+  const groupMsg2 = makeMessage(".ping", {
+    remoteJid: "5215512345678-16283929@g.us",
+    participant: "5215587654321@s.whatsapp.net",
+  });
+  await router.handle(sock, groupMsg2);
+  assert.equal(sock.sent.length, 2, "debe responder en grupo con guión");
+  assert.equal(sock.sent[1].jid, "5215512345678-16283929@g.us");
+});
+
+test("router responde en grupos cuando el mensaje viene envuelto en viewOnce / ephemeral", async () => {
+  const engine = createEngine();
+  const router = await (async () => { const r = createRouter(engine); await r.init(); return r; })();
+  const sock = makeFakeSock();
+
+  const wrappedMsg = {
+    key: {
+      remoteJid: "120363028383838383@g.us",
+      participant: "5215511223344@s.whatsapp.net",
+      fromMe: false,
+      id: "WRP1",
+    },
+    message: {
+      viewOnceMessageV2: {
+        message: {
+          extendedTextMessage: {
+            text: ".ping",
+          },
+        },
+      },
+    },
+    pushName: "GroupUser",
+    messageTimestamp: Math.floor(Date.now() / 1000),
+  };
+
+  await router.handle(sock, wrappedMsg);
+  assert.equal(sock.sent.length, 1, "debe responder a mensajes desenvueltos");
+  assert.ok(sock.sent[0].content.text.includes("Pong"));
+});
+

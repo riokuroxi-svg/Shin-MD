@@ -15,6 +15,7 @@ import makeWASocket, {
 } from "baileys";
 import { useSQLiteAuthState } from "./auth.js";
 import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "./metaCache.js";
+import { patchGroupMetadata } from "#serialize";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
 import fs from "fs";
@@ -97,7 +98,7 @@ export function connectSocket(engine, opts) {
     const s = makeWASocket({
       version: ver,
       logger: pino({ level: "silent" }),
-      browser: Browsers.ubuntu("Chrome"),
+      browser: Browsers.macOS("Chrome"),
       printQRInTerminal: false,
       auth: {
         creds: state.creds,
@@ -112,7 +113,7 @@ export function connectSocket(engine, opts) {
       keepAliveIntervalMs: 30000,
       connectTimeoutMs: 20000,
       transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
-      emitOwnEvents: false,
+      emitOwnEvents: true,
       msgRetryCounterCache,
       cachedGroupMetadata: async (jid) => getCachedMeta(jid) ?? undefined,
       getMessage: async (key) => {
@@ -123,8 +124,11 @@ export function connectSocket(engine, opts) {
     });
 
     sock = s;
+    patchGroupMetadata(s);
     s.msgRetryCounterCache = msgRetryCounterCache;
     s.ev.on("creds.update", saveCreds);
+    s.ev.on("group-participants.update", ({ id }) => { deleteCachedMeta(id); });
+    s.ev.on("groups.update", (updates) => { for (const u of (updates || [])) deleteCachedMeta(u.id); });
     s.sendText = (j, t, q, o) => s.sendMessage(j, { text: t, ...o }, { quoted: q });
     s.reply = (j, t, q, o) => {
       const content = typeof t === "string" ? { text: t } : (t || {});
@@ -189,12 +193,40 @@ export function connectSocket(engine, opts) {
     s.ev.on("messages.upsert", async ({ messages, type }) => {
       // Señal de vida para el watchdog (la conexión fluye de verdad)
       if (watchdog) watchdog.tick();
-      if (engine.getState() < engine.LIFECYCLE.READY || type !== "notify") return;
+      if (engine.getState() < engine.LIFECYCLE.READY) return;
+      if (!Array.isArray(messages)) return;
       for (const msg of messages) {
         try {
           if (!msg?.message || msg.key?.remoteJid === "status@broadcast") continue;
-          if ((msg.messageTimestamp * 1000) < engine.bootTime - 15000) continue;
-          if (msg.message.ephemeralMessage) msg.message = msg.message.ephemeralMessage.message;
+          // Ignorar mensajes enviados por el código interno del bot (evita bucles)
+          if (msg.key?.fromMe && msg.key?.id && msgStore.has(SK + msg.key.id)) continue;
+          const rawTs = typeof msg.messageTimestamp === "object" && msg.messageTimestamp !== null
+            ? (msg.messageTimestamp.low || Number(msg.messageTimestamp))
+            : Number(msg.messageTimestamp || 0);
+
+          // Descartar únicamente mensajes históricos viejos de hace más de 3 minutos
+          if (rawTs > 0 && (Date.now() - rawTs * 1000) > 180_000) continue;
+
+          // Desenvolver recursivamente wrappers de mensajes (ephemeral, viewOnce, etc.)
+          let inner = msg.message;
+          while (
+            inner?.ephemeralMessage?.message ||
+            inner?.viewOnceMessage?.message ||
+            inner?.viewOnceMessageV2?.message ||
+            inner?.viewOnceMessageV2Extension?.message ||
+            inner?.documentWithCaptionMessage?.message ||
+            inner?.editedMessage?.message
+          ) {
+            inner =
+              inner.ephemeralMessage?.message ||
+              inner.viewOnceMessage?.message ||
+              inner.viewOnceMessageV2?.message ||
+              inner.viewOnceMessageV2Extension?.message ||
+              inner.documentWithCaptionMessage?.message ||
+              inner.editedMessage?.message;
+          }
+          msg.message = inner;
+
           if (msg?.key?.id) {
             msgStore.set(msg.key.remoteJid + ":" + msg.key.id, msg.message);
             if (msgStore.size > SMAX) msgStore.delete(msgStore.keys().next().value);
@@ -218,6 +250,7 @@ export function connectSocket(engine, opts) {
         retries = 0;
         isRestarting = false;
         patientWarned = false;
+        if (typeof engine.resetBootTime === "function") engine.resetBootTime();
         if (Date.now() - lastRestartAt > 60000) restartStreak = 0;
 
         // FORZAR guardado inmediato de credenciales ANTES de que se cierre

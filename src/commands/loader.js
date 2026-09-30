@@ -10,6 +10,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { downloadContentFromMessage } from "baileys";
 import log from "#logger";
 import { isAdmin, userPart, getCachedMeta } from "#serialize";
+import { readMore } from "../lib/formatter.js";
+import { getVerifiedQuoted, getChannelContext } from "../lib/contextBuilder.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CMDS_DIR = path.resolve(__dirname, "../../cmds");
@@ -54,6 +56,11 @@ function wrapGinkoCmd(gk) {
     category: gk.category || "utils",
     description: gk.description || "",
     cooldown: 3,
+    adminOnly: !!(gk.adminOnly || gk.isAdmin),
+    botAdmin: !!(gk.botAdmin || gk.isBotAdmin),
+    ownerOnly: !!(gk.ownerOnly || gk.isOwner),
+    groupOnly: !!(gk.groupOnly || gk.isGroup),
+    priority: !!gk.priority,
     handler: async (sock, ctx, engine) => {
       const full = ctx.full || {};
       let isAdmins = false, isBotAdmins = false, isOwner = false, groupMetadata = null;
@@ -88,20 +95,49 @@ function wrapGinkoCmd(gk) {
         sender: ctx.senderId,
         isGroup: ctx.isGroup,
         text: ctx.text,
+        body: ctx.text,
+        command: mainName,
+        usedPrefix: ctx.usedPrefix || ".",
         pushName: ctx.pushName || full.pushName || "",
         key: full.key || {},
         id: full.key?.id,
         fromMe: full.key?.fromMe,
+        isBotAdmin: isBotAdmins,
+        isAdmin: isAdmins,
+        isOwner: isOwner,
         message: full.message || {},
         msg: directInner || full.message || {},
         mimetype: directInner?.mimetype || "",
         mentionedJid: full.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
         quoted: null,
+        readMore,
         download: () => downloadMediaFromObject(full.message),
         reply: async (content) => {
           if (typeof content === "string")
             return sock.sendMessage(ctx.chatId, { text: content }, { quoted: full });
           return sock.sendMessage(ctx.chatId, content, { quoted: full });
+        },
+        replyVerified: async (content, opts = {}) => {
+          const vQuote = getVerifiedQuoted({ botName: "Shin-MD", sender: ctx.senderId });
+          const payload = typeof content === "string" ? { text: content, ...opts } : { ...content, ...opts };
+          return sock.sendMessage(ctx.chatId, payload, { quoted: vQuote });
+        },
+        replyChannel: async (content, opts = {}) => {
+          const cCtx = getChannelContext({ mentionedJid: [ctx.senderId], ...opts.contextInfo });
+          const payload = typeof content === "string" ? { text: content, contextInfo: cCtx, ...opts } : { ...content, contextInfo: cCtx, ...opts };
+          return sock.sendMessage(ctx.chatId, payload, { quoted: full });
+        },
+        simulateRecording: async (ms = 1000) => {
+          try {
+            await sock.sendPresenceUpdate("recording", ctx.chatId);
+            if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+          } catch {}
+        },
+        simulateTyping: async (ms = 1000) => {
+          try {
+            await sock.sendPresenceUpdate("composing", ctx.chatId);
+            if (ms > 0) await new Promise((r) => setTimeout(r, ms));
+          } catch {}
         },
         react: (emoji) => sock.sendMessage(ctx.chatId, { react: { text: emoji, key: full.key } }),
       };
@@ -136,7 +172,7 @@ function wrapGinkoCmd(gk) {
       try {
         await gk.run({
           msg, sock,
-          usedPrefix: ".",
+          usedPrefix: ctx.usedPrefix || ".",
           text: ctx.arg || "",
           command: mainName,
           args: ctx.args || [],
