@@ -46,6 +46,23 @@ function resumir(env) {
   const inter = m.interactiveMessage || m.viewOnceMessage?.message?.interactiveMessage;
   const salida = { clase: "nativo", nodos: (env.nodos || []).map((n) => n.tag) };
 
+  if (inter?.carouselMessage) {
+    salida.tipo = "carrusel";
+    salida.texto = inter.body?.text || "";
+    salida.pie = inter.footer?.text || "";
+    salida.botones = [];
+    salida.tarjetas = (inter.carouselMessage.cards || []).map((c) => ({
+      titulo: c.header?.title || "",
+      cuerpo: c.body?.text || "",
+      botones: (c.nativeFlowMessage?.buttons || []).map((b) => {
+        let p = {};
+        try { p = JSON.parse(b.buttonParamsJson || "{}"); } catch { /* da igual */ }
+        return { tipo: b.name, texto: p.display_text || "" };
+      }),
+    }));
+    return salida;
+  }
+
   if (inter) {
     const nf = inter.nativeFlowMessage || {};
     salida.tipo = "tarjeta interactiva";
@@ -301,6 +318,33 @@ const anotar = (comando, donde, esperado, envs, nota = "") =>
     buttons: [{ text: "💰 Mi saldo", id: "balance" }, { text: "🏆 Ranking", id: "economyboard" }],
   });
   anotar(".daily", "grupo", "tarjeta de recompensa con atajos", sock.enviados);
+}
+
+// ── .ytsearch: el carrusel ─────────────────────────────────────────
+{
+  const { buildTarjeta, sendCarousel } = await import("../src/lib/carousel.js");
+  const vids = [
+    ["Cunumi - Faraon Love Shady (Video Oficial)", "3:28", "20,127,468", "Faraón Love Shady"],
+    ["Cunumi (Letra)", "3:30", "812,345", "Letras"],
+    ["Cunumi en vivo", "4:02", "99,123", "Conciertos"],
+  ];
+  const sock = socketFalso();
+  await sendCarousel(sock, GRUPO, {
+    texto: "🔎 *cunumi*\n> 3 resultados · pásalos con el dedo",
+    pie: "❦ Shin-MD · 反魂",
+    tarjetas: vids.map(([t, d, v, c], i) => buildTarjeta({
+      titulo: t,
+      cuerpo: `ⴵ *${d}*  ·  ✿ ${v} vistas\n❖ ${c}`,
+      pie: `${i + 1} de ${vids.length}`,
+      botones: [
+        { texto: "⬇️ Descargar", id: ".play https://youtu.be/x" },
+        { texto: "▶️ Ver en YouTube", url: "https://youtu.be/x" },
+        { texto: "📋 Copiar enlace", copiar: "https://youtu.be/x" },
+      ],
+    })),
+  });
+  anotar(".ytsearch", "grupo", "carrusel: 3 tarjetas que se pasan con el dedo", sock.enviados,
+    "antes era una foto y un ladrillo de texto con todos los resultados pegados");
 }
 
 // ── Los estados del sistema, antes y después ───────────────────────
