@@ -245,7 +245,17 @@ async function main() {
   // fuerza el perfil. La fecha se persiste: antes el warm-up se reiniciaba
   // en cada arranque y un número viejo NUNCA se sentía ágil.
   const today = new Date().toISOString().slice(0, 10);
-  let warmupStart = db.settings.get("warmup_start_date");
+  // B2.2: en hostings donde la base de datos NO persiste (redeploy sin volumen,
+  // reinstalar Termux, borrar la carpeta de datos), esta fecha volvía a "hoy"
+  // en cada arranque y el bot quedaba atrapado para siempre en el día 0 del
+  // warm-up = 20 mensajes al día. WARMUP_START_DATE permite fijarla en el .env.
+  const envWarmupStart = (process.env.WARMUP_START_DATE || "").trim();
+  let warmupStart = /^\d{4}-\d{2}-\d{2}$/.test(envWarmupStart)
+    ? envWarmupStart
+    : db.settings.get("warmup_start_date");
+  if (envWarmupStart && !/^\d{4}-\d{2}-\d{2}$/.test(envWarmupStart)) {
+    log.warn("WARMUP_START_DATE ignorada: formato inválido (se espera AAAA-MM-DD)");
+  }
   if (!warmupStart) {
     db.settings.set("warmup_start_date", today);
     warmupStart = today;
@@ -258,9 +268,38 @@ async function main() {
   const throttlerOpts = numberProfile === "veterano"
     ? { baseDelayMs: 700, warmUpDays: 2, warmUpStartDate: warmupStart }
     : { baseDelayMs: 1500, warmUpDays: 7, warmUpStartDate: warmupStart };
-  log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días");
+
+  // B2.2: el tope diario del warm-up ahora es configurable desde .env.
+  // El RITMO entre mensajes (delay + jitter) NO se toca: eso es lo que de
+  // verdad protege del ban. Lo configurable es cuántos mensajes al día.
+  const numEnv = (nombre) => {
+    const v = parseInt(process.env[nombre] || "", 10);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  };
+  const warmupOff = /^(0|off|no|false)$/i.test((process.env.WARMUP || "").trim());
+  if (warmupOff) {
+    throttlerOpts.warmUpStartMsgsPerDay = Number.MAX_SAFE_INTEGER;
+    throttlerOpts.warmUpMaxMsgsPerDay = Number.MAX_SAFE_INTEGER;
+  } else {
+    const iniEnv = numEnv("WARMUP_START_MSGS");
+    const maxEnv = numEnv("WARMUP_MAX_MSGS");
+    const diasEnv = numEnv("WARMUP_DAYS");
+    if (iniEnv) throttlerOpts.warmUpStartMsgsPerDay = iniEnv;
+    if (maxEnv) throttlerOpts.warmUpMaxMsgsPerDay = maxEnv;
+    if (diasEnv) throttlerOpts.warmUpDays = diasEnv;
+    // Coherencia: el tope final nunca puede quedar por debajo del inicial
+    // (si no, getDailyLimit() decrecería con los días: absurdo).
+    const ini = throttlerOpts.warmUpStartMsgsPerDay ?? 20;
+    const max = throttlerOpts.warmUpMaxMsgsPerDay ?? 500;
+    if (max < ini) {
+      throttlerOpts.warmUpMaxMsgsPerDay = ini;
+      log.warn("WARMUP_MAX_MSGS era menor que WARMUP_START_MSGS; se igualó a " + ini);
+    }
+  }
 
   const engine = createEngine({ throttler: throttlerOpts });
+  const warmupStats = engine.getThrottler().getStats();
+  log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días, tope de hoy " + (warmupOff ? "SIN TOPE (WARMUP=off)" : warmupStats.dailyLimit + " mensajes"));
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
   createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });

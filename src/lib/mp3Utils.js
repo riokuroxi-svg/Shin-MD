@@ -20,7 +20,18 @@ import {
 } from '#lib/ytdlp';
 
 const exec = promisify(execFile);
+// Portada embebida en el MP3 (ID3v2 APIC).
+//  · media/covers/*.jpg|png → galería: se elige una AL AZAR por canción.
+//  · media/audio-cover.jpg  → portada única de respaldo (compatibilidad).
+// Si no hay ninguna, el MP3 sale sin portada (nunca revienta).
 const COVER_PATH = path.join(process.cwd(), 'media', 'audio-cover.jpg');
+const COVER_DIR = path.join(process.cwd(), 'media', 'covers');
+const COVER_EXT = /\.(jpe?g|png)$/i;
+// Tope duro: una portada >500KB hace que WhatsApp Android renombre el audio
+// a AUD-xxxx (ver cabecera de este archivo). Las que se pasen, se ignoran.
+const COVER_MAX_BYTES = 500 * 1024;
+const ALBUM_NAME = (process.env.MUSIC_ALBUM_NAME || 'Shin-MD').slice(0, 60);
+const DEFAULT_ARTIST = (process.env.MUSIC_ARTIST_NAME || 'Shin-MD').slice(0, 60);
 let ffmpegDisponible = null;
 
 // ── Resolución de ffmpeg/ffprobe (con auto-descarga si no están) ──────────
@@ -132,16 +143,46 @@ export async function getMp3Duration(filePath) {
   }
 }
 
-// Redimensionar portada en memoria a 500x500 JPEG ~30-50KB con ffmpeg
-// (si no hay ffmpeg, usar la versión ya redimensionada en disco)
+// ── Galería de portadas ──────────────────────────────────────────────
+// Se relee cada 60s para poder agregar/quitar imágenes sin reiniciar el bot.
+let _coverCache = { at: 0, list: [] };
+
+function _esPortadaUsable(p) {
+  try {
+    const st = fs.statSync(p);
+    return st.isFile() && st.size > 0 && st.size <= COVER_MAX_BYTES;
+  } catch { return false; }
+}
+
+/** Lista de portadas disponibles (rutas absolutas). Puede venir vacía. */
+export function listAudioCovers(force = false) {
+  if (!force && Date.now() - _coverCache.at < 60000) return _coverCache.list;
+  const list = [];
+  try {
+    for (const f of fs.readdirSync(COVER_DIR)) {
+      if (!COVER_EXT.test(f)) continue;
+      const p = path.join(COVER_DIR, f);
+      if (_esPortadaUsable(p)) list.push(p);
+    }
+  } catch {}
+  list.sort();
+  // Respaldo: la portada única de siempre
+  if (!list.length && _esPortadaUsable(COVER_PATH)) list.push(COVER_PATH);
+  _coverCache = { at: Date.now(), list };
+  return list;
+}
+
+/** Elige una portada al azar. Devuelve '' si no hay ninguna disponible. */
+export function pickAudioCover() {
+  const list = listAudioCovers();
+  if (!list.length) return '';
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+// Portada ya optimizada en disco (500x500, ~30-55KB). Se elige una al azar
+// por canción para que la galería rote sola.
 async function getOptimizedCover() {
-  // La portada en disco ya fue redimensionada a 500x500 ~33KB
-  if (fs.existsSync(COVER_PATH)) {
-    const stat = fs.statSync(COVER_PATH);
-    // Si la portada en disco es menor de 200KB, usarla directamente (ya está optimizada)
-    if (stat.size < 200 * 1024) return COVER_PATH;
-  }
-  return COVER_PATH;
+  return pickAudioCover();
 }
 
 /**
@@ -171,7 +212,7 @@ async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secon
       '-map_metadata', '-1',
       '-metadata', `title=${safeTitle}`,
       '-metadata', `artist=${artista}`,
-      '-metadata', 'album=Ginko Bot',
+      '-metadata', `album=${ALBUM_NAME}`,
       '-avoid_negative_ts', 'make_zero',
       outPath,
     );
@@ -202,7 +243,7 @@ async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secon
  *   RECODIFICACIÓN completa con libmp3lame (fix del AUD-xxxx).
  * Devuelve { buffer, seconds }
  */
-export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = 'Ginko Bot', bitrateKbps = 128, origen = 'api', secondsHint = 0) {
+export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = DEFAULT_ARTIST, bitrateKbps = 128, origen = 'api', secondsHint = 0) {
   // Verificar ffmpeg una sola vez por proceso; evita pagar `ffmpeg -version` en cada canción.
   if (!(await hasFfmpeg())) return { buffer: inputBuffer, seconds: 0 };
 
@@ -264,7 +305,7 @@ export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = 'Gink
     args.push(
       '-metadata', `title=${safeTitle}`,
       '-metadata', `artist=${artista}`,
-      '-metadata', 'album=Ginko Bot',
+      '-metadata', `album=${ALBUM_NAME}`,
     );
 
     // Asegurar que el MP3 no tenga problemas de timestamps negativos
