@@ -16,7 +16,7 @@ import moment from "moment-timezone";
 import readlineSync from "readline-sync";
 import fs from "fs";
 import path from "path";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "../src/storage/sqlite-compat.js";
 import { createEngine } from "#engine";
 import { connectSocket } from "#socket";
 import { createWatchdog } from "#watchdog";
@@ -279,7 +279,12 @@ async function main() {
   // global.owner y global.mess. Sin definirlos, el primer uso lanza
   // TypeError en runtime (global.owner.map sobre undefined).
   globalThis.owner = ownerNum ? [ownerNum] : [];
-  globalThis.links = { channel: process.env.CHANNEL_LINK || "", support: "" };
+  globalThis.links = {
+    channel: process.env.CHANNEL_LINK || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522",
+    channelCode: process.env.CHANNEL_CODE || "0029VbDVFpSGJP89hfZUe522",
+    channelName: process.env.CHANNEL_NAME || "Shin-MD Official Channel",
+    support: process.env.SUPPORT_LINK || "",
+  };
   globalThis.multiplier = 2;
   globalThis.botname = "Shin-MD";
   globalThis.conns = new Map();

@@ -16,6 +16,7 @@ import makeWASocket, {
 import { useSQLiteAuthState } from "./auth.js";
 import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "./metaCache.js";
 import { patchGroupMetadata } from "#serialize";
+import { resolveChannel } from "../lib/channel.js";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
 import fs from "fs";
@@ -262,6 +263,9 @@ export function connectSocket(engine, opts) {
         engine.emit("connected", s.user);
         log.success("[ ✿ ] Conectado a: " + (s.user?.name || s.user?.id || "?"));
         if (onReady) onReady(s);
+
+        // Resolver metadata del canal oficial en background
+        resolveChannel(s, null).catch(() => {});
 
         // B2.2: log estilo Ginko — "Grupos: X" al conectar, y el dato queda
         // disponible para el panel /health. Con setTimeout para no frenar la
