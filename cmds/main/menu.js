@@ -28,21 +28,53 @@ import { sendInteractive, singleSelect, quickReply, ctaUrl } from "#interactive"
 import db from "../../src/services/ginko-db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BANNER_PATHS = [
-  process.env.MENU_IMAGE,
-  path.resolve(__dirname, "../../assets/banner-default.png"),
-  path.resolve(__dirname, "../../assets/bocchi-banner.png"),
-  path.resolve(__dirname, "../../media/menu.jpg"),
-].filter(Boolean);
 
-let _bannerCache = null;
-function getBanner() {
-  if (_bannerCache) return _bannerCache;
-  for (const p of BANNER_PATHS) {
+/**
+ * Obtiene un banner aleatorio de la colección shuffle o assets por defecto
+ */
+function getRandomBanner() {
+  const shuffleDir = path.resolve(__dirname, "../../assets/image/shuffle");
+  try {
+    if (fs.existsSync(shuffleDir)) {
+      const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
+      if (files.length > 0) {
+        const chosen = files[Math.floor(Math.random() * files.length)];
+        return fs.readFileSync(path.join(shuffleDir, chosen));
+      }
+    }
+  } catch {}
+
+  const fallbackPaths = [
+    process.env.MENU_IMAGE,
+    path.resolve(__dirname, "../../assets/image/anita-landscape.jpg"),
+    path.resolve(__dirname, "../../assets/image/anita.png"),
+    path.resolve(__dirname, "../../assets/banner-default.png"),
+    path.resolve(__dirname, "../../assets/bocchi-banner.png"),
+  ].filter(Boolean);
+
+  for (const p of fallbackPaths) {
     try {
       if (typeof p === "string" && fs.existsSync(p)) {
-        _bannerCache = fs.readFileSync(p);
-        return _bannerCache;
+        return fs.readFileSync(p);
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Obtiene el buffer del video animado para menús gifPlayback
+ */
+function getVideoAsset() {
+  const videoPaths = [
+    process.env.MENU_VIDEO_PATH,
+    path.resolve(__dirname, "../../assets/video/anita-mp4.mp4"),
+  ].filter(Boolean);
+
+  for (const p of videoPaths) {
+    try {
+      if (typeof p === "string" && fs.existsSync(p)) {
+        return fs.readFileSync(p);
       }
     } catch {}
   }
@@ -132,7 +164,7 @@ export default {
       const lines = list.map(c => `\`${prefix}${c.name}\`${getCommandBadges(c)} — ${c.description || "Sin descripción"}`);
       const text = `${greeting}\n\n` + createBracketBox(catTitle, lines, emoji) + `\n_Shin-MD v${version} · AGPL-3.0_`;
 
-      const banner = getBanner();
+      const banner = getRandomBanner();
       if (banner) {
         await sock.sendMessage(ctx.chatId, { image: banner, caption: text }, { quoted: ctx.full });
         return null;
@@ -145,7 +177,7 @@ export default {
     try {
       const botJid = sock?.user?.id || "default";
       const settings = db.getSettings(botJid) || {};
-      menuVariant = settings.menu_variant || settings.menuVariant || 1;
+      menuVariant = Number(settings.menu_variant || settings.menuVariant || 1);
     } catch {
       menuVariant = 1;
     }
@@ -194,18 +226,40 @@ export default {
     }
 
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
-    const verifiedQuoted = getVerifiedQuoted({
-      botName: "Shin-MD Official",
-      sender: ctx.senderId,
-      senderNum: senderNumber,
-      weather,
-    });
-    const banner = getBanner();
+    const banner = getRandomBanner();
+    const videoAsset = getVideoAsset();
 
     // ── VARIANTES DE RENDERIZADO ──
-    // En grupos de WhatsApp (@g.us), los servidores de WhatsApp descartan los
-    // interactiveMessage / nativeFlow buttons para cuentas estándar.
-    // Por tanto, en grupos siempre se envía el formato estético garantizado (100% visible).
+
+    // Variante 3: Video Animado GifPlayback
+    if (menuVariant === 3 && videoAsset) {
+      const interactiveBody = headerText +
+        `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
+        `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
+        `│ 🅖 Grupos • 🅛 Límite\n` +
+        `╰─────────────────────────⬣\n\n` +
+        `_Selecciona una categoría en el botón desplegable de abajo._\n\n` +
+        `📢 *Canal:* ${channelUrl}`;
+
+      await sendInteractive(sock, ctx.chatId, {
+        title: "✨ SHIN-MD " + version,
+        body: interactiveBody,
+        footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
+        video: videoAsset,
+        gifPlayback: true,
+        buttons: [
+          singleSelect("📂 Explorar Categorías", [{ title: "反魂 · Categorías", rows: categoryRows }]),
+          quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
+          quickReply("🏓 Ping", "ping"),
+          ctaUrl("📢 Canal Oficial", channelUrl),
+        ],
+        quoted: ctx.full,
+        fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
+      });
+      return null;
+    }
+
+    // Variante 2 (o en Grupos de WhatsApp): Formato visual estético garantizado 100% visible
     if (ctx.isGroup || menuVariant === 2) {
       const finalContent = headerText +
         `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
@@ -230,7 +284,7 @@ export default {
       return null;
     }
 
-    // En chat privado (DM), enviar la tarjeta interactiva con selector desplegable
+    // Variante 1 (Por defecto en DM): Tarjeta Interactiva con Banner Rotativo
     const interactiveBody = headerText +
       `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
       `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
@@ -239,7 +293,7 @@ export default {
       `_Selecciona una categoría en el botón desplegable de abajo para ver sus comandos._\n\n` +
       `📢 *Canal:* ${channelUrl}`;
 
-    const sent = await sendInteractive(sock, ctx.chatId, {
+    await sendInteractive(sock, ctx.chatId, {
       title: "✨ SHIN-MD " + version,
       body: interactiveBody,
       footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
