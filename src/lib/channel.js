@@ -7,10 +7,15 @@ const DEFAULT_CHANNEL_NAME = "Shin-MD Official Channel";
 let triedOnce = false;
 
 export async function resolveChannel(sock, db, force = false) {
-  const channelCode = globalThis.links?.channelCode || DEFAULT_CHANNEL_CODE;
+  let channelCode = globalThis.links?.channelCode || DEFAULT_CHANNEL_CODE;
   const channelName = globalThis.links?.channelName || DEFAULT_CHANNEL_NAME;
 
-  if (!sock) return null;
+  if (typeof channelCode === "string" && /whatsapp\.com\/channel\/([0-9A-Za-z]{22,24})/i.test(channelCode)) {
+    const match = channelCode.match(/whatsapp\.com\/channel\/([0-9A-Za-z]{22,24})/i);
+    if (match) channelCode = match[1];
+  }
+
+  if (!sock) return globalThis.channelJid || null;
   if (globalThis.channelJid?.resolved && !force) return globalThis.channelJid;
 
   const botId = sock?.user?.id?.split(':')[0] + '@s.whatsapp.net';
@@ -29,7 +34,7 @@ export async function resolveChannel(sock, db, force = false) {
     } catch {}
   }
 
-  if (triedOnce && !force) return globalThis.channelJid;
+  if (triedOnce && !force) return globalThis.channelJid || null;
   triedOnce = true;
 
   try {
@@ -56,7 +61,7 @@ export async function resolveChannel(sock, db, force = false) {
 
 export function getChannelInfo() {
   return globalThis.channelJid || {
-    id: globalThis.links?.channelId || '',
+    id: globalThis.links?.channelId || '120363380000000000@newsletter',
     name: globalThis.links?.channelName || DEFAULT_CHANNEL_NAME,
     url: globalThis.links?.channel || DEFAULT_CHANNEL_LINK,
     code: globalThis.links?.channelCode || DEFAULT_CHANNEL_CODE,

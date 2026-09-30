@@ -17,6 +17,7 @@ import { useSQLiteAuthState } from "./auth.js";
 import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "./metaCache.js";
 import { patchGroupMetadata } from "#serialize";
 import { resolveChannel } from "../lib/channel.js";
+import db from "../services/ginko-db.js";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
 import fs from "fs";
@@ -265,7 +266,7 @@ export function connectSocket(engine, opts) {
         if (onReady) onReady(s);
 
         // Resolver metadata del canal oficial en background
-        resolveChannel(s, null).catch(() => {});
+        resolveChannel(s, db).catch(() => {});
 
         // B2.2: log estilo Ginko — "Grupos: X" al conectar, y el dato queda
         // disponible para el panel /health. Con setTimeout para no frenar la

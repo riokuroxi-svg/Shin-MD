@@ -63,28 +63,31 @@ export async function getWeatherSummary(city = "Mexico City") {
 
 /**
  * Genera el contextInfo con reenvío de canal oficial verificado.
+ * Solo adjunta forwardedNewsletterMessageInfo cuando existe un JID real de @newsletter.
  * @param {Object} options
  * @returns {Object}
  */
 export function getChannelContext(options = {}) {
   const ch = getChannelInfo();
-  const {
-    mentionedJid = [],
-    channelJid = ch.id || "120363380000000000@newsletter",
-    channelName = ch.name || "Shin-MD Official Channel",
-    serverMessageId = 127,
-  } = options;
+  const mentionedJid = options.mentionedJid || [];
+  const canalId = options.channelJid || ch.id || (globalThis.channelJid?.resolved ? globalThis.channelJid.id : "");
+  const canalName = options.channelName || ch.name || (globalThis.channelJid?.resolved ? globalThis.channelJid.name : globalThis.links?.channelName || "Shin-MD Official Channel");
 
-  return {
+  const contextInfo = {
     mentionedJid,
-    isForwarded: true,
-    forwardingScore: 999,
-    forwardedNewsletterMessageInfo: {
-      newsletterJid: channelJid,
-      newsletterName: channelName,
-      serverMessageId,
-    },
   };
+
+  if (canalId && String(canalId).endsWith("@newsletter")) {
+    contextInfo.isForwarded = true;
+    contextInfo.forwardingScore = 1;
+    contextInfo.forwardedNewsletterMessageInfo = {
+      newsletterJid: canalId,
+      newsletterName: canalName,
+      serverMessageId: options.serverMessageId !== undefined ? options.serverMessageId : 0,
+    };
+  }
+
+  return contextInfo;
 }
 
 /**

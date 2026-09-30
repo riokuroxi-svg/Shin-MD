@@ -23,6 +23,7 @@ import {
   getChannelContext,
   getVerifiedQuoted,
 } from "../../src/lib/contextBuilder.js";
+import { resolveChannel } from "../../src/lib/channel.js";
 import { sendInteractive, singleSelect, quickReply, ctaUrl } from "#interactive";
 import db from "../../src/services/ginko-db.js";
 
@@ -90,12 +91,14 @@ export default {
   priority: true,
 
   async handler(sock, ctx, engine, commands) {
+    resolveChannel(sock, db).catch(() => {});
     const uptimeMs = engine?.getUptime?.() || (process.uptime() * 1000);
     const uptimeFormatted = formatUptime(uptimeMs);
     const greeting = getTimeGreeting();
     const version = localVersion();
     const prefix = ctx.usedPrefix || ".";
     const weather = await getWeatherSummary();
+    const channelUrl = globalThis.links?.channel || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522";
 
     // ── Clasificación de Comandos ──
     const cats = new Map();
@@ -208,7 +211,7 @@ export default {
         `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
         readMore +
         fullCategoriesList +
-        `\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`;
+        `\n📢 *Canal Oficial:* ${channelUrl}\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`;
 
       if (banner) {
         await sock.sendMessage(
@@ -233,7 +236,8 @@ export default {
       `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
       `│ 🅖 Grupos • 🅛 Límite\n` +
       `╰─────────────────────────⬣\n\n` +
-      `_Selecciona una categoría en el botón desplegable de abajo para ver sus comandos._`;
+      `_Selecciona una categoría en el botón desplegable de abajo para ver sus comandos._\n\n` +
+      `📢 *Canal:* ${channelUrl}`;
 
     const sent = await sendInteractive(sock, ctx.chatId, {
       title: "✨ SHIN-MD " + version,
@@ -244,10 +248,10 @@ export default {
         singleSelect("📂 Explorar Categorías", [{ title: "反魂 · Categorías", rows: categoryRows }]),
         quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
         quickReply("🏓 Ping", "ping"),
-        ctaUrl("📢 Canal Oficial", globalThis.links?.channel || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522"),
+        ctaUrl("📢 Canal Oficial", channelUrl),
       ],
       quoted: ctx.full,
-      fallbackText: headerText + readMore + fullCategoriesList,
+      fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
     });
 
     return null;
