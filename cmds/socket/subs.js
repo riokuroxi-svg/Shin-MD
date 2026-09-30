@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
 import { smsg, patchGroupMetadata, getCachedMeta } from '#serialize';
+import { sendNativeQuickReply } from '#lib/native-reply';
 import db from '../../src/services/ginko-db.js';
 
 if (!global.conns) global.conns = [];
@@ -42,7 +43,7 @@ export function remove(sock) {
   try { sock.msgRetryCounterCache?.close(); } catch {}
 }
 
-const logger = pino({ level: "silent" });
+const logger = pino({ level: 'silent' });
 const versionCache = { value: null, expiresAt: 0 };
 async function getVersion() {
   if (versionCache.value && Date.now() < versionCache.expiresAt) return versionCache.value;
@@ -66,11 +67,24 @@ function normalizePhone(input) {
   return s;
 }
 
-// Mismo backoff exponencial con jitter que el bot principal
 function backoffDelay(attempt, baseMs = 4000, maxMs = 45000, jitterMs = 2000) {
   const exponential = baseMs * Math.pow(1.6, Math.min(attempt, 8));
   const capped = Math.min(maxMs, exponential);
   return Math.max(2000, capped + (Math.random() * jitterMs * 2 - jitterMs));
+}
+
+function getBannerBuffer() {
+  const possiblePaths = [
+    path.resolve(process.cwd(), 'assets', 'banner-default.png'),
+    path.resolve(process.cwd(), 'assets', 'bocchi-banner.png'),
+    path.resolve(process.cwd(), 'assets', 'avatar-default.png'),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try { return fs.readFileSync(p); } catch {}
+    }
+  }
+  return null;
 }
 
 export async function startSubBot(msg, client, caption = '', isCode = false, phone = '', chatId = '', isCommand = false) {
@@ -189,24 +203,90 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} desconectado (código ${reason}), reconectando en ${Math.round(delay/1000)}s...`));
       setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
     }
+
+    // ── Envío de Código de Emparejamiento (TODO EN UN SOLO MENSAJE CON IMAGEN + BOTÓN COPIAR) ──
     if (qr && isCode && phone && socks.client && chatId && senderId && commandFlags[senderId]) {
       try {
         let codeGen = await socks.requestPairingCode(phone);
         codeGen = codeGen.match(/.{1,4}/g)?.join('-') || codeGen;
-        const sentMsg = await socks.client.sendMessage(chatId, { text: caption }, { quoted: msg });
-        const msgCode = await socks.client.sendMessage(chatId, { text: codeGen }, { quoted: msg });
         delete commandFlags[senderId];
+
+        const instagramLink = global.links?.instagram || 'https://www.instagram.com/__ikg.05';
+        const instagramTag = instagramLink.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '@').replace(/\/$/, '');
+
+        const textMessage = `\`✤\` Vincula tu *cuenta* usando el *código.*\n\n` +
+          `> ✥ Sigue las *instrucciones*\n\n` +
+          `*›* Click en los *3 puntos* (o Ajustes)\n` +
+          `*›* Toque *Dispositivos vinculados*\n` +
+          `*›* Vincular *nuevo dispositivo*\n` +
+          `*›* Selecciona *Vincular con el número de teléfono*\n\n` +
+          `*Código:* \`${codeGen}\`\n\n` +
+          `ꕤ *\`Importante\`*\n` +
+          `> ₊·( 🜸 ) ➭ Este *Código* expira en 60s y solo funciona en el *número que lo solicitó.*`;
+
+        const bannerBuf = getBannerBuffer();
+
+        const replyRes = await sendNativeQuickReply({
+          sock: socks.client,
+          jid: chatId,
+          body: textMessage,
+          footer: `❦ Shin-MD · Instagram: ${instagramTag}`,
+          title: '❦ Shin-MD Sub-Bot',
+          quoted: msg,
+          buttons: [
+            {
+              name: 'cta_copy',
+              text: '📋 Copiar Código',
+              copy_code: codeGen,
+            },
+          ],
+          imageBuffer: bannerBuf,
+        });
+
+        let sentMsgKey = replyRes?.key;
+        if (!replyRes?.sent) {
+          const fallback = await socks.client.sendMessage(chatId, bannerBuf ? {
+            image: bannerBuf,
+            caption: textMessage,
+          } : { text: textMessage }, { quoted: msg }).catch(() => null);
+          sentMsgKey = fallback?.key;
+        }
+
         setTimeout(async () => {
-          try { await socks.client.sendMessage(chatId, { delete: sentMsg.key }); } catch {}
-          try { await socks.client.sendMessage(chatId, { delete: msgCode.key }); } catch {}
+          if (sentMsgKey) {
+            try { await socks.client.sendMessage(chatId, { delete: sentMsgKey }); } catch {}
+          }
         }, 60000);
       } catch (err) { console.error('[Código Error]', err); }
     }
+
+    // ── Envío de Código QR (TODO EN UN SOLO MENSAJE CON QR GENERADO) ──
     if (qr && !isCode && socks.client && chatId && senderId && commandFlags[senderId]) {
       try {
-        const msgQR = await socks.client.sendMessage(chatId, { image: await qrcode.toBuffer(qr, { scale: 8 }), caption }, { quoted: msg });
         delete commandFlags[senderId];
-        setTimeout(async () => { try { await socks.client.sendMessage(chatId, { delete: msgQR.key }); } catch {} }, 60000);
+        const qrBuffer = await qrcode.toBuffer(qr, { scale: 8 });
+        const instagramLink = global.links?.instagram || 'https://www.instagram.com/__ikg.05';
+        const instagramTag = instagramLink.replace(/^https?:\/\/(www\.)?instagram\.com\//i, '@').replace(/\/$/, '');
+
+        const qrText = `\`✤\` Vincula tu *cuenta* usando *código QR.*\n\n` +
+          `> ✥ Sigue las *instrucciones*\n\n` +
+          `*›* Click en los *3 puntos* (o Ajustes)\n` +
+          `*›* Toque *Dispositivos vinculados*\n` +
+          `*›* Vincular *nuevo dispositivo*\n` +
+          `*›* Escanea el código *QR.*\n\n` +
+          `> ₊·( 🜸 ) ➭ Recuerda no usar tu cuenta principal para registrar un socket.\n\n` +
+          `❦ Shin-MD · Instagram: ${instagramTag}`;
+
+        const msgQR = await socks.client.sendMessage(chatId, {
+          image: qrBuffer,
+          caption: qrText,
+        }, { quoted: msg });
+
+        setTimeout(async () => {
+          if (msgQR?.key) {
+            try { await socks.client.sendMessage(chatId, { delete: msgQR.key }); } catch {}
+          }
+        }, 60000);
       } catch (err) { console.error('[QR Error]', err); }
     }
   });
@@ -223,14 +303,15 @@ function msToTime(ms) {
 }
 
 export default {
-  command: ['code', 'qr'],
+  command: ['code', 'qr', 'serbot', 'jadibot'],
   category: 'socket',
-  description: 'Gestionar bots subbots.',
+  description: 'Gestionar y vincular subbots por código o QR.',
   run: async ({ msg, sock, args, command }) => {
     db.setCreate('users', msg.sender, 'Subs', 0);
     const user = db.getUser(msg.sender);
-    if (Date.now() - user.Subs < 80000) {
-      const remainingTime = (user.Subs + 80000) - Date.now();
+    const lastSubTime = Number(user?.Subs || 0);
+    if (Date.now() - lastSubTime < 80000) {
+      const remainingTime = (lastSubTime + 80000) - Date.now();
       return sock.reply(msg.chat, `ꕥ Debes esperar *${msToTime(remainingTime)}* para volver a intentar vincular un socket.`, msg);
     }
     ensureDir(subsPath);
@@ -248,16 +329,12 @@ export default {
       return sock.reply(msg.chat, '✐ No se han encontrado espacios disponibles para registrar un `Sub-Bot`.', msg);
     }
     commandFlags[msg.sender] = true;
-    const rtx = '`✤` Vincula tu *cuenta* usando el *codigo.*\n\n> ✥ Sigue las *instrucciones*\n\n*›* Click en los *3 puntos*\n*›* Toque *dispositivos vinculados*\n*›* Vincular *nuevo dispositivo*\n*›* Selecciona *Vincular con el número de teléfono*\n\nꕤ *`Importante`*\n> ₊·( 🜸 ) ➭ Este *Código* solo funciona en el *número que lo solicito*';
-    const rtx2 = '`✤` Vincula tu *cuenta* usando *codigo qr.*\n\n> ✥ Sigue las *instrucciones*\n\n*›* Click en los *3 puntos*\n*›* Toque *dispositivos vinculados*\n*›* Vincular *nuevo dispositivo*\n*›* Escanea el código *QR.*\n\n> ₊·( 🜸 ) ➭ Recuerda que no es recomendable usar tu cuenta principal para registrar un socket.';
-    const isCode = /^(code)$/.test(command);
-    const isCommand = /^(code|qr)$/.test(command);
-    const caption = isCode ? rtx : rtx2;
+    const isCode = /^(code|serbot|jadibot)$/.test(command);
     const fullArgs = args.join(' ');
     const separatorIndex = fullArgs.search(/[|•\/]/);
     const rawPhone = separatorIndex === -1 ? fullArgs.trim() : fullArgs.slice(separatorIndex + 1).trim();
     const phone = normalizePhone(rawPhone || msg.sender.split('@')[0]);
-    await startSubBot(msg, sock, caption, isCode, phone, msg.chat, isCommand);
+    await startSubBot(msg, sock, '', isCode, phone, msg.chat, true);
     db.setUser(msg.sender, 'Subs', Date.now());
   },
 };
