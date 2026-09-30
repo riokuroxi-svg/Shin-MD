@@ -11,7 +11,7 @@ import {
   getCommandBadges,
   CATEGORY_EMOJIS,
 } from "../../src/lib/formatter.js";
-import { getVerifiedQuoted } from "../../src/lib/contextBuilder.js";
+import { getChannelContext } from "../../src/lib/contextBuilder.js";
 
 const CAT_LABELS = {
   info: "INFORMACIÓN",
@@ -76,7 +76,14 @@ export default {
     text += `\nTotal: *${list.length}* comandos en esta categoría.\n`;
     text += `_Leyenda: 🅞 Dueño • 🅟 Premium • 🅐 Admin • 🅖 Grupos • 🅛 Límite_`;
 
-    await sock.sendMessage(ctx.chatId, { text }, { quoted: ctx.full });
+    await sock.sendMessage(
+      ctx.chatId,
+      {
+        text,
+        contextInfo: getChannelContext({ mentionedJid: [ctx.senderId] }),
+      },
+      { quoted: ctx.full }
+    );
     return null;
   },
 };

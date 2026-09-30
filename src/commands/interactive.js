@@ -127,6 +127,31 @@ export async function sendAdReply(sock, jid, opts = {}) {
   }
 }
 
+function formatButtonsAsText(buttons = []) {
+  if (!buttons || !buttons.length) return "";
+  const lines = [];
+  for (const b of buttons) {
+    try {
+      const p = typeof b.buttonParamsJson === "string" ? JSON.parse(b.buttonParamsJson) : (b.buttonParamsJson || {});
+      if (b.name === "quick_reply") {
+        lines.push(`🔘 *[ ${p.display_text || p.id} ]* ➔ \`${p.id || p.display_text}\``);
+      } else if (b.name === "cta_url") {
+        lines.push(`🔗 *[ ${p.display_text || "Enlace"} ]* ➔ ${p.url}`);
+      } else if (b.name === "cta_copy") {
+        lines.push(`📋 *[ ${p.display_text || "Copiar"} ]* ➔ \`${p.copy_code}\``);
+      } else if (b.name === "single_select") {
+        lines.push(`📑 *[ ${p.title || "Menú"} ]*`);
+        for (const sec of p.sections || []) {
+          for (const row of sec.rows || []) {
+            lines.push(`   • *${row.title}* ➔ \`${row.id}\``);
+          }
+        }
+      }
+    } catch {}
+  }
+  return lines.length ? "\n\n╭──〔 🔘 *OPCIONES* 〕──⬣\n" + lines.map(l => "│ " + l).join("\n") + "\n╰─────────────────────────⬣" : "";
+}
+
 /**
  * Envía un mensaje interactivo con botones.
  * @param {object} sock - socket Baileys
@@ -143,8 +168,26 @@ export async function sendAdReply(sock, jid, opts = {}) {
 export async function sendInteractive(sock, jid, opts = {}) {
   const body = opts.body || "";
   const footer = opts.footer || "";
-  const { imageMessage } = await prepareMedia(sock, opts.image);
+  const isGroup = typeof jid === "string" && (jid.endsWith("@g.us") || jid.endsWith("@newsletter"));
 
+  // ⚠️ En grupos de WhatsApp (@g.us), los servidores de WhatsApp descartan
+  // los botones interactiveMessage / nativeFlow para cuentas estándar.
+  // Enviamos directamente el formato visual garantizado con cotización limpia.
+  if (isGroup) {
+    const safeQuoted = (opts.quoted && (opts.quoted.message || opts.quoted.key)) ? (opts.quoted.full || opts.quoted) : undefined;
+    const btnText = formatButtonsAsText(opts.buttons);
+    const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : "") + btnText);
+
+    if (opts.image) {
+      const imagePayload = typeof opts.image === "string" && /^https?:\/\//i.test(opts.image)
+        ? { url: opts.image }
+        : opts.image;
+      return await sock.sendMessage(jid, { image: imagePayload, caption: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
+    }
+    return await sock.sendMessage(jid, { text: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
+  }
+
+  const { imageMessage } = await prepareMedia(sock, opts.image);
   const buttons = Array.isArray(opts.buttons) ? opts.buttons.filter(Boolean) : [];
   const hasMedia = !!imageMessage;
 
@@ -186,15 +229,10 @@ export async function sendInteractive(sock, jid, opts = {}) {
     return msg;
   } catch (err) {
     log.warn("interactive: fallback a texto (" + (err.message || err) + ")");
-    // Fallback: texto plano. Usa el MISMO filtro que el intento principal:
-    // si el fallo fue por quoted inválido (key sin message), reenviar con
-    // el quoted crudo re-lanzaba el error DENTRO del catch.
-    // opts.fallbackText: el llamador puede dar un texto más completo que
-    // body+footer (el menú lo usa para caer al menú clásico con la lista
-    // entera de comandos si la tarjeta no se pudo enviar).
     try {
       const safeQuoted = (opts.quoted && opts.quoted.message) ? opts.quoted : undefined;
-      const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : ""));
+      const btnText = formatButtonsAsText(opts.buttons);
+      const fbText = opts.fallbackText || (body + (footer ? "\n\n" + footer : "") + btnText);
       const sent = await sock.sendMessage(jid, { text: fbText }, safeQuoted ? { quoted: safeQuoted } : {});
       return sent;
     } catch (err2) {
@@ -216,6 +254,34 @@ export async function sendInteractive(sock, jid, opts = {}) {
  * @returns {Promise<object|null>}
  */
 export async function sendCarousel(sock, jid, opts = {}) {
+  const isGroup = typeof jid === "string" && (jid.endsWith("@g.us") || jid.endsWith("@newsletter"));
+
+  // ⚠️ En grupos de WhatsApp (@g.us), formateamos todas las tarjetas en un
+  // mensaje visual completo con soporte de imagen para asegurar 100% entrega.
+  if (isGroup) {
+    const safeQuoted = (opts.quoted && (opts.quoted.message || opts.quoted.key)) ? (opts.quoted.full || opts.quoted) : undefined;
+    let fullText = (opts.title ? `✨ *${opts.title}*\n\n` : "") + (opts.body ? `${opts.body}\n\n` : "");
+    for (let i = 0; i < (opts.cards || []).length; i++) {
+      const c = opts.cards[i];
+      fullText += `╭──〔 📌 *${c.title || `OPCIÓN ${i + 1}`}* 〕──⬣\n`;
+      if (c.body) fullText += `│ ${c.body.replace(/\n/g, "\n│ ")}\n`;
+      if (c.footer) fullText += `│ _${c.footer}_\n`;
+      const cardBtns = formatButtonsAsText(c.buttons);
+      if (cardBtns) fullText += cardBtns + "\n";
+      fullText += `╰─────────────────────────⬣\n\n`;
+    }
+    if (opts.footer) fullText += `_${opts.footer}_\n`;
+
+    const firstImg = opts.cards?.[0]?.image;
+    if (firstImg) {
+      const imagePayload = typeof firstImg === "string" && /^https?:\/\//i.test(firstImg)
+        ? { url: firstImg }
+        : firstImg;
+      return await sock.sendMessage(jid, { image: imagePayload, caption: fullText.trim() }, safeQuoted ? { quoted: safeQuoted } : {});
+    }
+    return await sock.sendMessage(jid, { text: fullText.trim() }, safeQuoted ? { quoted: safeQuoted } : {});
+  }
+
   const cards = [];
   for (const card of opts.cards || []) {
     const { imageMessage } = await prepareMedia(sock, card.image);
@@ -270,7 +336,8 @@ export async function sendCarousel(sock, jid, opts = {}) {
     log.warn("interactive: carousel fallback (" + (err.message || err) + ")");
     try {
       const safeQuoted = (opts.quoted && opts.quoted.message) ? opts.quoted : undefined;
-      const sent = await sock.sendMessage(jid, { text: opts.body || "" }, safeQuoted ? { quoted: safeQuoted } : {});
+      let fullText = (opts.title ? `*${opts.title}*\n\n` : "") + (opts.body || "");
+      const sent = await sock.sendMessage(jid, { text: fullText }, safeQuoted ? { quoted: safeQuoted } : {});
       return sent;
     } catch (err2) {
       log.error("interactive: el fallback de texto del carousel también falló: " + (err2.message || err2));

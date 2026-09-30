@@ -129,8 +129,11 @@ export default {
 
     // Renderizar y enviar tablero interactivo
     const header = "🎮 *TRES EN RAYA*\n\n" +
-      "Toca una celda para jugar. ¡Tú eres ❌ y el bot ⭕!\n" +
-      "Turno: *" + (game.turn === "X" ? "TÚ (❌)" : "BOT (⭕)") + "*";
+      "¡Tú eres ❌ y el bot ⭕!\n" +
+      "Turno actual: *" + (game.turn === "X" ? "TÚ (❌)" : "BOT (⭕)") + "*";
+
+    const boardText = header + "\n\n" + renderBoard(game.board) +
+      "\n\n💡 _Para jugar responde o escribe: .ttt a1, .ttt b2, .ttt c3_\n_Para rendirte: .ttt cancelar_";
 
     try {
       await sendInteractive(sock, chatId, {
@@ -138,11 +141,11 @@ export default {
         footer: "反魂 Shin-MD · .ttt cancelar",
         buttons: boardButtons(game.board),
         quoted: ctx.full,
+        fallbackText: boardText,
       });
       return null;
     } catch {
-      return header + "\n\n" + renderBoard(game.board) +
-        "\n\nEscribe `ttt a1` para jugar.";
+      return boardText;
     }
   },
 };
