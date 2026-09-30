@@ -4,67 +4,120 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-// Demo — muestra la capacidad de carrusel: tabla + imágenes + botones
-// en un SOLO mensaje (lo que los bots avanzados hacen, tipo reels/insta).
-// Usa sendCarousel del helper interactivo.
+// Demo — muestra las capacidades visuales, interactivas y multimedia de Shin-MD.
 
-import { sendCarousel, quickReply } from "#interactive";
+import { sendCarousel, quickReply, ctaUrl } from "#interactive";
+import { getChannelContext } from "../../src/lib/contextBuilder.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "node:url";
 
-const DEMO_IMAGES = [
-  "https://picsum.photos/seed/shin1/400/400",
-  "https://picsum.photos/seed/shin2/400/400",
-  "https://picsum.photos/seed/shin3/400/400",
-];
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const BANNER_PATHS = [
+  process.env.MENU_IMAGE,
+  path.resolve(__dirname, "../../assets/banner-default.png"),
+  path.resolve(__dirname, "../../assets/bocchi-banner.png"),
+  path.resolve(__dirname, "../../media/menu.jpg"),
+].filter(Boolean);
+
+let _bannerCache = null;
+function getBanner() {
+  if (_bannerCache) return _bannerCache;
+  for (const p of BANNER_PATHS) {
+    try {
+      if (typeof p === "string" && fs.existsSync(p)) {
+        _bannerCache = fs.readFileSync(p);
+        return _bannerCache;
+      }
+    } catch {}
+  }
+  return null;
+}
 
 export default {
   name: "demo",
-  aliases: ["showcase", "carousel", "reels"],
+  aliases: ["showcase", "carousel", "reels", "demostracion"],
   category: "info",
-  description: "Muestra carrusel con imagen, texto y botones 🎠",
+  description: "Muestra la suite estética e interactiva de Shin-MD 🎠",
   usage: ".demo",
-  cooldown: 10,
+  cooldown: 5,
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,
 
   async handler(sock, ctx, engine) {
+    const banner = getBanner();
+    const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
+
     const cards = [
       {
-        image: DEMO_IMAGES[0],
-        title: "反魂 Shin-MD",
-        body: "Tabla + imagen + botones\nen un solo mensaje ✨",
-        footer: "Hecho desde cero · AGPL-3.0",
-        buttons: [quickReply("🎮 Juegos", "menu games"), quickReply("📋 Info", "menu info")],
+        image: banner,
+        title: "✨ 反魂 Shin-MD Engine",
+        body: "Arquitectura moderna Baileys MD sobre SQLite WAL.\nCero pérdida de sesión y anti-ban con jitter gaussiano.",
+        footer: "Tecnología de última generación",
+        buttons: [
+          quickReply("📋 Menú Principal", "menu"),
+          quickReply("🏓 Latencia / Ping", "ping"),
+        ],
       },
       {
-        image: DEMO_IMAGES[1],
-        title: "Botones interactivos",
-        body: "Toca una opción y el bot responde\nsin que escribas nada.",
-        footer: "Anti-ban nativo",
-        buttons: [quickReply("🛠️ Utilidad", "menu utility"), quickReply("👑 Owner", "owner")],
+        image: banner,
+        title: "🎵 Audio & Descargas Vreden",
+        body: "Motor de música multi-origen (YouTube, SoundCloud, Spotify).\nStreaming sin binarios locales con fallback multi-servidor.",
+        footer: "Soporte Opus HQ y MP3 320kbps",
+        buttons: [
+          quickReply("🎵 Probar Play", "play anime chill"),
+          quickReply("☁️ SoundCloud", "playsc lofi beats"),
+        ],
       },
       {
-        image: DEMO_IMAGES[2],
-        title: "Descarga sin binarios",
-        body: "Play/descargas vía API HTTP.\nCero ffmpeg en el servidor.",
-        footer: "Ideal para BoxMine",
-        buttons: [quickReply("🎵 Play", "play")],
+        image: banner,
+        title: "🛡️ CAI Cyber-Security Shield",
+        body: "Defensa contra inyecciones de prompt, fuzzing de memoria RAG\ny aislamiento de fallos con fail-safe garantizado.",
+        footer: "Inmunidad CVE-2025-67511",
+        buttons: [
+          ctaUrl("📢 Canal Oficial", globalThis.links?.channel || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522"),
+        ],
       },
     ];
 
-    try {
-      await sendCarousel(sock, ctx.chatId, {
-        title: "反魂 Shin-MD",
-        body: "✨ *Carrusel de demostración*\nDesliza entre tarjetas →",
-        footer: "反魂 · AGPL-3.0",
-        cards,
-        quoted: ctx.full,
-      });
-      return null;
-    } catch {
-      // Fallback: lista simple en texto
-      return "✨ *Carrusel no disponible en este dispositivo.*\n\n" +
-        cards.map((c, i) => (i + 1) + ". *" + c.title + "*\n   " + c.body.replace(/\n/g, " ")).join("\n\n");
+    if (ctx.isGroup) {
+      let showcaseText = `╭┈┈⫹⫺ *SHOWCASE · SHIN-MD v3.0* ⫹⫺┈┈╮\n`;
+      showcaseText += `│ ◈ *Motor* : Baileys Multi-Device NATIVO\n`;
+      showcaseText += `│ ◈ *Almacenamiento* : SQLite WAL + Checkpoint\n`;
+      showcaseText += `│ ◈ *Anti-Ban* : Jitter Gaussiano 1200ms\n`;
+      showcaseText += `│ ◈ *Descargas* : Multi-API (Vreden + SoundCloud)\n`;
+      showcaseText += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n`;
+
+      for (let i = 0; i < cards.length; i++) {
+        const c = cards[i];
+        showcaseText += `╭──〔 📌 *${c.title}* 〕──⬣\n`;
+        showcaseText += `│ ${c.body.replace(/\n/g, "\n│ ")}\n`;
+        showcaseText += `│ _${c.footer}_\n`;
+        showcaseText += `╰─────────────────────────⬣\n\n`;
+      }
+
+      showcaseText += `_Usa \`.menu\` para explorar los 201+ comandos disponibles._`;
+
+      if (banner) {
+        await sock.sendMessage(
+          ctx.chatId,
+          { image: banner, caption: showcaseText, contextInfo: channelCtx },
+          { quoted: ctx.full }
+        );
+        return null;
+      }
+      return showcaseText;
     }
+
+    await sendCarousel(sock, ctx.chatId, {
+      title: "反魂 Shin-MD Showcase",
+      body: "✨ *Demostración interactiva de capacidades*",
+      footer: "Shin-MD • Powered by riokuroxi-svg",
+      cards,
+      quoted: ctx.full,
+    });
+    return null;
   },
 };

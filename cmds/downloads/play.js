@@ -4,68 +4,104 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-// Play — descarga y envía audio de YouTube con nombre personalizado
-// Sin binarios: downloader configurable por .env con metadata vía ytsr + ytdl-core
+// ═══════════════════════════════════════════════════════════════════
+//  play.js — Descarga y reproducción de música (YouTube / Vreden / Multi-API)
+// ═══════════════════════════════════════════════════════════════════
 
 import { getAudioUrl } from "#downloader";
+import { searchYouTube } from "#lib/youtubeSearch";
+import { getChannelContext } from "../../src/lib/contextBuilder.js";
 
 export default {
   name: "play",
-  aliases: ["yt", "playmp3", "musica", "mp3", "playaudio", "ytaudio", "ytmp3"],
-  category: "utility",
-  description: "Descarga y envía audio de YouTube 🎵",
-  usage: ".play <link o canción>",
-  cooldown: 15,
+  aliases: ["yt", "playmp3", "musica", "mp3", "playaudio", "ytaudio", "ytmp3", "music"],
+  category: "downloads",
+  description: "Busca, reproduce y descarga música en alta calidad 🎵",
+  usage: ".play <canción o link>",
+  cooldown: 10,
   ownerOnly: false,
   groupOnly: false,
   adminOnly: false,
 
   async handler(sock, ctx, engine) {
     if (!ctx.arg) {
-      return "🎵 *Play*\n\nUso: `" + ctx.text.split(/\s+/)[0] + " <link o nombre>`\n" +
-        "Ej: `" + ctx.text.split(/\s+/)[0] + " never gonna give you up`\n\n" +
-        "_Descarga sin ffmpeg ni binarios._\n" +
-        "_Configura YT_API_URL en .env para tu propia API._";
+      return "🎵 *SHIN MUSIC PLAYER*\n\n" +
+        "Uso: `" + (ctx.usedPrefix || ".") + "play <canción o link>`\n" +
+        "Ej: `" + (ctx.usedPrefix || ".") + "play bad bunny monaco`\n\n" +
+        "💡 _También puedes usar `" + (ctx.usedPrefix || ".") + "playsc` para buscar en SoundCloud._";
     }
 
-    const sent = await sock.sendMessage(ctx.chatId, {
-      text: "⏳ *Buscando y descargando...*\n_" + ctx.arg.slice(0, 40) + "_"
+    const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
+
+    // Si es un link de SoundCloud, redirigir al handler de SoundCloud
+    if (/^https?:\/\/(soundcloud\.com|on\.soundcloud\.com)\//i.test(ctx.arg.trim())) {
+      const scHandler = (await import("./soundcloud.js")).default;
+      return scHandler.handler(sock, ctx, engine);
+    }
+
+    // Buscar metadata visual antes de descargar
+    let searchMeta = null;
+    try {
+      const s = await searchYouTube(ctx.arg);
+      if (s && s.length > 0) searchMeta = s[0];
+    } catch {}
+
+    const waitMsg = await sock.sendMessage(ctx.chatId, {
+      text: "⏳ *Buscando y procesando audio...*\n_" + ctx.arg.slice(0, 45) + "_",
+      contextInfo: channelCtx,
     }, { quoted: ctx.full });
 
-    let key;
-    if (sent && sent.key) key = sent.key;
+    let key = waitMsg?.key;
 
     try {
       const result = await getAudioUrl(ctx.arg);
       const { url, provider, title, duration } = result;
 
-      // Construir nombre de archivo desde el título
-      let fileName = "audio.mp3";
-      if (title) {
-        fileName = title.replace(/[/\\?*:<>|"]/g, '').slice(0, 80) + ".mp3";
-      }
+      const trackTitle = title || searchMeta?.title || "Audio Shin-MD";
+      const trackAuthor = searchMeta?.author?.name || "YouTube Music";
+      const trackDuration = duration || searchMeta?.timestamp || "0:00";
+      const trackViews = searchMeta?.views ? searchMeta.views.toLocaleString() : "N/A";
+      const trackThumbnail = searchMeta?.thumbnail || searchMeta?.image;
 
-      // Enviar el audio como documento con nombre personalizado (para que se vea el título)
-      const audioMsg = await sock.sendMessage(ctx.chatId, {
-        document: { url },
-        mimetype: "audio/mpeg",
-        fileName: fileName,
-      }, { quoted: ctx.full });
+      let cardText = `╭┈┈⫹⫺ *SHIN MUSIC PLAYER* ⫹⫺┈┈╮\n`;
+      cardText += `│ ◈ *Título* : *${trackTitle}*\n`;
+      cardText += `│ ◈ *Artista* : *${trackAuthor}*\n`;
+      cardText += `│ ◈ *Duración* : *${trackDuration}*\n`;
+      cardText += `│ ◈ *Vistas* : *${trackViews}*\n`;
+      cardText += `│ ◈ *Servidor* : \`${provider || "Vreden / Multi-API"}\`\n`;
+      cardText += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n`;
+      cardText += `_⏳ Enviando archivo de audio..._`;
 
-      // Editar mensaje de "buscando" a éxito
-      if (key) {
-        let successText = "✅ *Listo!*";
-        if (title) successText += "\n📌 " + title.slice(0, 60);
-        if (provider) successText += "\n⚡ " + provider;
+      if (trackThumbnail) {
         try {
-          await sock.sendMessage(ctx.chatId, { text: successText, edit: key }, { _priority: true });
+          await sock.sendMessage(ctx.chatId, {
+            image: { url: trackThumbnail },
+            caption: cardText,
+            contextInfo: channelCtx,
+          }, { quoted: ctx.full });
         } catch {}
       }
-      return audioMsg ? null : "⚠️ No se pudo enviar el audio.";
+
+      const safeFileName = trackTitle.replace(/[/\\?*:<>|"]/g, "").slice(0, 75) + ".mp3";
+
+      const audioMsg = await sock.sendMessage(ctx.chatId, {
+        audio: { url },
+        mimetype: "audio/mpeg",
+        fileName: safeFileName,
+        contextInfo: channelCtx,
+      }, { quoted: ctx.full });
+
+      if (key) {
+        try {
+          await sock.sendMessage(ctx.chatId, { text: "✅ *Audio entregado con éxito!*", edit: key }, { _priority: true });
+        } catch {}
+      }
+
+      return audioMsg ? null : "⚠️ No se pudo enviar el archivo de audio.";
     } catch (err) {
       const errTxt = err.message && err.message.length < 400
         ? err.message
-        : "❌ Error al descargar. Prueba otro enlace o inténtalo más tarde.";
+        : "❌ Error al descargar el audio. Intenta con `.playsc <nombre>` o prueba otra canción.";
       if (key) {
         try {
           await sock.sendMessage(ctx.chatId, { text: errTxt, edit: key }, { _priority: true });
