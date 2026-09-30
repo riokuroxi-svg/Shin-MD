@@ -168,7 +168,13 @@ export async function sendQuiz(sock, jid, datos, { quoted } = {}) {
     });
     if (!generado?.key?.id) throw new Error("no se generó el quiz");
 
-    await sock.relayMessage(jid, generado.message, { messageId: generado.key.id });
+    await sock.relayMessage(jid, generado.message, {
+      messageId: generado.key.id,
+      // baileys marca así las encuestas cuando las manda él; al
+      // relayear a mano hay que ponerlo o el servidor no la registra
+      // como encuesta nueva y los votos se pierden.
+      additionalNodes: [{ tag: "meta", attrs: { polltype: "creation" } }],
+    });
     return { sent: true, key: generado.key };
   } catch (error) {
     return { sent: false, error };
@@ -194,7 +200,10 @@ export async function sendImagePoll(sock, jid, { pregunta, items = [], multiple 
     });
     if (!padre?.key?.id) throw new Error("no se generó la encuesta");
 
-    await sock.relayMessage(jid, padre.message, { messageId: padre.key.id });
+    await sock.relayMessage(jid, padre.message, {
+      messageId: padre.key.id,
+      additionalNodes: [{ tag: "meta", attrs: { polltype: "creation" } }],
+    });
 
     let fotos = 0;
     for (let i = 0; i < items.length; i++) {
