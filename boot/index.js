@@ -342,13 +342,20 @@ async function main() {
     const jid = u + "@s.whatsapp.net";
     process.env.BOT_JID = jid;
     // ⚠️ s.user es la cuenta VINCULADA (el propio bot), no el dueño.
-    // owner_jid solo como fallback: si .env no definió OWNER_NUMBER,
-    // asumimos que quien vinculó la cuenta es el dueño. Si el owner ya
-    // está definido NO se sobreescribe — antes el handler lo pisaba con
-    // el JID del bot y el dueño real perdía sus permisos de owner.
+    // NO se fija como owner el número del bot: quien vincula un número
+    // distinto al suyo (p. ej. un SIM/VM) y no configura .env, se
+    // quedaba con un bot que se coronaba a sí mismo mientras el dueño
+    // real recibía «solo el dueño». Eso ya no puede pasar: si falta
+    // OWNER_NUMBER, se avisa a gritos en consola y NADIE es owner
+    // hasta configurarlo. (Bot de una sola cuenta: sin cambios — tus
+    // propios mensajes ya pasan por ctx.fromMe.)
     if (!engine.getOwnerJid()) {
-      db.settings.set("owner_jid", jid);
-      engine.setOwnerJid(jid);
+      log.warn("┌─────────────────────────────────────────────────────────");
+      log.warn("│ ⚠ OWNER_NUMBER SIN CONFIGURAR — nadie será dueño del bot");
+      log.warn("│   1) cp .env.example .env");
+      log.warn("│   2) escribe tu número en OWNER_NUMBER (solo dígitos)");
+      log.warn("│   3) reinicia el bot. Hasta entonces: todos sin permisos.");
+      log.warn("└─────────────────────────────────────────────────────────");
     }
   });
 
