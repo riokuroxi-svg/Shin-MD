@@ -307,17 +307,28 @@ async function main() {
   // (Antes: si OWNER_NUMBER no existía, `undefined + "@s.whatsapp.net"`
   //  dejaba owner_jid = "undefined@s.whatsapp.net" — owner fantasma.)
   const ownerNum = (process.env.OWNER_NUMBER || "").replace(/\D/g, "");
+  // 🇲🇽 México: WhatsApp conserva en los JID el formato viejo 52+1+número
+  //  (13 dígitos). Si se configura el móvil como 52… (12 dígitos) el bot
+  //  NUNCA reconocería a su dueño: el JID real lleva el 1. Generamos la
+  //  otra forma y la tratamos como alias; todos los candados aceptan ambas.
+  let ownerAlias = null;
+  if (ownerNum.startsWith("52") && !ownerNum.startsWith("521") && ownerNum.length === 12) {
+    ownerAlias = "521" + ownerNum.slice(2);
+  } else if (ownerNum.startsWith("521") && ownerNum.length === 13) {
+    ownerAlias = "52" + ownerNum.slice(3);
+  }
   if (ownerNum) {
-    const ownerEnv = ownerNum + "@s.whatsapp.net";
-    db.settings.set("owner_jid", ownerEnv);
-    engine.setOwnerJid(ownerEnv);
+    const ownerJidReal = (ownerAlias || ownerNum) + "@s.whatsapp.net";
+    db.settings.set("owner_jid", ownerJidReal);
+    engine.setOwnerJid(ownerJidReal);
+    if (ownerAlias) log.info("Owner móvil MX: acepto «" + ownerNum + "» y su forma en JID «" + ownerAlias + "».");
   }
 
   // ── Globals legacy de Ginko ─────────────────────────────────────
   // 21 comandos portados (self, kick, setprefix, setowner...) leen
   // global.owner y global.mess. Sin definirlos, el primer uso lanza
   // TypeError en runtime (global.owner.map sobre undefined).
-  globalThis.owner = ownerNum ? [ownerNum] : [];
+  globalThis.owner = ownerNum ? Array.from(new Set([ownerNum, ownerAlias].filter(Boolean))) : [];
   globalThis.links = {
     channel: process.env.CHANNEL_LINK || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522",
     channelCode: process.env.CHANNEL_CODE || "0029VbDVFpSGJP89hfZUe522",
