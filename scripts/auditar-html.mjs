@@ -85,19 +85,25 @@ const PROMESAS = [
   ["diseño", "Rediseño de .perfil y nivel", "boxData"],
 ];
 
+//  Las promesas salieron completas el 01-oct-2026: ahora JUGAMOS en
+//  BocchiTheRock-MD (rama laboratorio). Señales que viven allí con su
+//  roundtrip contra el proto: no están olvidadas, está EL HOSPITAL de
+//  experimentos. Si algún día migran de vuelta, se quitan del set.
+const TRASLADADAS = new Set(["sendRich", "address_message"]);
+
 const filas = PROMESAS.map(([origen, promesa, senales]) => {
   const partes = senales.split("|");
   const res = partes.map(buscar);
   const enCmds = [...new Set(res.flatMap((r) => r.enCmds))];
   const enSrc = [...new Set(res.flatMap((r) => r.enSrc))];
   const enLab = [...new Set(res.flatMap((r) => r.enLab))];
-  const estado = enCmds.length ? "EN USO" : enSrc.length ? "MONTADO" : enLab.length ? "SOLO LAB" : "SIN HACER";
+  const estado = enCmds.length ? "EN USO" : enSrc.length ? "MONTADO" : enLab.length ? "SOLO LAB" : partes.every((s) => TRASLADADAS.has(s)) ? "TRASLADADO" : "SIN HACER";
   return { origen, promesa, estado, donde: (enCmds.length ? enCmds : enSrc.length ? enSrc : enLab).slice(0, 3) };
 });
 
 const cuenta = filas.reduce((a, f) => ((a[f.estado] = (a[f.estado] || 0) + 1), a), {});
 
-const ORDEN = { "EN USO": 0, MONTADO: 1, "SOLO LAB": 2, "SIN HACER": 3 };
+const ORDEN = { "EN USO": 0, MONTADO: 1, "SOLO LAB": 2, TRASLADADO: 3, "SIN HACER": 4 };
 filas.sort((a, b) => ORDEN[a.estado] - ORDEN[b.estado] || a.promesa.localeCompare(b.promesa));
 
 for (const f of filas) console.log(`${f.estado.padEnd(10)} │ ${f.promesa.padEnd(46)} │ ${f.donde[0] || ""}`);
@@ -115,7 +121,7 @@ if (destino) {
     ...filas.map((f) => `| ${f.estado} | ${f.promesa} | ${f.origen} | \`${f.donde[0] || "—"}\` |`),
     "",
     "**EN USO** = lo llama un comando del día a día · **MONTADO** = la librería existe y está probada, "
-    + "pero ningún comando la usa todavía · **SOLO LAB** = únicamente dentro de `.lab` · **SIN HACER** = no existe.",
+    + "pero ningún comando la usa todavía · **SOLO LAB** = únicamente dentro de `.lab` · **TRASLADADO** = vive en BocchiTheRock-MD · **SIN HACER** = no existe.",
     "",
   ].join("\n");
   writeFileSync(destino, md);
