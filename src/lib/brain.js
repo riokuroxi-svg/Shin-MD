@@ -113,6 +113,7 @@ export function createBrain(opts) {
     }
 
     // Decisión final: reglas duras primero, luego score
+    /** @type {"ALLOW"|"SLOW"|"BLOCK"} */
     let action = "ALLOW";
     if (hardBlock || score >= cfg.blockScore) action = "BLOCK";
     else if (score >= cfg.slowScore) action = "SLOW";
