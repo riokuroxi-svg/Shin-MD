@@ -7,30 +7,15 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { downloadContentFromMessage } from "baileys";
 import log from "#logger";
-import { isAdmin, userPart, getCachedMeta } from "#serialize";
-import { readMore } from "../lib/formatter.js";
-import { getVerifiedQuoted, getChannelContext } from "../lib/contextBuilder.js";
+import { buildCommandContext, downloadMediaFromObject } from "./context.js";
+
+// Re-export: el resto del bot (router, tests) lo importa desde "#commands".
+// El original sigue viviendo en context.js, donde no crea ciclos.
+export { downloadMediaFromObject };
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CMDS_DIR = path.resolve(__dirname, "../../cmds");
-
-export async function downloadMediaFromObject(msgObject) {
-  if (!msgObject) return null;
-  const target = msgObject.message || msgObject;
-  const mediaKey = Object.keys(target).find(k =>
-    /imageMessage|videoMessage|stickerMessage|audioMessage|documentMessage/i.test(k)
-  );
-  if (!mediaKey) return null;
-  const rawType = mediaKey.replace(/Message$/i, "").toLowerCase();
-  const stream = await downloadContentFromMessage(target[mediaKey], rawType);
-  let buffer = Buffer.from([]);
-  for await (const chunk of stream) {
-    buffer = Buffer.concat([buffer, chunk]);
-  }
-  return buffer;
-}
 
 function scanFiles(dir) {
   const results = [];
@@ -62,127 +47,31 @@ function wrapGinkoCmd(gk) {
     groupOnly: !!(gk.groupOnly || gk.isGroup),
     priority: !!gk.priority,
     handler: async (sock, ctx, engine) => {
-      const full = ctx.full || {};
-      let isAdmins = false, isBotAdmins = false, isOwner = false, groupMetadata = null;
-      if (ctx.isGroup) {
-        isAdmins = await isAdmin(sock, ctx.chatId, ctx.senderId);
-        const botJid = sock?.user?.id;
-        if (botJid) isBotAdmins = await isAdmin(sock, ctx.chatId, botJid);
-        const ownerJid = engine?.getOwnerJid?.();
-        if (ownerJid) isOwner = userPart(ctx.senderId) === userPart(ownerJid);
-      }
-      if (ctx.isGroup) {
-        groupMetadata = getCachedMeta(ctx.chatId)
-          || (await sock?.groupMetadata?.(ctx.chatId).catch(() => null))
-          || null;
-      }
-
-      if (!sock.reply) {
-        sock.reply = (jid, text, quoted, opts) => {
-          const content = typeof text === "string" ? { text } : (text || {});
-          const quote = quoted?.key ? quoted : (quoted?.full || quoted);
-          return sock.sendMessage(jid, { ...content, ...(opts || {}) }, { quoted: quote });
-        };
-      }
-
-      const directMediaType = Object.keys(full.message || {}).find(k =>
-        /imageMessage|videoMessage|stickerMessage|audioMessage|documentMessage/i.test(k)
-      );
-      const directInner = directMediaType ? full.message[directMediaType] : null;
-
-      const msg = {
-        chat: ctx.chatId,
-        sender: ctx.senderId,
-        isGroup: ctx.isGroup,
-        text: ctx.text,
-        body: ctx.text,
-        command: mainName,
-        usedPrefix: ctx.usedPrefix || ".",
-        pushName: ctx.pushName || full.pushName || "",
-        key: full.key || {},
-        id: full.key?.id,
-        fromMe: full.key?.fromMe,
-        isBotAdmin: isBotAdmins,
-        isAdmin: isAdmins,
-        isOwner: isOwner,
-        message: full.message || {},
-        msg: directInner || full.message || {},
-        mimetype: directInner?.mimetype || "",
-        mentionedJid: full.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
-        quoted: null,
-        readMore,
-        download: () => downloadMediaFromObject(full.message),
-        reply: async (content) => {
-          if (typeof content === "string")
-            return sock.sendMessage(ctx.chatId, { text: content }, { quoted: full });
-          return sock.sendMessage(ctx.chatId, content, { quoted: full });
-        },
-        replyVerified: async (content, opts = {}) => {
-          const vQuote = getVerifiedQuoted({ botName: "Shin-MD", sender: ctx.senderId });
-          const payload = typeof content === "string" ? { text: content, ...opts } : { ...content, ...opts };
-          return sock.sendMessage(ctx.chatId, payload, { quoted: vQuote });
-        },
-        replyChannel: async (content, opts = {}) => {
-          const cCtx = getChannelContext({ mentionedJid: [ctx.senderId], ...opts.contextInfo });
-          const payload = typeof content === "string" ? { text: content, contextInfo: cCtx, ...opts } : { ...content, contextInfo: cCtx, ...opts };
-          return sock.sendMessage(ctx.chatId, payload, { quoted: full });
-        },
-        simulateRecording: async (ms = 1000) => {
-          try {
-            await sock.sendPresenceUpdate("recording", ctx.chatId);
-            if (ms > 0) await new Promise((r) => setTimeout(r, ms));
-          } catch {}
-        },
-        simulateTyping: async (ms = 1000) => {
-          try {
-            await sock.sendPresenceUpdate("composing", ctx.chatId);
-            if (ms > 0) await new Promise((r) => setTimeout(r, ms));
-          } catch {}
-        },
-        react: (emoji) => sock.sendMessage(ctx.chatId, { react: { text: emoji, key: full.key } }),
-      };
-
-      if (full.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
-        const ci = full.message.extendedTextMessage.contextInfo;
-        const qMsg = ci.quotedMessage;
-        const qMediaType = Object.keys(qMsg).find(k =>
-          /imageMessage|videoMessage|stickerMessage|audioMessage|documentMessage/i.test(k)
-        );
-        const qInner = qMediaType ? qMsg[qMediaType] : null;
-
-        msg.quoted = {
-          id: ci.stanzaId,
-          stanzaId: ci.stanzaId,
-          sender: ci.participant || "",
-          text: qMsg?.conversation || qMsg?.extendedTextMessage?.text || qInner?.caption || "",
-          key: {
-            remoteJid: ctx.chatId,
-            fromMe: ci.participant ? ci.participant === sock?.user?.id : false,
-            id: ci.stanzaId || "",
-            participant: ci.participant || "",
-          },
-          message: qMsg,
-          msg: qInner || qMsg,
-          mimetype: qInner?.mimetype || "",
-          seconds: qInner?.seconds || 0,
-          download: () => downloadMediaFromObject(qMsg),
-        };
-      }
+      // Mismo contexto exacto que reciben los hooks `before` (context.js).
+      // Antes esta función construía su propia copia, más rica que la de
+      // los hooks; esa divergencia ya no puede volver a ocurrir.
+      const { msg, groupMetadata, participants, isAdmins, isBotAdmins, isOwner } =
+        await buildCommandContext(sock, ctx, engine, { commandName: mainName });
 
       try {
         await gk.run({
-          msg, sock,
+          msg,
+          sock,
           usedPrefix: ctx.usedPrefix || ".",
           text: ctx.arg || "",
           command: mainName,
           args: ctx.args || [],
           groupMetadata,
-          participants: (groupMetadata?.participants || []),
-          isAdmins, isBotAdmins, isOwner,
+          participants,
+          isAdmins,
+          isBotAdmins,
+          isOwner,
         });
       } catch (err) {
         log.error("Ginko cmd '" + mainName + "': " + (err.message || err));
-        try { await sock.sendMessage(ctx.chatId, { text: "⚠️ " + (err.message || "Error") }, { quoted: full }); } catch {}
+        try {
+          await sock.sendMessage(ctx.chatId, { text: "⚠️ " + (err.message || "Error") }, { quoted: ctx.full });
+        } catch {}
       }
     },
   };
@@ -234,7 +123,10 @@ export async function loadCommands() {
     }
   }
 
-  commands.befores = befores;
+  // El Map lleva los hooks pegados como propiedad. Se tipa explícito
+  // porque "un Map con una propiedad extra" no existe en el sistema de
+  // tipos; lo limpio sería devolver { commands, befores }.
+  /** @type {any} */ (commands).befores = befores;
   const unique = shinCount + ginkoCount - dupeCount;
   log.success(unique + " comandos únicos (" + shinCount + " Shin, " + ginkoCount + " Ginko) · " + commands.size + " entradas con aliases" + (dupeCount ? " · " + dupeCount + " duplicados" : "") + (befores.length ? " · " + befores.length + " hooks before" : ""));
   return commands;

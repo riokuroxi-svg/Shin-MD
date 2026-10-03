@@ -10,7 +10,12 @@
     "start:code": "node index.js --code",
     "start:qr": "node index.js --qr",
     "test": "node scripts/run-tests.mjs",
-    "postinstall": "node scripts/patch-baileys-pairing.cjs"
+    "postinstall": "node scripts/patch-baileys-pairing.cjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
+    "typecheck": "tsc"
   },
   "imports": {
     "#engine": "./src/core/engine.js",
@@ -84,5 +89,12 @@
     "type": "git",
     "url": "git+https://github.com/riokuroxi-svg/Shin-MD.git"
   },
-  "homepage": "https://github.com/riokuroxi-svg/Shin-MD"
+  "homepage": "https://github.com/riokuroxi-svg/Shin-MD",
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3"
+  }
 }

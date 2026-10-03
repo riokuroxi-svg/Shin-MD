@@ -16,7 +16,7 @@ export default {
     }
     try {
       const fullArgs = args.join(' ');
-      const separatorIndex = fullArgs.search(/[|•\/]/);
+      const separatorIndex = fullArgs.search(/[|•/]/);
       let metadatos01, metadatos02;
       if (separatorIndex === -1) {
         metadatos01 = fullArgs.trim();

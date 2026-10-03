@@ -31,7 +31,12 @@ export default {
     if (!media) return msg.reply('✎ No se pudo descargar la imagen.');
     if (args[1] === 'full') {
       const { img } = await resizeImage(media);
-      await sock.query({ tag: 'iq', attrs, content: [{ tag: 'picture', attrs, content: img }] });
+      // `attrs` nunca estuvo definido: esta rama lanzaba ReferenceError.
+      await sock.query({
+        tag: 'iq',
+        attrs: { to: idBot, type: 'set', xmlns: 'w:profile:picture' },
+        content: [{ tag: 'picture', attrs: { type: 'image' }, content: img }],
+      });
     } else {
       await sock.updateProfilePicture(idBot, media);
     }    

@@ -18,8 +18,8 @@ import { sendNativeQuickReply } from '#lib/native-reply';
 import db from '../../src/services/ginko-db.js';
 
 if (!global.conns) global.conns = [];
-let reintentos = {};
-let commandFlags = {};
+const reintentos = {};
+const commandFlags = {};
 const cleanJid = (jid = '') => jid.replace(/:\d+/, '').split('@')[0];
 const sessionsPath = path.resolve(process.cwd(), 'Sessions');
 const subsPath = path.join(sessionsPath, 'Subs');
@@ -350,7 +350,7 @@ export default {
     commandFlags[msg.sender] = true;
     const isCode = /^(code|serbot|jadibot)$/.test(command);
     const fullArgs = args.join(' ');
-    const separatorIndex = fullArgs.search(/[|•\/]/);
+    const separatorIndex = fullArgs.search(/[|•/]/);
     const rawPhone = separatorIndex === -1 ? fullArgs.trim() : fullArgs.slice(separatorIndex + 1).trim();
     const phone = normalizePhone(rawPhone || msg.sender.split('@')[0]);
     await startSubBot(msg, sock, '', isCode, phone, msg.chat, true);

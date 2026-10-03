@@ -21,18 +21,20 @@ const FILE_LOG = process.env.LOG_FILE !== "0";
 const LOG_DIR = path.resolve("logs");
 const KEEP_DAYS = 7;
 let fileLogBroken = false;
+let lastCleanupDay = ""; // antes era writeLog._day: estado escondido dentro de una función
 
 function writeLog(level, msg) {
   if (!FILE_LOG || fileLogBroken) return;
   try {
     if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
     const day = new Date().toISOString().slice(0, 10);
+    // eslint-disable-next-line no-control-regex -- limpia los códigos ANSI de chalk antes de escribir el archivo
     const clean = String(msg).replace(/\u001b\[[0-9;]*m/g, "");
     fs.appendFileSync(path.join(LOG_DIR, "shin-" + day + ".log"),
       new Date().toISOString() + " [" + level + "] " + clean + "\n");
     // Limpieza perezosa: solo cuando cambia el día
-    if (writeLog._day !== day) {
-      writeLog._day = day;
+    if (lastCleanupDay !== day) {
+      lastCleanupDay = day;
       const cutoff = Date.now() - KEEP_DAYS * 86400000;
       for (const f of fs.readdirSync(LOG_DIR)) {
         if (!/^shin-\d{4}-\d{2}-\d{2}\.log$/.test(f)) continue;

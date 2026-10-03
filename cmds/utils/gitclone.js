@@ -8,7 +8,7 @@ import fetch from 'node-fetch';
 import defaultAvatar from '../../lib/default-avatar.js';
 import { state } from '#lib/theme';
 
-const regex = /^(?:https:\/\/|git@)github\.com\/([^\/]+)\/([^\/]+?)(?:\.git)?$/i;
+const regex = /^(?:https:\/\/|git@)github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/i;
 
 export default {
   command: ['gitclone', 'git'],

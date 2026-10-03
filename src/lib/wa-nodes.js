@@ -50,6 +50,11 @@ export function nodosInteractivos(jid, { ai = true } = {}) {
       { tag: "quality_control", attrs: { source_type: "third_party" } },
     ],
   }];
+  // ⚠️ HALLAZGO del chequeo de tipos (correr `npm run typecheck`):
+  // Baileys exige además actual_actors, host_storage y privacy_mode_ts
+  // en este nodo y aquí faltan desde el diseño original. NO se toca a
+  // ciegas: hay que verificar contra WhatsApp real qué valores espera.
+  // @ts-expect-error -- pendiente de validar en teléfono
   if (esPrivado(jid) && ai) nodos.push({ tag: "bot", attrs: { biz_bot: "1" } });
   return nodos;
 }
