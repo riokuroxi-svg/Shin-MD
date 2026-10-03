@@ -16,6 +16,7 @@ import path from 'path';
 import chalk from 'chalk';
 import { smsg, patchGroupMetadata, getCachedMeta } from '#serialize';
 import { sendNativeQuickReply } from '#lib/native-reply';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 import db from '../../src/services/ginko-db.js';
 
 if (!global.conns) global.conns = [];
@@ -313,14 +314,6 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
   return socks;
 }
 
-function msToTime(ms) {
-  const totalSeconds = Math.floor(Math.abs(ms) / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0
-    ? `${minutes} minuto${minutes !== 1 ? 's' : ''} y ${seconds} segundo${seconds !== 1 ? 's' : ''}`
-    : `${seconds} segundo${seconds !== 1 ? 's' : ''}`;
-}
 
 export default {
   command: ['code', 'qr', 'serbot', 'jadibot'],

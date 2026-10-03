@@ -7,6 +7,7 @@
 import { botJid } from "#serialize";
 import defaultAvatar from '../../lib/default-avatar.js';
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 const linkRegex = /chat\.whatsapp\.com\/([0-9A-Za-z]{20,24})(?:\s+[0-9]{1,3})?/i;
 
 async function getGroupName(sock, chatId) {
@@ -74,14 +75,3 @@ export default {
     db.setUser(msg.sender, 'jointime', Date.now());
   },
 };
-
-function msToTime(duration) {
-  const milliseconds = parseInt((duration % 1000) / 100);
-  let seconds = Math.floor((duration / 1000) % 60);
-  let minutes = Math.floor((duration / (1000 * 60)) % 60);
-  let hours = Math.floor((duration / (1000 * 60 * 60)) % 24);
-  hours = hours < 10 ? '0' + hours : hours;
-  minutes = minutes < 10 ? '0' + minutes : minutes;
-  seconds = seconds < 10 ? '0' + seconds : seconds;
-  return `${minutes} Minuto(s) ${seconds} Segundo(s)`;
-}

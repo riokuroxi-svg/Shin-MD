@@ -8,6 +8,7 @@ import { economyGate } from "#lib/economy-guard";
 import { botJid } from "#serialize";
 import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 export default {
   command: ['cazar', 'hunt'],
   category: 'economy',
@@ -119,11 +120,4 @@ export default {
   }
 };
 
-function msToTime(duration) {
-  const seconds = Math.floor((duration / 1000) % 60);
-  const minutes = Math.floor((duration / (1000 * 60)) % 60);
-  const min = minutes < 10 ? '0' + minutes : minutes;
-  const sec = seconds < 10 ? '0' + seconds : seconds;
-  return min === '00' ? `${sec} segundo${sec > 1 ? 's' : ''}` : `${min} minuto${min > 1 ? 's' : ''}, ${sec} segundo${sec > 1 ? 's' : ''}`;
-}
 

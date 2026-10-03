@@ -7,6 +7,7 @@
 import { economyGate } from "#lib/economy-guard";
 import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo } from "#lib/tiempo";
 export default {
   command: ['monthly', 'mensual'],
   category: 'economy',
@@ -25,7 +26,7 @@ export default {
     const gap = 30 * 24 * 60 * 60 * 1000;
     const now = Date.now();
     if (now < user.lastmonthly) {
-      const wait = formatTime(Math.floor((user.lastmonthly - now) / 1000));
+      const wait = tiempoLargo(user.lastmonthly - now);
       return sock.sendMessage(msg.chat, { text: `ꕥ Ya has reclamado tu recompensa mensual.\n> Puedes reclamarlo de nuevo en *${wait}*` }, { quoted: msg });
     }
     let currentStreak = users.monthlyStreak;
@@ -49,14 +50,3 @@ export default {
     await sock.sendMessage(msg.chat, { text: `「❁」 Has reclamado tu recompensa mensual de *+${coins.toLocaleString()} ${currency}* (Mes *${currentStreak}*)\n${caption}` }, { quoted: msg });
   }
 };
-
-function formatTime(t) {
-  const d = Math.floor(t / 86400);
-  const h = Math.floor((t % 86400) / 3600);
-  const m = Math.floor((t % 3600) / 60);
-  const s = t % 60;
-  if (d) return `${d} día${d !== 1 ? 's' : ''} ${h} hora${h !== 1 ? 's' : ''} ${m} minuto${m !== 1 ? 's' : ''}`;
-  if (h) return `${h} hora${h !== 1 ? 's' : ''} ${m} minuto${m !== 1 ? 's' : ''} ${s} segundo${s !== 1 ? 's' : ''}`;
-  if (m) return `${m} minuto${m !== 1 ? 's' : ''} ${s} segundo${s !== 1 ? 's' : ''}`;
-  return `${s} segundo${s !== 1 ? 's' : ''}`;
-}

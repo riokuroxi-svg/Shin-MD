@@ -7,6 +7,7 @@
 import { botJid } from "#serialize";
 import { randomInt, pickRandom } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 export default {
   command: ['ppt'],
   category: 'economy',
@@ -72,10 +73,4 @@ function determineWinner(user, bot) {
     return 'win';
   }
   return 'lose';
-}
-
-function msToTime(duration) {
-  const seconds = Math.floor((duration / 1000) % 60);
-  const minutes = Math.floor((duration / (1000 * 60)) % 60);
-  return `${minutes} minuto${minutes !== 1 ? 's' : ''}, ${seconds} segundo${seconds !== 1 ? 's' : ''}`;
 }

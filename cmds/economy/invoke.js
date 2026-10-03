@@ -7,6 +7,7 @@
 import { economyGate } from "#lib/economy-guard";
 import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 export default {
   command: ['ritual', 'invoke', 'invocar'],
   category: 'economy',
@@ -77,14 +78,6 @@ export default {
   }
 };
 
-function msToTime(duration) {
-  let seconds = Math.floor((duration / 1000) % 60);
-  let minutes = Math.floor((duration / (1000 * 60)) % 60);
-  minutes = minutes < 10 ? '0' + minutes : minutes;
-  seconds = seconds < 10 ? '0' + seconds : seconds;
-  if (minutes === '00') return `${seconds} segundo${seconds > 1 ? 's' : ''}`;
-  return `${minutes} minuto${minutes > 1 ? 's' : ''}, ${seconds} segundo${seconds > 1 ? 's' : ''}`;
-}
 
 
 const normalInvocations = [

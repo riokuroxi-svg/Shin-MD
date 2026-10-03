@@ -7,6 +7,7 @@
 import { botJid } from "#serialize";
 import { randomInt, pickRandom } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 export default {
   command: ['slut', 'prostituirse'],
   category: 'economy',
@@ -90,14 +91,4 @@ export default {
     }
     await sock.sendMessage(chatId, { text: `「✿」 ${message}`, mentions: [senderId] }, { quoted: msg });
   }
-};
-
-const msToTime = (duration) => {
-  const seconds = Math.floor((duration / 1000) % 60);
-  const minutes = Math.floor((duration / (1000 * 60)) % 60);
-  const pad = (n) => n.toString().padStart(2, '0');
-  if (minutes === 0) {
-    return `${pad(seconds)} segundo${seconds !== 1 ? 's' : ''}`;
-  }
-  return `${pad(minutes)} minuto${minutes !== 1 ? 's' : ''}, ${pad(seconds)} segundo${seconds !== 1 ? 's' : ''}`;
 };

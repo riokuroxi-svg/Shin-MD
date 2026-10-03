@@ -7,6 +7,7 @@
 import { randomInt, pickRandom } from "#lib/random";
 // Economy helpers — capa sobre SQLite para economía/gacha
 import { getDatabase } from "#db";
+import { tiempoCorto } from "#lib/tiempo";
 
 const COOLDOWNS = {
   daily: 24 * 60 * 60 * 1000,
@@ -51,14 +52,11 @@ export function setTimer(chatId, sender, type) {
     .run(id, chatId, sender, timer.last_daily, timer.last_work, timer.last_fish, timer.last_hunt, timer.last_mine, timer.last_crime, timer.last_rob, timer.last_slot, timer.last_rt, Date.now());
 }
 
+// El formateo vive en #lib/tiempo; aquí solo se conserva el nombre público
+// y el "ahora" de los tramos ya cumplidos.
 export function formatTime(ms) {
   if (ms <= 0) return 'ahora';
-  const s = Math.ceil(ms / 1000);
-  if (s < 60) return s + 's';
-  const m = Math.floor(s / 60);
-  if (m < 60) return m + 'm ' + (s % 60) + 's';
-  const h = Math.floor(m / 60);
-  return h + 'h ' + (m % 60) + 'm';
+  return tiempoCorto(ms);
 }
 
 // Delegado en #lib/random: aquí solo se conserva el nombre público.

@@ -7,6 +7,7 @@
 import { botJid } from "#serialize";
 import { randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as formatTime } from "#lib/tiempo";
 export default {
   command: ['robar', 'steal', 'rob'],
   category: 'economy',
@@ -69,15 +70,3 @@ export default {
     sock.reply(msg.chat, `❀ Le robaste *¥${rob.toLocaleString()} ${currency}* a *${name}*`, msg, { mentions: [who] });
   }
 };
-
-function formatTime(ms) {
-  const totalSec = Math.ceil(ms / 1000);
-  const hours = Math.floor(totalSec / 3600);
-  const minutes = Math.floor((totalSec % 3600) / 60);
-  const seconds = totalSec % 60;
-  const parts = [];
-  if (hours) parts.push(`${hours} hora${hours !== 1 ? 's' : ''}`);
-  if (minutes) parts.push(`${minutes} minuto${minutes !== 1 ? 's' : ''}`);
-  parts.push(`${seconds} segundo${seconds !== 1 ? 's' : ''}`);
-  return parts.join(' ');
-}

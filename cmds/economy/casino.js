@@ -7,6 +7,9 @@
 import { botJid } from "#serialize";
 import { delay } from 'baileys';
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo } from "#lib/tiempo";
+// El aviso de "ya está listo" es de este comando: el formateo es de #lib/tiempo.
+const formatTime = (ms) => (ms <= 0 || isNaN(ms) ? "Ahora" : tiempoLargo(ms));
 
 let buatall = 1;
 export default {
@@ -77,15 +80,4 @@ export default {
 
 function formatNumber(number) {
   return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-function formatTime(ms) {
-  if (ms <= 0 || isNaN(ms)) return 'Ahora';
-  const totalSec = Math.ceil(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  const partes = [];
-  if (min) partes.push(`${min} minuto${min !== 1 ? 's' : ''}`);
-  partes.push(`${sec} segundo${sec !== 1 ? 's' : ''}`);
-  return partes.join(' ');
 }
