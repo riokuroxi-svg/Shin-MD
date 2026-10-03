@@ -15,7 +15,7 @@ export default {
     let user = db.getChatUser(chatId, who);
     if (!user) {
       return msg.reply(`「✎」 El usuario mencionado no está registrado en el bot.`);
-    }    
+    }
     let userStats = user.stats;
     const now = new Date();
     const daysArg = parseInt(args[0]) || 30;

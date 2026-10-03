@@ -17,10 +17,10 @@ export default {
       const chat = db.getChat(msg.chat);
       if (chat.adminonly || !chat.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
-      }      
+      }
       const userId = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
       const userGlobal = db.getUser(userId);
-      const name = userGlobal?.name || userId.split('@')[0];      
+      const name = userGlobal?.name || userId.split('@')[0];
       const structure = await loadCharacters();
       const allCharacters = flattenCharacters(structure);
       let ownedIDs = [];
@@ -30,7 +30,7 @@ export default {
           try { userData.characters = JSON.parse(userData.characters); } catch { userData.characters = []; }
         }
         ownedIDs = Array.isArray(userData.characters) ? userData.characters : [];
-      }      
+      }
       if (ownedIDs.length === 0) {
         const isSelf = userId === msg.sender;
         const replyText = isSelf ? 'ꕥ No tienes personajes reclamados.' : `ꕥ *${name}* no tiene personajes reclamados.`;
@@ -64,7 +64,7 @@ export default {
         const charName = jsonRec?.name || chatChar2?.name || globalChar2?.name || `ID:${id}`;
         const value = typeof globalChar2?.value === 'number' ? globalChar2.value : chatChar2?.value || 0;
         message += `» *${charName}* (*${value.toLocaleString()}*)\n`;
-      }      
+      }
       message += `\n⌦ _Página *${page}* de *${totalPages}*_`;
       if (page < totalPages) {
         const nameArgs = args.filter(arg => isNaN(parseInt(arg))).join(' ');

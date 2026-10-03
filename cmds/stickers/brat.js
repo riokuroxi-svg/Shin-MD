@@ -35,18 +35,18 @@ export default {
       text = msg.quoted?.text || text;
       if (!text) {
         return sock.reply(msg.chat, `《✧》 Por favor, responde a un mensaje o ingresa un texto para crear el Sticker.`, msg);
-      }      
-      await msg.react('🕒');      
+      }
+      await msg.react('🕒');
       let user = db.getUser(msg.sender);
       const name = user.name || msg.sender.split('@')[0];
       const hasMeta1 = user.metadatos ? String(user.metadatos).trim() : '';
       const hasMeta2 = user.metadatos2 ? String(user.metadatos2).trim() : '';
       let texto1 = hasMeta1 ? user.metadatos : global.stickerBrand || '🍁 Ginko-MD';
-      let texto2 = hasMeta1 ? (hasMeta2 ? user.metadatos2 : '') : `@${name}`;      
+      let texto2 = hasMeta1 ? (hasMeta2 ? user.metadatos2 : '') : `@${name}`;
       const buffer = await fetchSticker(text);
       const tmpFile = `./tmp/brat-${Date.now()}.webp`;
-      fs.writeFileSync(tmpFile, buffer);      
-      await sock.sendImageAsSticker(msg.chat, tmpFile, msg, { packname: texto1, author: texto2 });      
+      fs.writeFileSync(tmpFile, buffer);
+      await sock.sendImageAsSticker(msg.chat, tmpFile, msg, { packname: texto1, author: texto2 });
       fs.unlinkSync(tmpFile);
       await msg.react('✔️');
     } catch (e) {

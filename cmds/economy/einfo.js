@@ -30,7 +30,7 @@ export default {
     const chatData = db.getChat(chatId);
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
-    }        
+    }
     db.setCreate('chat_users', [chatId, msg.sender], 'lastcrime', 0);
     db.setCreate('chat_users', [chatId, msg.sender], 'lastmine', 0);
     db.setCreate('chat_users', [chatId, msg.sender], 'lastinvoke', 0);
@@ -44,12 +44,12 @@ export default {
     db.setCreate('chat_users', [chatId, msg.sender], 'lastadventure', 0);
     db.setCreate('chat_users', [chatId, msg.sender], 'lastdaily', 0);
     db.setCreate('chat_users', [chatId, msg.sender], 'lastweekly', 0);
-    db.setCreate('chat_users', [chatId, msg.sender], 'lastmonthly', 0);    
+    db.setCreate('chat_users', [chatId, msg.sender], 'lastmonthly', 0);
     const user = db.getChatUser(chatId, msg.sender);
     const users = db.getUser(msg.sender);
     const settings = db.getSettings(botId);
     const now = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;    
+    const oneDay = 24 * 60 * 60 * 1000;
     const cooldowns = {
       crime: Math.max(0, (user.lastcrime || 0) - now),
       mine: Math.max(0, (user.lastmine || 0) - now),
@@ -65,8 +65,8 @@ export default {
       daily: Math.max(0, (user.lastdaily || 0) - now),
       weekly: Math.max(0, (user.lastweekly || 0) - now),
       monthly: Math.max(0, (user.lastmonthly || 0) - now)
-    };        
-        
+    };
+
     const coins = user.coins || 0;
     const name = users?.name || msg.sender.split('@')[0];
     const mensaje = `✿ Usuario \`<${name}>\`

@@ -17,7 +17,7 @@ export default {
       if (!args.length) {
         return msg.reply('《✧》Especifica el nombre del paquete de stickers.')
       }
-      const packName = args.join(' ').trim().toLowerCase()      
+      const packName = args.join(' ').trim().toLowerCase()
       let pack = null
       let packOwner = msg.sender
       const stickerPackData = db.getStickersPack(msg.sender)

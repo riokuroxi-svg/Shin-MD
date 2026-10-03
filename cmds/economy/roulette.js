@@ -19,18 +19,18 @@ export default {
     }
     const botId = botJid(sock);
     const botSettings = db.getSettings(botId);
-    const currency = botSettings.currency || 'Monedas';    
-    db.setCreate('chat_users', [chatId, senderId], 'lastroulette', 0);    
-    const user = db.getChatUser(chatId, senderId);    
-    const cooldown = 30 * 1000;    
+    const currency = botSettings.currency || 'Monedas';
+    db.setCreate('chat_users', [chatId, senderId], 'lastroulette', 0);
+    const user = db.getChatUser(chatId, senderId);
+    const cooldown = 30 * 1000;
     if (Date.now() < user.lastroulette) {
       const restante = user.lastroulette - Date.now();
       return msg.reply(`ꕥ Debes esperar *${msToTime(restante)}* antes de volver a usar rt.`);
     }
     if (args.length < 2) {
       return msg.reply(`《✧》 Debes ingresar una cantidad de ${currency} y apostar a un color.`);
-    }    
-    let amount, color;    
+    }
+    let amount, color;
     if (!isNaN(parseInt(args[0]))) {
       amount = parseInt(args[0]);
       color = args[1].toLowerCase();
@@ -39,27 +39,27 @@ export default {
       amount = parseInt(args[1]);
     } else {
       return msg.reply(`《✧》 Formato inválido. Ejemplo: *rt 2000 black* o *rt black 2000*`);
-    }    
+    }
     const validColors = ['red', 'black', 'green'];
     if (isNaN(amount) || amount < 200) {
       return msg.reply(`《✧》 La cantidad mínima de ${currency} a apostar es 200.`);
     }
     if (!validColors.includes(color)) {
       return msg.reply(`《✧》 Por favor, elige un color válido: red, black, green.`);
-    }    
+    }
     if (user.coins < amount) {
       return msg.reply(`《✧》 No tienes suficientes *${currency}* para hacer esta apuesta.`);
-    }    
-    db.setChatUser(chatId, senderId, 'lastroulette', Date.now() + cooldown);    
+    }
+    db.setChatUser(chatId, senderId, 'lastroulette', Date.now() + cooldown);
     const random = Math.floor(Math.random() * 37);
-    let resultColor;    
+    let resultColor;
     if (random < 9) {
       resultColor = 'green';
     } else if (random < 23) {
       resultColor = 'red';
     } else {
       resultColor = 'black';
-    }    
+    }
     if (resultColor === color) {
       const reward = amount * (resultColor === 'green' ? 5 : 2);
       db.setChatUser(chatId, senderId, 'coins', (user.coins || 0) + reward);

@@ -39,32 +39,32 @@ export default {
       const chat = db.getChat(msg.chat);
       if (chat.adminonly || !chat.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
-      }      
+      }
       if (!args.length) {
         return msg.reply(`❀ Por favor, proporciona el nombre de un personaje.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
-      }      
+      }
       const structure = await loadCharacters();
       const allCharacters = flattenCharacters(structure);
-      const nameQuery = args.join(' ').toLowerCase().trim();      
-      const character = allCharacters.find(c => String(c.name).toLowerCase() === nameQuery) || allCharacters.find(c => String(c.name).toLowerCase().includes(nameQuery) || (Array.isArray(c.tags) && c.tags.some(tag => tag.toLowerCase().includes(nameQuery)))) || allCharacters.find(c => nameQuery.split(' ').some(q => String(c.name).toLowerCase().includes(q) || (Array.isArray(c.tags) && c.tags.some(tag => tag.toLowerCase().includes(q)))));      
+      const nameQuery = args.join(' ').toLowerCase().trim();
+      const character = allCharacters.find(c => String(c.name).toLowerCase() === nameQuery) || allCharacters.find(c => String(c.name).toLowerCase().includes(nameQuery) || (Array.isArray(c.tags) && c.tags.some(tag => tag.toLowerCase().includes(nameQuery)))) || allCharacters.find(c => nameQuery.split(' ').some(q => String(c.name).toLowerCase().includes(q) || (Array.isArray(c.tags) && c.tags.some(tag => tag.toLowerCase().includes(q)))));
       if (!character) {
         return msg.reply(`ꕥ No se encontró el personaje *${nameQuery}*.`);
-      }      
+      }
       const source = getSeriesNameByCharacter(structure, character.id);
       let characterData = db.getCharacter(character.id);
       if (!characterData) {
         characterData = { name: character.name, value: Number(character.value) || 100, votes: 0 };
         db.setCharacter(character.id, characterData);
-      }      
+      }
       const allChatUsers = db.getChatUser(msg.chat);
       for (const u of allChatUsers) {
         if (u.characters && typeof u.characters === 'string') {
           try { u.characters = JSON.parse(u.characters); } catch { u.characters = []; }
         }
-      }      
-      const userEntry = allChatUsers.find(u => Array.isArray(u.characters) && u.characters.includes(character.id));      
+      }
+      const userEntry = allChatUsers.find(u => Array.isArray(u.characters) && u.characters.includes(character.id));
       let ownerName = 'Desconocido';
-      let claimedDateLine = '';      
+      let claimedDateLine = '';
       if (userEntry) {
         const ownerGlobal = db.getUser(userEntry.user_id);
         ownerName = ownerGlobal?.name?.trim() || userEntry.user_id.split('@')[0];
@@ -72,7 +72,7 @@ export default {
         if (claimedChar?.claimedAt) {
           claimedDateLine = `\nⴵ Fecha de reclamo » *${new Date(claimedChar.claimedAt).toLocaleDateString('es-VE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}*`;
         }
-      }      
+      }
       const lastVoteAgo = typeof characterData.lastVotedAt === 'number' ? `hace *${formatElapsed(Date.now() - characterData.lastVotedAt)}*` : '*Nunca*';
       const allCharacters_data = [];
       for (const c of allCharacters) {
@@ -80,17 +80,17 @@ export default {
         if (charData?.value) {
           allCharacters_data.push({ name: c.name, value: charData.value });
         }
-      }      
+      }
       const sorted = allCharacters_data.sort((a, b) => b.value - a.value);
-      const rank = sorted.findIndex(c => c.name === character.name) + 1 || '—';     
+      const rank = sorted.findIndex(c => c.name === character.name) + 1 || '—';
       const caption = `❀ Nombre » *${characterData.name}*
 ⚥ Género » *${character.gender || 'Desconocido'}*
 ✰ Valor » *${characterData.value.toLocaleString()}*
 ♡ Estado » ${userEntry ? `Reclamado por *${ownerName}*` : '*Libre*'}${claimedDateLine}
 ❖ Fuente » *${source}*
 ❏ Puesto » *#${rank}*
-ⴵ Último voto » ${lastVoteAgo}`.trim();     
-      await sock.sendMessage(msg.chat, { text: caption }, { quoted: msg });     
+ⴵ Último voto » ${lastVoteAgo}`.trim();
+      await sock.sendMessage(msg.chat, { text: caption }, { quoted: msg });
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

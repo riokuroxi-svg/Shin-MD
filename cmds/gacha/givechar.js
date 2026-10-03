@@ -17,10 +17,10 @@ export default {
       const chat = db.getChat(msg.chat);
       if (chat.adminonly || !chat.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
-      }      
+      }
       if (!args.length) {
         return msg.reply(`❀ Debes escribir el nombre del personaje y citar o mencionar al usuario que lo recibirá`);
-      }      
+      }
       const targetId = msg.mentionedJid?.[0] || msg.quoted?.sender || null;
       if (!targetId) return msg.reply(`❀ Debes mencionar o citar el mensaje del destinatario.`);
       let sender = db.getChatUser(msg.chat, msg.sender);
@@ -28,13 +28,13 @@ export default {
       if (!target) {
       return msg.reply(`「✎」 El usuario mencionado no está registrado en el bot.`);
       }
-      const characterName = msg.quoted ? args.join(' ').toLowerCase().trim() : args.slice(0, -1).join(' ').toLowerCase().trim();      
+      const characterName = msg.quoted ? args.join(' ').toLowerCase().trim() : args.slice(0, -1).join(' ').toLowerCase().trim();
       const structure = await loadCharacters();
       const allCharacters = flattenCharacters(structure);
-      const character = allCharacters.find(c => c.name.toLowerCase() === characterName);      
+      const character = allCharacters.find(c => c.name.toLowerCase() === characterName);
       if (!character) {
         return msg.reply(`ꕥ No se encontró el personaje *${characterName}*.`);
-      }      
+      }
       if (!sender.characters.includes(character.id)) {
         return msg.reply(`ꕥ *${character.name}* no está reclamado por ti.`);
       }

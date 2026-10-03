@@ -19,17 +19,17 @@ export default {
     const settings = db.getSettings(botId);
     const currency = settings.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'weapons', {});
-    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastdungeon', 0);    
+    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastdungeon', 0);
     let user = db.getChatUser(msg.chat, msg.sender);
     if (user.weapons && typeof user.weapons === 'string') {
       try { user.weapons = JSON.parse(user.weapons); } catch { user.weapons = {}; }
-    }    
+    }
     const staminaConsumed = randomInt(1, 5);
     if (user.stamina < staminaConsumed) {
       return msg.reply(`ꕥ No tienes suficiente stamina para volver asaltar la mazmorra.\n> Usa *${usedPrefix}heal* para curarte.`);
-    }    
+    }
     let usingMagic = false;
-    let usingWeapon = false;    
+    let usingWeapon = false;
     if (user.weapons?.hacha) {
       if (user.weapons.hacha.durability <= 10) {
         delete user.weapons.hacha;
@@ -45,21 +45,21 @@ export default {
       usingMagic = true;
       user.magic -= magicConsumed;
       db.setChatUser(msg.chat, msg.sender, 'magic', user.magic);
-    }    
+    }
     if (user.health < 5) {
       return msg.reply(`ꕥ No tienes suficiente salud para volver a la *mazmorra*.\n> Usa *${usedPrefix}heal* para curarte.`);
-    }    
+    }
     if (Date.now() < user.lastdungeon) {
       const restante = user.lastdungeon - Date.now();
       return msg.reply(`ꕥ Debes esperar *${msToTime(restante)}* antes de volver a la mazmorra.`);
-    }    
+    }
     user.stamina -= staminaConsumed;
-    db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);    
+    db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);
     const rand = Math.random();
     let cantidad = 0;
     let salud = randomInt(1, 15);
     let durabilityConsumed = randomInt(1, 15);
-    let message;    
+    let message;
     if (rand < 0.4) {
       if (usingWeapon) {
         user.weapons.hacha.durability -= durabilityConsumed;
@@ -72,7 +72,7 @@ export default {
       user.coins += cantidad;
       user.health -= salud;
       db.setChatUser(msg.chat, msg.sender, 'coins', user.coins);
-      db.setChatUser(msg.chat, msg.sender, 'health', user.health);      
+      db.setChatUser(msg.chat, msg.sender, 'health', user.health);
       const successMessages = [
         `Derrotaste al guardián de las ruinas y reclamaste el tesoro antiguo, ganaste *¥${cantidad.toLocaleString()} ${currency}*.`,
         `Descifraste los símbolos rúnicos y obtuviste recompensas ocultas, ganaste *¥${cantidad.toLocaleString()} ${currency}*.`,
@@ -116,7 +116,7 @@ export default {
       }
       user.health -= salud;
       if (user.health < 0) user.health = 0;
-      db.setChatUser(msg.chat, msg.sender, 'health', user.health);      
+      db.setChatUser(msg.chat, msg.sender, 'health', user.health);
       const failMessages = [
         `Un espectro maldito te drena energía antes de que puedas escapar, perdiste *¥${cantidad.toLocaleString()} ${currency}*.`,
         `Un basilisco te sorprende en la cámara oculta, huyes herido, perdiste *¥${cantidad.toLocaleString()} ${currency}*.`,
@@ -136,7 +136,7 @@ export default {
         `Encuentras un mural antiguo que revela secretos de la mazmorra.`
       ];
       message = pickRandom(neutralMessages);
-    }    
+    }
     db.setChatUser(msg.chat, msg.sender, 'lastdungeon', Date.now() + 17 * 60 * 1000);
     await sock.sendMessage(msg.chat, { text: `「✿」 ${message}` }, { quoted: msg });
   }

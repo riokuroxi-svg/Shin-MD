@@ -38,7 +38,7 @@ export default {
         await sock.sendMessage(msg.chat, { image: buffer, caption: mediaMessage.caption || '' }, { quoted: msg });
       } else if (/audio/i.test(messageType)) {
         await sock.sendMessage(msg.chat, { audio: buffer, mimetype: 'audio/ogg; codecs=opus', ptt: mediaMessage.ptt || false }, { quoted: msg });
-      }      
+      }
       await msg.react('✔️');
     } catch (e) {
       await msg.react('✖️');

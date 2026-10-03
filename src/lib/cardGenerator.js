@@ -114,7 +114,7 @@ export async function generateProfileCard({
 
     <!-- Name & Badges -->
     <text x="235" y="88" font-family="sans-serif" font-weight="900" font-size="32" fill="#ffffff">${safeName}</text>
-    
+
     <rect x="235" y="105" width="130" height="26" rx="6" fill="#4338ca" />
     <text x="300" y="123" font-family="sans-serif" font-weight="bold" font-size="12" fill="#e0e7ff" text-anchor="middle">🛡️ ${safeRank}</text>
 
@@ -195,7 +195,7 @@ export async function generateWelcomeCard({
 
     <text x="235" y="82" font-family="sans-serif" font-weight="900" font-size="22" fill="#34d399">¡BIENVENIDO(A) AL GRUPO!</text>
     <text x="235" y="125" font-family="sans-serif" font-weight="900" font-size="32" fill="#ffffff">${safeMember}</text>
-    
+
     <text x="235" y="170" font-family="sans-serif" font-size="18" fill="#a7f3d0">Grupo: <tspan font-weight="bold" fill="#ffffff">${safeGroup}</tspan></text>
     <text x="235" y="205" font-family="sans-serif" font-size="15" fill="#6ee7b7">Miembro número: <tspan font-weight="bold" fill="#34d399">#${memberCount}</tspan></text>
 

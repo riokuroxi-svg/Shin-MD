@@ -27,7 +27,7 @@ export default {
     }
     const rsl = randomInt(2000, 4000);
     db.setChatUser(msg.chat, msg.sender, 'lastwork', Date.now() + cooldown);
-    db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) + rsl);    
+    db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) + rsl);
     await sock.sendMessage(msg.chat, { text: `❀ ${pickRandom(trabajo)} *¥${rsl.toLocaleString()} ${monedas}*.` }, { quoted: msg });
   }
 };

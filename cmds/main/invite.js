@@ -48,7 +48,7 @@ export default {
     const pp = await sock.profilePictureUrl(msg.sender, 'image').catch(() => defaultAvatar());
     const userName = user?.name || 'Usuario';
     const sugg = `❀ 𝗦𝗢𝗟𝗜𝗖𝗜𝗧𝗨𝗗 𝗥𝗘𝗖𝗜𝗕𝗜𝗗𝗔
-    
+
 ✩ *Usuario ›* ${userName}
 ✿ *Enlace ›* ${args.join(' ')}
 ✿ *Chat ›* ${grupo}

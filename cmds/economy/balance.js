@@ -19,7 +19,7 @@ export default {
     const monedas = botSettings.currency;
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
-    }    
+    }
     const who = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     const user = db.getChatUser(chatId, who);
     if (!user) {

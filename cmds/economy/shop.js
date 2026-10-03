@@ -31,8 +31,8 @@ export default {
     }
     if (user.inventory && typeof user.inventory === 'string') {
       try { user.inventory = JSON.parse(user.inventory); } catch { user.inventory = {}; }
-    }    
-    const armas = [{ id: 'espada', name: 'Espada', price: 8000, durability: 100, description: 'Para aventura', tipo: 'Combate' }, { id: 'hacha', name: 'Hacha', price: 7500, durability: 100, description: 'Para mazmorra', tipo: 'Combate' }, { id: 'arco', name: 'Arco', price: 7000, durability: 100, description: 'Para cazar', tipo: 'Combate' }];    
+    }
+    const armas = [{ id: 'espada', name: 'Espada', price: 8000, durability: 100, description: 'Para aventura', tipo: 'Combate' }, { id: 'hacha', name: 'Hacha', price: 7500, durability: 100, description: 'Para mazmorra', tipo: 'Combate' }, { id: 'arco', name: 'Arco', price: 7000, durability: 100, description: 'Para cazar', tipo: 'Combate' }];
     const herramientas = [{ id: 'pico', name: 'Pico', price: 6500, durability: 100, description: 'Para minar', tipo: 'Equipo' }, { id: 'caña', name: 'Caña de pescar', price: 6000, durability: 100, description: 'Para pescar', tipo: 'Equipo' }, { id: 'totem', name: 'Totem', price: 4000, durability: 3, description: 'Para ritual', tipo: 'Consumible' }, { id: 'pocion', name: 'Pocion', price: 1500, durability: 1, description: 'Restaura magia', tipo: 'Consumible' }];
     const commandType = command.toLowerCase();
     if (commandType === 'inventory' || commandType === 'inv' || commandType === 'inventario') {
@@ -250,7 +250,7 @@ export default {
       db.setChatUser(msg.chat, msg.sender, 'weapons', user.weapons);
       db.setChatUser(msg.chat, msg.sender, 'tools', user.tools);
       db.setChatUser(msg.chat, msg.sender, 'inventory', user.inventory);
-      db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) - costoTotal);      
+      db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) - costoTotal);
       let mensajeFinal = `ꕥ Compra exitosa:\n`;
       mensajeFinal += `> Items: *${itemsComprados.join(', ')}*\n`;
       mensajeFinal += `> Total: *¥${costoTotal.toLocaleString()} ${currency}*`;

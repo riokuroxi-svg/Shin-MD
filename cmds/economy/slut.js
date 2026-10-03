@@ -13,27 +13,27 @@ export default {
   description: 'Ganar coins con trabajos de riesgo.',
   run: async ({ msg, sock, usedPrefix, text }) => {
     const chatId = msg.chat;
-    const senderId = msg.sender;    
+    const senderId = msg.sender;
     const chatData = db.getChat(chatId);
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = botJid(sock);    
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId);
-    db.setCreate('chat_users', [chatId, senderId], 'lastslut', 0);    
-    const user = db.getChatUser(chatId, senderId);    
+    db.setCreate('chat_users', [chatId, senderId], 'lastslut', 0);
+    const user = db.getChatUser(chatId, senderId);
     const cooldown = 5 * 60 * 1000;
     const now = Date.now();
     const remaining = (user.lastslut || 0) - now;
-    const currency = botSettings.currency    
+    const currency = botSettings.currency
     if (remaining > 0) {
       return msg.reply(`✿ Debes esperar *${msToTime(remaining)}* antes de intentar nuevamente.`);
-    }    
+    }
     const success = Math.random() < 0.5;
-    const amount = success ? 
-      randomInt(3500, 6000) : 
-      randomInt(2000, 4000);    
-    db.setChatUser(chatId, senderId, 'lastslut', now + cooldown);    
+    const amount = success ?
+      randomInt(3500, 6000) :
+      randomInt(2000, 4000);
+    db.setChatUser(chatId, senderId, 'lastslut', now + cooldown);
     const winMessages = [
       `Le acaricias el pene a un cliente habitual y ganaste *¥${amount.toLocaleString()} ${currency}*!`,
       `El admin se viene en tu boca, ganaste *¥${amount.toLocaleString()} ${currency}*!`,
@@ -87,7 +87,7 @@ export default {
         db.setChatUser(chatId, senderId, 'coins', 0);
         db.setChatUser(chatId, senderId, 'bank', 0);
       }
-    }   
+    }
     await sock.sendMessage(chatId, { text: `「✿」 ${message}`, mentions: [senderId] }, { quoted: msg });
   }
 };
@@ -95,7 +95,7 @@ export default {
 const msToTime = (duration) => {
   const seconds = Math.floor((duration / 1000) % 60);
   const minutes = Math.floor((duration / (1000 * 60)) % 60);
-  const pad = (n) => n.toString().padStart(2, '0');  
+  const pad = (n) => n.toString().padStart(2, '0');
   if (minutes === 0) {
     return `${pad(seconds)} segundo${seconds !== 1 ? 's' : ''}`;
   }

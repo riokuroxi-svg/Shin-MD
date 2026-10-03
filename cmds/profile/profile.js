@@ -29,7 +29,7 @@ export default {
   run: async ({ msg, sock, usedPrefix, command }) => {
     const userId = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     db.setCreate('chat_users', [msg.chat, userId], 'favorite', '');
-    let user = db.getChatUser(msg.chat, userId);    
+    let user = db.getChatUser(msg.chat, userId);
     if (!user) {
       return msg.reply('✎ El usuario *mencionado* no está *registrado* en el bot');
     }
@@ -40,7 +40,7 @@ export default {
     const name = user2.name || msg.pushName || 'Usuario';
     const birth = user2.birth || 'Sin especificar';
     const genero = user2.genre || 'Oculto';
-    const comandos = user2.usedcommands || '0';    
+    const comandos = user2.usedcommands || '0';
     let pareja = 'Nadie';
     if (user2.marry) {
       const partner = db.getUser(user2.marry) || {};
@@ -61,15 +61,15 @@ export default {
       if (character) {
         favLine = `\n๑ Claim favorito » *${character.name || '???'}*`;
       }
-    }    
+    }
     const ownedIDs = Array.isArray(user.characters) ? user.characters : [];
-    let haremValue = 0;    
+    let haremValue = 0;
     for (const id of ownedIDs) {
       const character = db.getCharacter(id);
       if (character) {
         haremValue += character.value || 0;
       }
-    }    
+    }
     const haremCount = ownedIDs.length;
     let perfilUrl = null;
     try {
@@ -80,14 +80,14 @@ export default {
 
     const allUsers = db.getUser() || [];
     const users = Array.isArray(allUsers) ? allUsers.map(u => ({ ...u, jid: u.id })) : [];
-    const sortedLevel = users.sort((a, b) => (b.level || 0) - (a.level || 0));    
+    const sortedLevel = users.sort((a, b) => (b.level || 0) - (a.level || 0));
 
     try {
       const rankPos = sortedLevel.findIndex((u) => u.jid === userId) + 1;
       const { min, max, xp } = xpRange(nivel, global.multiplier);
       const progreso = Math.max(0, exp - min);
-      const porcentaje = xp > 0 ? Math.min(100, Math.floor((progreso / xp) * 100)) : 0;      
-      
+      const porcentaje = xp > 0 ? Math.min(100, Math.floor((progreso / xp) * 100)) : 0;
+
       const userRank = user2.isOwner ? "Owner" : (user2.isPremium ? "Premium" : "Miembro");
 
       let profileText = `╭┈┈⫹⫺ *PERFIL DE USUARIO* ⫹⫺┈┈╮\n`;

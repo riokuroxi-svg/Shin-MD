@@ -17,19 +17,19 @@ export default {
       return msg.reply(`ꕤ ꨩᰰ𑪐𑂺 ˳ ׄ Set Welcome ࣭𑁯ᰍ   ̊ ܃܃
 
 *❒ Variables disponibles:*
-𖣣ֶㅤ֯⌗ ✤ ⬭ @user    
+𖣣ֶㅤ֯⌗ ✤ ⬭ @user
 > → Mención del usuario que ingresa
 
-𖣣ֶㅤ֯⌗ ✤ ⬭ @group   
+𖣣ֶㅤ֯⌗ ✤ ⬭ @group
 > → Nombre del grupo
 
-𖣣ֶㅤ֯⌗ ✤ ⬭ @desc    
+𖣣ֶㅤ֯⌗ ✤ ⬭ @desc
 > → Descripción del grupo
 
-𖣣ֶㅤ֯⌗ ✤ ⬭ @members 
+𖣣ֶㅤ֯⌗ ✤ ⬭ @members
 > → Número de miembros actuales
 
-𖣣ֶㅤ֯⌗ ✤ ⬭ @time    
+𖣣ֶㅤ֯⌗ ✤ ⬭ @time
 > → Fecha y hora
 
 ✿ Si ya tienes un mensaje configurado y quieres borrarlo usa: *${usedPrefix + command} clear*`);

@@ -17,25 +17,25 @@ export default {
     const chatData = db.getChat(msg.chat)
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
-    }        
+    }
     const botId = botJid(sock);
     const bot = db.getSettings(botId);
     const currency = bot.currency;
-    const botname = bot.botname;    
+    const botname = bot.botname;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastApuesta', 0);
-    const user = db.getChatUser(msg.chat, msg.sender);    
+    const user = db.getChatUser(msg.chat, msg.sender);
     let Aku = Math.floor(Math.random() * 101);
     let Kamu = Math.floor(Math.random() * 55);
     let count = args[0];
     const users = db.getUser(msg.sender);
     const userName = users?.name || msg.sender.split('@')[0];
     const tiempoEspera = 30 * 1000;
-    const ahora = Date.now();        
+    const ahora = Date.now();
     if (user.lastApuesta && ahora - user.lastApuesta < tiempoEspera) {
       const restante = user.lastApuesta + tiempoEspera - ahora;
       const tiempoRestante = formatTime(restante);
       return sock.reply(msg.chat, `ꕥ Debes esperar *${tiempoRestante}* para usar *${usedPrefix + command}* nuevamente.`, msg);
-    }        
+    }
     db.setChatUser(msg.chat, msg.sender, 'lastApuesta', ahora);
     if (count && /all/i.test(count)) {
       count = Math.floor(users.limit / buatall);
@@ -43,7 +43,7 @@ export default {
       count = parseInt(args[0]);
     } else {
       count = 1;
-    }        
+    }
     count = Math.max(1, count);
     if (args.length < 1) {
       return sock.reply(msg.chat, `❀ Ingresa la cantidad de *${currency}* que deseas aportar contra *${botname}*\n> Ejemplo: *${usedPrefix + command} 100*`, msg);

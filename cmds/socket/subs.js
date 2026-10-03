@@ -172,7 +172,7 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       if (conss !== -1) { global.conns[conss] = socks; } else { global.conns.push(socks); }
       delete reintentos[socks.userId || id];
       log.ui(chalk.gray(`[ ✿  ]  SUB-BOT conectado: ${socks.userId}`));
-      
+
       // Guardar credenciales de forma inmediata y síncrona
       clearTimeout(saveCredsTimer);
       try { await saveCredsDB(); } catch {}

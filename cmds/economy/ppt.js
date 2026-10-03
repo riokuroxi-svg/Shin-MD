@@ -17,18 +17,18 @@ export default {
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = botJid(sock);    
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId);
     const monedas = botSettings.currency;
-    const botname = botSettings.namebot;   
+    const botname = botSettings.namebot;
     db.setCreate('chat_users', [chatId, msg.sender], 'lastppt', 0);
-    const user = db.getChatUser(chatId, msg.sender);    
-    const remainingTime = user.lastppt - Date.now();    
+    const user = db.getChatUser(chatId, msg.sender);
+    const remainingTime = user.lastppt - Date.now();
     if (remainingTime > 0) {
       return msg.reply(`ꕥ Debes esperar *${msToTime(remainingTime)}* antes de jugar nuevamente.`);
     }
     const options = ['piedra', 'papel', 'tijera'];
-    const userChoice = args[0]?.trim().toLowerCase();    
+    const userChoice = args[0]?.trim().toLowerCase();
     if (!options.includes(userChoice)) {
       return msg.reply(`《✧》 Usa el comando así:\n› *${usedPrefix + command} piedra*, *papel* o *tijera*`);
     }
@@ -36,16 +36,16 @@ export default {
     const result = determineWinner(userChoice, botChoice);
     const reward = randomInt(3000, 5500);
     const loss = randomInt(1000, 3000);
-    const tieReward = randomInt(800, 1500);    
+    const tieReward = randomInt(800, 1500);
     let newCoins = user.coins || 0;
-    let newBank = user.bank || 0;    
+    let newBank = user.bank || 0;
     if (result === 'win') {
       newCoins += reward;
       db.setChatUser(chatId, msg.sender, 'coins', newCoins);
       await sock.sendMessage(chatId, { text: `ꕥ Ganaste.\n\n> ✿ *Tu elección ›* ${userChoice}\n> ✿ *${botname} eligió ›* ${botChoice}\n> ✿ *${monedas} ›* ¥${reward.toLocaleString()}` }, { quoted: msg });
     } else if (result === 'lose') {
       const total = newCoins + newBank;
-      const actualLoss = Math.min(loss, total);      
+      const actualLoss = Math.min(loss, total);
       if (newCoins >= actualLoss) {
         newCoins -= actualLoss;
         db.setChatUser(chatId, msg.sender, 'coins', newCoins);
@@ -55,7 +55,7 @@ export default {
         newBank = Math.max(0, newBank - remaining);
         db.setChatUser(chatId, msg.sender, 'coins', 0);
         db.setChatUser(chatId, msg.sender, 'bank', newBank);
-      }      
+      }
       await sock.sendMessage(chatId, { text: `ꕥ Perdiste.\n\n> ✿ *Tu elección ›* ${userChoice}\n> ✿ *${botname} eligió ›* ${botChoice}\n> ✿ *${monedas} ›* -¥${actualLoss.toLocaleString()}` }, { quoted: msg });
     } else {
       newCoins += tieReward;

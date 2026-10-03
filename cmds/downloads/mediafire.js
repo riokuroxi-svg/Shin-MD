@@ -21,17 +21,17 @@ export default {
     try {
       if (!/^https?:\/\/(www\.)?mediafire\.com\/.+/i.test(text)) {
         return msg.reply('《✧》 Por favor, ingresa un enlace válido de Mediafire.')
-      }      
+      }
       scraped = await mediafireDl(text)
-      if (!scraped?.downloadLink) return msg.reply(`《✧》 No se pudo obtener el archivo.`)      
+      if (!scraped?.downloadLink) return msg.reply(`《✧》 No se pudo obtener el archivo.`)
       const title = (scraped.filename || 'archivo').trim()
       const ext = path.extname(title) || (scraped.type ? `.${scraped.type}` : '')
-      const tipo = lookup(ext.toLowerCase()) || 'application/octet-stream'      
+      const tipo = lookup(ext.toLowerCase()) || 'application/octet-stream'
       let info = `✰ ᩧ　𓈒　ׄ　𝖬𝖾𝖽𝗂𝖺𝖥𝗂𝗋𝖾　ׅ　✿\n\n`
       info += `ׄ ﹙ׅ✿﹚ּ *Nombre* › ${title}\n`
       info += `ׄ ﹙ׅ✿﹚ּ *Tipo* › ${tipo}\n`
       if (scraped.size) info += `ׄ ﹙ׅ✿﹚ּ *Peso* › ${scraped.size}\n`
-      if (scraped.uploaded) info += `ׄ ﹙ׅ✿﹚ּ *Subido* › ${scraped.uploaded}\n`      
+      if (scraped.uploaded) info += `ׄ ﹙ׅ✿﹚ּ *Subido* › ${scraped.uploaded}\n`
       await sock.sendMessage(msg.chat, { document: { url: scraped.downloadLink }, mimetype: tipo, fileName: title, caption: info, mentions: [msg.sender] }, { quoted: msg })
     } catch (e) {
       // Si el envío falla (suele ser por tamaño), al menos que se

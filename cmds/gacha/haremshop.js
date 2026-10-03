@@ -20,7 +20,7 @@ export default {
     }
     if (chat.sales && typeof chat.sales === 'string') {
       try { chat.sales = JSON.parse(chat.sales); } catch { chat.sales = {}; }
-    }    
+    }
     try {
       const ahora = Date.now();
       let cambios = false;
@@ -33,7 +33,7 @@ export default {
       if (cambios) {
         db.setChat(chatId, 'sales', chat.sales);
       }
-      const ventas = Object.entries(chat.sales || {});      
+      const ventas = Object.entries(chat.sales || {});
       if (!ventas.length) {
         const grupo = await sock.groupMetadata(msg.chat);
         return msg.reply(`ꕥ No hay personajes en venta en *${grupo.subject || 'este grupo'}*`);

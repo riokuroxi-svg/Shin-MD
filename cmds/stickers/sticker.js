@@ -24,7 +24,7 @@ export default {
       if (args[0] === '-list') {
         let helpText = `ꕥ Lista de Formas y Efectos Disponibles para *imagen*:\n\n✦ *Formas:*\n- -c : Crea un sticker circular\n- -t : Crea un sticker triangular\n- -s : Crea un sticker con forma de estrella\n- -r : Crea un sticker con esquinas redondeadas\n- -h : Crea un sticker hexagonal\n- -d : Crea un sticker con forma de diamante\n- -f : Crea un sticker con un marco\n- -b : Crea un sticker con un borde\n- -w : Crea un sticker con forma de onda\n- -m : Crea un sticker espejado\n- -o : Crea un sticker octogonal\n- -y : Crea un sticker pentagonal\n- -e : Crea un sticker elíptico\n- -z : Crea un sticker en forma de cruz\n- -v : Crea un sticker con forma de corazón\n- -x : Crea un sticker expandido (cover)\n- -i : Crea un sticker expandido (contain)\n\n✧ *Efectos:*\n- -blur : Aplica un efecto de desenfoque\n- -sepia : Aplica un efecto sepia\n- -sharpen : Aplica un efecto de nitidez\n- -brighten : Aumenta el brillo\n- -darken : Disminuye el brillo\n- -invert : Invierte los colores\n- -grayscale : Aplica escala de grises\n- -rotate90 : Rota la imagen 90 grados\n- -rotate180 : Rota la imagen 180 grados\n- -flip : Invierte la imagen horizontalmente\n- -flop : Invierte la imagen verticalmente\n- -normalice : Normaliza la imagen\n- -negate : Negatiza la imagen\n- -tint : Aplica un tinte de color a la imagen (rojo por defecto)\n\n> Ejemplo: *${usedPrefix + command} -c -blur Pack | Autor*`;
         return sock.reply(msg.chat, helpText, msg);
-      }      
+      }
       const quoted = msg.quoted || msg;
       const mime = (quoted.msg || quoted).mimetype || '';
       let user = db.getUser(msg.sender);
@@ -132,17 +132,17 @@ export default {
       } else if (/video/.test(mime)) {
         if ((quoted.msg || quoted).seconds > 20) {
           return msg.reply('《✧》 El video no puede ser muy largo');
-        }        
+        }
         let buffer = await quoted.download();
         const inputPath = `./tmp/video-${Date.now()}.mp4`;
         fs.writeFileSync(inputPath, buffer);
         await processWithFFmpeg(inputPath, true);
         fs.unlinkSync(inputPath);
       } else if (urlArg) {
-        const url = urlArg;        
+        const url = urlArg;
         if (!url.match(/\.(jpe?g|png|gif|webp|mp4|mov|avi|mkv|webm)(\?.*)?$/i)) {
           return sock.reply(msg.chat, '《✧》 La URL debe ser de una imagen (jpg, png, gif, webp) o video (mp4, mov, avi, mkv, webm)', msg);
-        }        
+        }
         const response = await fetch(url);
         if (!response.ok) return sock.reply(msg.chat, '《✧》 No pude descargar ese archivo desde la URL.', msg);
         const buffer = Buffer.from(await response.arrayBuffer());
@@ -208,7 +208,7 @@ const buildFFmpegFilters = (effects, isVideo = false) => {
   if (shape && !['cover', 'contain', 'mirror', 'border', 'frame'].includes(shape)) {
     const cx = W/2;
     const cy = H/2;
-    const r = Math.min(W, H)/2;    
+    const r = Math.min(W, H)/2;
     let alphaExpr = '';
     switch (shape) {
       case 'circle': alphaExpr = `if(lte((X-${cx})*(X-${cx})+(Y-${cy})*(Y-${cy}),${r*r}),255,0)`; break;

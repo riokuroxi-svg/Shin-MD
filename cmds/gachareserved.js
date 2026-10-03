@@ -11,11 +11,11 @@ import db from '../src/services/ginko-db.js';
 const limpiarRolls = async () => {
   try {
     const now = Date.now();
-    const allChats = db.getChat();    
+    const allChats = db.getChat();
     for (const chat of allChats) {
-      if (!chat.rolls) continue;      
+      if (!chat.rolls) continue;
       let rolls = chat.rolls;
-      let cambios = false;      
+      let cambios = false;
       for (const msgId of Object.keys(rolls)) {
         const roll = rolls[msgId];
         const expirado = roll.expiresAt && now > roll.expiresAt;
@@ -24,7 +24,7 @@ const limpiarRolls = async () => {
           delete rolls[msgId];
           cambios = true;
         }
-      }      
+      }
       if (cambios) {
         db.setChat(chat.id, 'rolls', rolls);
       }

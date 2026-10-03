@@ -16,36 +16,36 @@ export default {
     const chat = db.getChat(msg.chat);
     if (chat.adminonly || !chat.gacha) {
       return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
-    }    
+    }
     try {
       const structure = await loadCharacters();
-      const allCharacters = flattenCharacters(structure);      
+      const allCharacters = flattenCharacters(structure);
       const allUsers = db.getUser();
-      const counts = {};      
+      const counts = {};
       for (const user of allUsers) {
         const favId = user.favorite;
         if (favId) counts[favId] = (counts[favId] || 0) + 1;
-      }      
+      }
       const enriched = [];
       for (const c of allCharacters) {
         const character = db.getCharacter(c.id);
         const name = character?.name || c.name;
         enriched.push({ name, favorites: counts[c.id] || 0 });
-      }      
-      const filtered = enriched.filter(e => e.favorites > 0);     
+      }
+      const filtered = enriched.filter(e => e.favorites > 0);
       const page = parseInt(args[0]) || 1;
       const perPage = 10;
       const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
       if (page < 1 || page > totalPages) {
         return msg.reply(`ꕥ Página no válida. Hay un total de *${totalPages}* páginas.`);
-      }      
+      }
       const sorted = filtered.sort((a, b) => b.favorites - a.favorites);
-      const sliced = sorted.slice((page - 1) * perPage, page * perPage);     
+      const sliced = sorted.slice((page - 1) * perPage, page * perPage);
       let replyText = '✰ Top de personajes favoritos:\n\n';
       sliced.forEach((char, i) => {
         replyText += `#${(page - 1) * perPage + i + 1} » *${char.name}*\n`;
         replyText += `   ♡ ${char.favorites} favorito${char.favorites !== 1 ? 's' : ''}.\n`;
-      });      
+      });
       replyText += `\n> Página ${page} de ${totalPages}`;
       await sock.reply(msg.chat, msg.trim(), msg);
     } catch (e) {

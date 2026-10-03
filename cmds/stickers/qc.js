@@ -29,14 +29,14 @@ export default {
       }
       await msg.react('🕒');
       const quoteObj = { type: 'quote', format: 'png', backgroundColor: '#000000', width: 512, height: 768, scale: 2, messages: [{ entities: [], avatar: true, from: { id: 1, name: nombre, photo: { url: pp } }, text: textFinal, replyMessage: {} }] };
-      const json = await axios.post('https://bot.lyo.su/quote/generate', quoteObj, { headers: { 'Content-Type': 'application/json' }});      
+      const json = await axios.post('https://bot.lyo.su/quote/generate', quoteObj, { headers: { 'Content-Type': 'application/json' }});
       const buffer = Buffer.from(json.data.result.image, 'base64');
       let user = db.getUser(msg.sender);
       const name = user.name || msg.sender.split('@')[0];
       const meta1 = user.metadatos ? String(user.metadatos).trim() : '';
       const meta2 = user.metadatos2 ? String(user.metadatos2).trim() : '';
       let texto1 = meta1 ? meta1 : global.stickerBrand || '🍁 Ginko-MD';
-      let texto2 = meta1 ? (meta2 ? meta2 : '') : `@${name}`;      
+      let texto2 = meta1 ? (meta2 ? meta2 : '') : `@${name}`;
       const tmpFile = `./tmp/qc-${Date.now()}.webp`;
       fs.writeFileSync(tmpFile, buffer);
       await sock.sendImageAsSticker(msg.chat, tmpFile, msg, { packname: texto1, author: texto2 });

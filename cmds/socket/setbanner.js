@@ -11,7 +11,7 @@ import db from '../../src/services/ginko-db.js';
 async function uploadImage(buffer, mime) {
   const base64Data = buffer.toString('base64');
   const extension = mime.split('/')[1] || 'jpg';
-  
+
   const res = await fetch('https://cdn.adoolab.xyz/api/upload', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -21,7 +21,7 @@ async function uploadImage(buffer, mime) {
       expiration: 'never'
     })
   });
-  
+
   const json = await res.json();
   if (json?.url) return json.url;
   throw new Error('Upload failed');

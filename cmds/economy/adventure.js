@@ -19,7 +19,7 @@ export default {
     const settings = db.getSettings(botId);
     const currency = settings.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'weapons', {});
-    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastadventure', 0);    
+    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastadventure', 0);
     let user = db.getChatUser(msg.chat, msg.sender);
     if (user.weapons && typeof user.weapons === 'string') {
       try { user.weapons = JSON.parse(user.weapons); } catch { user.weapons = {}; }
@@ -27,9 +27,9 @@ export default {
     const staminaConsumed = randomInt(1, 5);
     if (user.stamina < staminaConsumed) {
       return msg.reply(`ꕥ No tienes suficiente stamina para salir de aventura.\n> Usa *${usedPrefix}heal* para curarte.`);
-    }    
+    }
     let usingMagic = false;
-    let usingWeapon = false;    
+    let usingWeapon = false;
     if (user.weapons?.espada) {
       if (user.weapons.espada.durability <= 10) {
         delete user.weapons.espada;
@@ -45,21 +45,21 @@ export default {
       usingMagic = true;
       user.magic -= magicConsumed;
       db.setChatUser(msg.chat, msg.sender, 'magic', user.magic);
-    }    
+    }
     if (user.health < 5) {
       return msg.reply(`ꕥ No tienes suficiente salud para volver a *aventurarte*.\n> Usa *${usedPrefix}heal* para curarte.`);
-    }    
+    }
     const remainingTime = user.lastadventure - Date.now();
     if (remainingTime > 0) {
       return sock.reply(msg.chat, `ꕥ Debes esperar *${msToTime(remainingTime)}* para usar *${usedPrefix + command}* de nuevo.`, msg);
-    }    
+    }
     user.stamina -= staminaConsumed;
-    db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);    
+    db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);
     const rand = Math.random();
     let cantidad = 0;
     let salud = randomInt(1, 20);
     let durabilityConsumed = randomInt(1, 15);
-    let message;    
+    let message;
     if (rand < 0.4) {
       if (usingWeapon) {
         user.weapons.espada.durability -= durabilityConsumed;
@@ -72,7 +72,7 @@ export default {
       user.coins += cantidad;
       user.health -= salud;
       db.setChatUser(msg.chat, msg.sender, 'coins', user.coins);
-      db.setChatUser(msg.chat, msg.sender, 'health', user.health);      
+      db.setChatUser(msg.chat, msg.sender, 'health', user.health);
       const successMessages = [
         `Derrotaste a un ogro emboscado entre los árboles de Drakonia, ganaste *¥${cantidad.toLocaleString()} ${currency}*.`,
         `Te conviertes en campeón del torneo de gladiadores de Valoria, ganaste *¥${cantidad.toLocaleString()} ${currency}*.`,
@@ -116,7 +116,7 @@ export default {
       }
       user.health -= salud;
       if (user.health < 0) user.health = 0;
-      db.setChatUser(msg.chat, msg.sender, 'health', user.health);      
+      db.setChatUser(msg.chat, msg.sender, 'health', user.health);
       const failMessages = [
         `El hechicero oscuro te lanzó una maldición y huyes perdiendo *¥${cantidad.toLocaleString()} ${currency}*.`,
         `Te extravías en la jungla de Zarkelia y unos bandidos te asaltan, pierdes *¥${cantidad.toLocaleString()} ${currency}*.`,
@@ -136,7 +136,7 @@ export default {
         `Visitas una aldea remota y escuchas relatos de viejas batallas.`
       ];
       message = pickRandom(neutralMessages);
-    }    
+    }
     db.setChatUser(msg.chat, msg.sender, 'lastadventure', Date.now() + 20 * 60 * 1000);
     await sock.sendMessage(msg.chat, { text: `「✿」 ${message}` }, { quoted: msg });
   }

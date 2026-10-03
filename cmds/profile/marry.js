@@ -21,21 +21,21 @@ export default {
     const proposerUser = db.getUser(proposer);
     const proposeeUser = db.getUser(proposee);
     if (!proposee) return sock.reply(msg.chat, `《✧》 Debes mencionar a alguien para aceptar o proponer matrimonio.\n> Ejemplo » *${usedPrefix + command}* @${idBot.split('@')[0]}`, msg, { mentions: [idBot] });
-    if (proposer === proposee) return msg.reply(`《✧》 No puedes proponerte matrimonio a ti ${proposerUser.genre === 'Mujer' ? 'misma' : proposerUser.genre === 'Hombre' ? 'mismo' : 'mismx'}`);      
+    if (proposer === proposee) return msg.reply(`《✧》 No puedes proponerte matrimonio a ti ${proposerUser.genre === 'Mujer' ? 'misma' : proposerUser.genre === 'Hombre' ? 'mismo' : 'mismx'}`);
     if (!proposerUser || !proposeeUser) {
       return msg.reply('《✧》 Uno de los usuarios no está registrado en el bot.');
-    }    
+    }
     if (proposerUser?.marry) {
       const partner = db.getUser(proposerUser.marry);
       return msg.reply(`《✧》 Ya estás ${partner.genre === 'Mujer' ? 'casada' : partner.genre === 'Hombre' ? 'casado' : 'casadx'} con *${partner?.name || 'alguien'}*.`);
-    }    
+    }
     if (proposeeUser?.marry) {
       const partner = db.getUser(proposeeUser.marry);
       return msg.reply(`《✧》 *${proposeeUser.name || proposee.split('@')[0]}* ya está ${partner.genre === 'Mujer' ? 'casada' : partner.genre === 'Hombre' ? 'casado' : 'casadx'} con *${partner?.name || 'alguien'}*.`);
-    }    
+    }
     setTimeout(() => {
       delete proposals[proposer];
-    }, 120000);    
+    }, 120000);
     if (proposals[proposee] === proposer) {
       delete proposals[proposee];
       db.setUser(proposer, 'marry', proposee);

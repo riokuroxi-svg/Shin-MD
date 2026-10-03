@@ -9,10 +9,10 @@ import { state } from '#lib/theme';
 const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 0.75;
 
 function xpRange(level, multiplier = global.multiplier || 2) {
-  if (level < 0) throw new TypeError('level cannot be negative value');  
+  if (level < 0) throw new TypeError('level cannot be negative value');
   level = Math.floor(level);
   const min = level === 0 ? 0 : Math.round(Math.pow(level, growth) * multiplier) + 1;
-  const max = Math.round(Math.pow(level + 1, growth) * multiplier);  
+  const max = Math.round(Math.pow(level + 1, growth) * multiplier);
   return { min, max, xp: max - min };
 }
 
@@ -22,16 +22,16 @@ export default {
   description: 'Top de usuarios con más experiencia.',
   run: async ({ msg, sock, args, usedPrefix, command, text }) => {
     try {
-      const allUsers = db.getUser();      
+      const allUsers = db.getUser();
       const users = allUsers.filter(user => (user.exp || 0) >= 1).map(user => {
         const name = user.name || 'Usuario';
         const exp = user.exp || 0;
         const level = user.level || 0;
         const { min, xp } = xpRange(level, global.multiplier);
         const progreso = exp - min;
-        const porcentaje = xp > 0 ? Math.floor((progreso / xp) * 100) : 0;        
+        const porcentaje = xp > 0 ? Math.floor((progreso / xp) * 100) : 0;
         return { jid: user.id, name, exp, level, progreso, xp, porcentaje };
-      });            
+      });
       if (users.length === 0) {
         return msg.reply(`ꕥ No hay usuarios registrados con experiencia.`);
       }
@@ -48,7 +48,7 @@ export default {
       text += sorted.slice(start, end).map(({ name, exp, level, progreso, xp, porcentaje }, i) => {
         return `✩ ${start + i + 1} › *${name}*\n     XP → *${exp.toLocaleString()}*  LVL → *${level}*\n     ➨ Progreso → *${progreso} => ${xp}* _(${porcentaje}%)_`;
       }).join('\n\n');
-      text += `\n\n> ⌦ Página *${page}* de *${totalPages}*`;      
+      text += `\n\n> ⌦ Página *${page}* de *${totalPages}*`;
       if (page < totalPages) {
         text += `\n> Para ver la siguiente página › *${usedPrefix + command} ${page + 1}*`;
       }

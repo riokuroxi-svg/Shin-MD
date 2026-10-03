@@ -56,7 +56,7 @@ export default {
 ◆ *Heap Reservado* › ${format(process.memoryUsage().heapTotal)}
 ◆ *Heap Usado* › ${format(process.memoryUsage().heapUsed)}
 ◆ *Módulos Nativos* › ${format(process.memoryUsage().external)}
-◆ *Buffers de Datos* › ${format(process.memoryUsage().arrayBuffers)}`;    
+◆ *Buffers de Datos* › ${format(process.memoryUsage().arrayBuffers)}`;
     const mensajeEstado = `${estadoBot}\n\n${estadoServidor}`;
     await sock.sendMessage(msg.chat, { text: mensajeEstado, mentions: [msg.sender] }, { quoted: msg });
   }

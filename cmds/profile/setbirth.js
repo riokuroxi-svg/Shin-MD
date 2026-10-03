@@ -15,7 +15,7 @@ export default {
   run: async ({ msg, args, usedPrefix, command, text }) => {
     const user = db.getUser(msg.sender);
     const currentYear = new Date().getFullYear();
-    const input = args.join(' ');    
+    const input = args.join(' ');
     if (!input) return msg.reply(`《✧》 Debes ingresar una fecha válida para tu cumpleaños.\n✐ Ejemplos:\n> ${usedPrefix + command} *01/01/2000* (día/mes/año)\n> ${usedPrefix + command} *01/01* (día/mes/año)`);
     const birth = validarFechaNacimiento(input, currentYear, usedPrefix, command);
     if (typeof birth === 'string' && birth.startsWith('✦'))

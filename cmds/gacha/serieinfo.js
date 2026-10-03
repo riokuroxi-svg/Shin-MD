@@ -20,12 +20,12 @@ export default {
       const chat = db.getChat(msg.chat);
       if (chat.adminonly || !chat.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
-      }      
+      }
       if (!args.length) {
         return msg.reply(`❀ Debes especificar el nombre de un anime\n> Ejemplo » ${usedPrefix + command} Naruto`);
       }
       let page = 1;
-      let seriesNameArgs = args;    
+      let seriesNameArgs = args;
       const lastArg = args[args.length - 1];
       if (lastArg && !isNaN(lastArg) && parseInt(lastArg) > 0) {
         page = parseInt(lastArg);
@@ -33,14 +33,14 @@ export default {
       }
       const query = seriesNameArgs.join(' ').toLowerCase().trim();
       const structure = await loadCharacters();
-      const entries = Object.entries(structure);      
+      const entries = Object.entries(structure);
       const match = entries.find(([, s]) => (typeof s.name === 'string' && s.name.toLowerCase().includes(query)) || (Array.isArray(s.tags) && s.tags.some(t => t.toLowerCase().includes(query)))) || (entries.filter(([, s]) => (typeof s.name === 'string' && query.split(' ').some(w => s.name.toLowerCase().includes(w))) || (Array.isArray(s.tags) && s.tags.some(t => query.split(' ').some(w => t.toLowerCase().includes(w)))))[0] || []);
       const [seriesKey, seriesData] = match;
       if (!seriesKey || !seriesData) {
         return msg.reply(`ꕥ No se encontró la serie *${query}*\n> Puedes sugerirlo usando el comando *${usedPrefix}suggest sugerencia de serie: ${query}*`);
       }
       let list = Array.isArray(seriesData.characters) ? seriesData.characters : [];
-      const total = list.length;     
+      const total = list.length;
       const allChatUsers = db.getChatUser(msg.chat);
       for (const u of allChatUsers) {
         if (u.characters && typeof u.characters === 'string') {
@@ -70,19 +70,19 @@ export default {
       replyText += `♡ Reclamados » *\`${claimedList.length}/${total} (${((claimedList.length / total) * 100).toFixed(0)}%)\`*\n`;
       replyText += `❏ Lista de personajes:\n\n`;
       for (const c of pageCharacters) {
-        const ownerEntry = allChatUsers.find(u => Array.isArray(u.characters) && u.characters.includes(c.id));       
+        const ownerEntry = allChatUsers.find(u => Array.isArray(u.characters) && u.characters.includes(c.id));
         let ownerName = 'desconocido';
         if (ownerEntry) {
           const ownerGlobal = db.getUser(ownerEntry.user_id);
           ownerName = ownerGlobal?.name?.trim() || ownerEntry.user_id.split('@')[0];
-        }        
+        }
         const status = ownerEntry ? `Reclamado por *${ownerName}*` : 'Libre';
         replyText += `» *${c.name}* (${c.value.toLocaleString()}) • ${status}.\n`;
-      }      
+      }
       replyText += `\n> ⌦ _Página *${page}* de *${totalPages}*_`;
       if (page < totalPages) {
         replyText += `\n> Usa *${usedPrefix}${command} ${seriesNameArgs.join(' ')} ${page + 1}* para ver la siguiente página.`;
-      }   
+      }
       await sock.reply(msg.chat, replyText.trim(), msg);
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
