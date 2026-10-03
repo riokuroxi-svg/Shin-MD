@@ -18,7 +18,8 @@
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
     "typecheck": "tsc",
     "test:pairing": "node scripts/verificar-pairing.js",
-    "docs:web": "node scripts/actualizar-web.mjs"
+    "docs:web": "node scripts/actualizar-web.mjs",
+    "docs:pastel": "python3 tools/build_pastel.py"
   },
   "imports": {
     "#engine": "./src/core/engine.js",
