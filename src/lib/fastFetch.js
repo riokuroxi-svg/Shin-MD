@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // Sistema de fetch rápido con caché en memoria
 // Usa el fetch NATIVO de Node.js (18+) que ya trae keep-alive por defecto
 // para reutilizar conexiones HTTP y ahorrar 100-300ms por petición.

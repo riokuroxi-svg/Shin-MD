@@ -1,4 +1,10 @@
 /**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+/**
  * #lib/native-actions — acciones y tarjetas del sistema que el bot
  * puede fabricar y que casi nadie usa.
  *

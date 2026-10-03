@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // ════════════════════════════════════════════════════════════
 //  sqliteAuth.js — AuthState de Baileys sobre SQLite NATIVO
 //  (node:sqlite, Node >= 22.5 — sin better-sqlite3, sin compilar nada)

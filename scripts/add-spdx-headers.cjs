@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // add-spdx-headers.cjs — Pone el header legal (AGPL + copyright) en todos
 // los .js del proyecto. IDEMPOTENTE: si el archivo ya tiene un
 // SPDX-License-Identifier, se salta. Úsalo después de agregar archivos.
@@ -70,7 +76,10 @@ function escribirSiEsValido(file, nuevoContenido) {
     console.log('  ✗ ABORTADO ' + path.relative(ROOT, file) + ' — dejaría código dentro de un comentario: ' + atrapado);
     return false;
   }
-  const tmp = file + '.spdx-tmp';
+  // El temporal TIENE que terminar en .js: si no, node lo trata como otra
+  // cosa y --check falla siempre (bug que dejó este script inservible:
+  // abortaba con TODOS los archivos y parecía que estaban bien).
+  const tmp = file + '.spdx-tmp.js';
   fs.writeFileSync(tmp, nuevoContenido, 'utf8');
   const check = require('node:child_process').spawnSync(process.execPath, ['--check', tmp], { stdio: 'pipe' });
   fs.unlinkSync(tmp);

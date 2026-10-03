@@ -1,3 +1,9 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
 // Resuelve el JID real del canal oficial al conectar por primera vez.
 // Usa sock.newsletterMetadata("invite", code) que devuelve el @newsletter JID correcto.
 const DEFAULT_CHANNEL_CODE = "0029VbDVFpSGJP89hfZUe522";
