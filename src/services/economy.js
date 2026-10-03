@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { randomInt, pickRandom } from "#lib/random";
 // Economy helpers — capa sobre SQLite para economía/gacha
 import { getDatabase } from "#db";
 
@@ -60,13 +61,8 @@ export function formatTime(ms) {
   return h + 'h ' + (m % 60) + 'm';
 }
 
-export function random(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-export function pickRandom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+// Delegado en #lib/random: aquí solo se conserva el nombre público.
+export { randomInt as random, pickRandom };
 
 export { COOLDOWNS };
-export default { getUserCoins, updateUserCoins, getTimer, setTimer, formatTime, random, pickRandom, COOLDOWNS };
+export default { getUserCoins, updateUserCoins, getTimer, setTimer, formatTime, random: randomInt, pickRandom, COOLDOWNS };

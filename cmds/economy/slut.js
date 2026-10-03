@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { randomInt, pickRandom } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['slut', 'prostituirse'],
@@ -16,7 +18,7 @@ export default {
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';    
+    const botId = botJid(sock);    
     const botSettings = db.getSettings(botId);
     db.setCreate('chat_users', [chatId, senderId], 'lastslut', 0);    
     const user = db.getChatUser(chatId, senderId);    
@@ -29,8 +31,8 @@ export default {
     }    
     const success = Math.random() < 0.5;
     const amount = success ? 
-      Math.floor(Math.random() * (6000 - 3500 + 1)) + 3500 : 
-      Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;    
+      randomInt(3500, 6000) : 
+      randomInt(2000, 4000);    
     db.setChatUser(chatId, senderId, 'lastslut', now + cooldown);    
     const winMessages = [
       `Le acaricias el pene a un cliente habitual y ganaste *¥${amount.toLocaleString()} ${currency}*!`,
@@ -68,7 +70,7 @@ export default {
       `El gay se arrepintió en el último segundo, perdiste *¥${amount.toLocaleString()} ${currency}*.`,
       `Los Aliens te devolvieron con trauma, perdiste *¥${amount.toLocaleString()} ${currency}*.`,
     ];
-    const message = success ? winMessages[Math.floor(Math.random() * winMessages.length)] : loseMessages[Math.floor(Math.random() * loseMessages.length)];
+    const message = success ? pickRandom(winMessages) : pickRandom(loseMessages);
     if (success) {
       db.setChatUser(chatId, senderId, 'coins', (user.coins || 0) + amount);
     } else {

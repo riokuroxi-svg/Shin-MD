@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 import { sendNativeQuickReply } from '#lib/native-reply';
 import { offerParams } from '#lib/native-params';
@@ -16,7 +17,7 @@ export default {
     if (chat.adminonly || !chat.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const bot = db.getSettings(botId);
     const monedas = bot.currency;
     db.setCreate('users', msg.sender, 'streak', 0);

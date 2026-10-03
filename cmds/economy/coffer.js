@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom } from "#lib/random";
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['cofre', 'coffer'],
@@ -14,7 +16,7 @@ export default {
     if (chat.adminonly || !chat.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }        
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const bot = db.getSettings(botId);
     const currency = bot.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastcoffer', 0);
@@ -85,6 +87,3 @@ function msToTime(ms) {
   return txt.join(' ');
 }
 
-function pickRandom(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 import { geminiGenerate } from '#lib/geminiRole';
 
@@ -139,9 +140,6 @@ function msToTime(duration) {
   return `${minutes} minuto${minutes > 1 ? 's' : ''}, ${seconds} segundo${seconds > 1 ? 's' : ''}`;
 }
 
-function pickRandom(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
 
 const escenarios = [
   'una cueva oscura y húmeda',
@@ -247,7 +245,7 @@ export default {
     if (user.tools && typeof user.tools === 'string') {
       try { user.tools = JSON.parse(user.tools); } catch { user.tools = {}; }
     }
-    const staminaConsumed = Math.floor(Math.random() * (5 - 1 + 1)) + 1;
+    const staminaConsumed = randomInt(1, 5);
     if (user.stamina < staminaConsumed) {
       return msg.reply(`ꕥ No tienes suficiente energía para ir a minar.\n> Usa *${usedPrefix}heal* para curarte.`);
     }
@@ -268,7 +266,7 @@ export default {
 
     user.stamina -= staminaConsumed;
     db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);
-    const durabilityConsumed = Math.floor(Math.random() * (15 - 1 + 1)) + 1;
+    const durabilityConsumed = randomInt(1, 15);
     user.tools.pico.durability -= durabilityConsumed;
     if (user.tools.pico.durability <= 10) delete user.tools.pico;
     db.setChatUser(msg.chat, msg.sender, 'tools', user.tools);
@@ -280,7 +278,7 @@ export default {
     const pushName = msg.pushName || 'Minero/a';
 
     if (isLegendary) {
-      reward = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
+      reward = randomInt(11000, 13000);
       const iaLegend = await geminiGenerate(
         `El minero "${pushName}" acaba de encontrar un TESORO LEGENDARIO en la mina. Escribe UNA oración muy emocionante y corta (máximo 20 palabras) en español narrando el hallazgo épico, mencionando oro o diamantes. NO uses markdown.`,
         { maxTokens: 120, temperature: 1 }
@@ -288,7 +286,7 @@ export default {
       narration = iaLegend || '💎 ¡DESCUBRISTE UN TESORO LEGENDARIO! 💎';
       bonusMsg = '\nꕥ Recompensa ÉPICA obtenida!';
     } else {
-      reward = Math.floor(Math.random() * (9500 - 7000 + 1)) + 7000;
+      reward = randomInt(7000, 9500);
       const scenario = pickRandom(escenarios);
       const accion = pickRandom(mineria);
       let narr;
@@ -300,7 +298,7 @@ export default {
       }
       narration = narr || `En ${scenario}, ${accion}`;
       if (Math.random() < 0.1) {
-        const bonus = Math.floor(Math.random() * (4500 - 2500 + 1)) + 2500;
+        const bonus = randomInt(2500, 4500);
         reward += bonus;
         bonusMsg = `\n「✿」 ¡Bonus de minería! Ganaste *${bonus.toLocaleString()}* ${monedas} extra`;
       }

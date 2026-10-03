@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import fs from 'fs';
 import os from 'os';
 import { sizeFormatter } from 'human-readable';
@@ -26,7 +27,7 @@ export default {
     const hostId = getDefaultHostId();
     const allChats = db.getChat();
     const registeredGroups = allChats?.length || 0;
-    const botId = sock.user.id.split(':')[0] + "@s.whatsapp.net" || false;
+    const botId = botJid(sock) || false;
     const botSettings = db.getSettings(botId) || {};
     const botname = botSettings.botname || 'Bot';
     const allUsers = db.getUser();

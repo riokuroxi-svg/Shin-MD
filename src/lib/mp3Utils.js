@@ -176,7 +176,7 @@ export function listAudioCovers(force = false) {
 export function pickAudioCover() {
   const list = listAudioCovers();
   if (!list.length) return '';
-  return list[Math.floor(Math.random() * list.length)];
+  return pickRandom(list);
 }
 
 // Portada ya optimizada en disco (500x500, ~30-55KB). Se elige una al azar
@@ -191,6 +191,7 @@ async function getOptimizedCover() {
  * (descargas locales con yt-dlp). Devuelve null si no valida → el
  * llamador cae a la recodificación completa (seguridad AUD-xxxx intacta).
  */
+import { pickRandom } from "#lib/random";
 async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secondsHint = 0) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ginko-remux-'));
   const inPath = path.join(tmpDir, 'input.mp3');

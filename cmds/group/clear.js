@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 const getLastActive = (usedTime) => {
   if (!usedTime) return 0;
@@ -107,7 +108,7 @@ export default {
     if (userList.length === 0) {
       return msg.reply(isViewMode ? 'ꕥ No hay usuarios con actividad registrada en este grupo.' : 'ꕥ No se encontraron usuarios inactivos.\n> ⴵ Tiempo limite: 30 dias');
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const currency = db.getSettings(botId)?.currency || '⛁';
     let report = '';
     if (isDeleteMode && !isViewMode) {

@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['cazar', 'hunt'],
@@ -14,7 +16,7 @@ export default {
     if (chat.adminonly || !chat.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const settings = db.getSettings(botId);
     const currency = settings.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'weapons', {});
@@ -23,7 +25,7 @@ export default {
     if (user.weapons && typeof user.weapons === 'string') {
       try { user.weapons = JSON.parse(user.weapons); } catch { user.weapons = {}; }
     }    
-    const staminaConsumed = Math.floor(Math.random() * (5 - 1 + 1)) + 1;
+    const staminaConsumed = randomInt(1, 5);
     if (user.stamina < staminaConsumed) {
       return msg.reply(`ꕥ No tienes suficiente stamina para cazar.\n> Usa *${usedPrefix}heal* para curarte.`);
     }    
@@ -42,7 +44,7 @@ export default {
     user.stamina -= staminaConsumed;
     db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);    
     const rand = Math.random();
-    const durabilityConsumed = Math.floor(Math.random() * (15 - 1 + 1)) + 1;
+    const durabilityConsumed = randomInt(1, 15);
     let cantidad = 0;
     let message;    
     if (rand < 0.4) {
@@ -51,7 +53,7 @@ export default {
         delete user.weapons.arco;
       }
       db.setChatUser(msg.chat, msg.sender, 'weapons', user.weapons);      
-      cantidad = Math.floor(Math.random() * (13000 - 10000 + 1)) + 10000;
+      cantidad = randomInt(10000, 13000);
       user.coins += cantidad;
       db.setChatUser(msg.chat, msg.sender, 'coins', user.coins);      
       const successMessages = [
@@ -73,7 +75,7 @@ export default {
         delete user.weapons.arco;
       }
       db.setChatUser(msg.chat, msg.sender, 'weapons', user.weapons);      
-      cantidad = Math.floor(Math.random() * (8000 - 6000 + 1)) + 6000;
+      cantidad = randomInt(6000, 8000);
       const total = (user.coins || 0) + (user.bank || 0);
       if (total >= cantidad) {
         if (user.coins >= cantidad) {
@@ -126,6 +128,3 @@ function msToTime(duration) {
   return min === '00' ? `${sec} segundo${sec > 1 ? 's' : ''}` : `${min} minuto${min > 1 ? 's' : ''}, ${sec} segundo${sec > 1 ? 's' : ''}`;
 }
 
-function pickRandom(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}

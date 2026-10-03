@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -65,10 +66,10 @@ export default {
         return msg.reply('> ✅ Circuit-breakers restablecidos. Los servicios volverán a intentarse.');
       }
 
-      const botId = sock?.user?.id ? `${sock.user.id.split(':')[0]}@s.whatsapp.net` : '';
+      const botId = sock?.user?.id ? `botJid(sock)` : '';
       const settings = botId ? (db.getSettings(botId) || {}) : {};
       const botname = settings.botname || global.botname || 'Ginko-MD';
-      const isOficial = global.sock?.user?.id && botId === (global.sock.user.id.split(':')[0] + '@s.whatsapp.net');
+      const isOficial = global.sock?.user?.id && botId === (botJid(global.sock));
       const botType = isOficial ? 'Principal/Owner' : 'Sub Bot';
       const connected = !!sock?.user;
 

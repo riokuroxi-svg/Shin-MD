@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { normalizeJid, resolveParticipantJid, resolveJidSync, deleteCachedMeta, getCachedMeta, setCachedMeta } from '#serialize';
+import { botJid, deleteCachedMeta, getCachedMeta, normalizeJid, resolveJidSync, resolveParticipantJid, setCachedMeta } from "#serialize";
 import chalk from 'chalk';
 import moment from 'moment-timezone';
 import db from '../src/services/ginko-db.js';
@@ -37,7 +37,7 @@ export default async (sock, msg) => {
         return null;
       })();
       const groupAdmins = metadata ? getGroupAdmins(metadata.participants) : [];
-      const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+      const botId = botJid(sock);
       const chat = db.getChat(anu.id) || {};
       const settings = db.getSettings(botId) || {};
       const primaryBotId = chat?.primaryBot;

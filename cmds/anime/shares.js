@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom } from "#lib/random";
 import fetch from 'node-fetch';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 
 const symbols = ['(⁠◠⁠‿⁠◕⁠)', '˃͈◡˂͈', '૮(˶ᵔᵕᵔ˶)ა', '(づ｡◕‿‿◕｡)づ', '(✿◡‿◡)', '(꒪⌓꒪)', '(✿✪‿✪｡)', '(*≧ω≦)', '(✧ω◕)', '˃ 𖥦 ˂', '(⌒‿⌒)', '(¬‿¬)', '(✧ω✧)', '✿(◕ ‿◕)✿', 'ʕ•́ᴥ•̀ʔっ', '(ㅇㅅㅇ❀)', '(∩︵∩)', '(✪ω✪)', '(✯◕‿◕✯)', '(•̀ᴗ•́)و ̑̑'];
-function getRandomSymbol() { return symbols[Math.floor(Math.random() * symbols.length)]; }
+function getRandomSymbol() { return pickRandom(symbols); }
 
 const captions = {
   peek: (from, to) => from === to ? 'está espiando detrás de una puerta por diversión.' : 'está espiando a',

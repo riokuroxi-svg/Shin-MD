@@ -7,16 +7,7 @@
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-import { flattenCharacters } from "#lib/gacha-shared";
-
-const charactersFilePath = './core/characters.json';
-
-async function loadCharacters() {
-  const data = await fs.readFile(charactersFilePath, 'utf-8');
-  return JSON.parse(data);
-}
-
-
+import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
 export default {
   command: ['delchar', 'deletewaifu', 'delwaifu'],
   category: 'gacha',

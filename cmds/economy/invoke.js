@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['ritual', 'invoke', 'invocar'],
@@ -23,15 +24,15 @@ export default {
     if (user.inventory && typeof user.inventory === 'string') {
       try { user.inventory = JSON.parse(user.inventory); } catch { user.inventory = {}; }
     }    
-    const staminaConsumed = Math.floor(Math.random() * (5 - 1 + 1)) + 1;
+    const staminaConsumed = randomInt(1, 5);
     if (user.stamina < 10) {
       return msg.reply(`ꕥ No tienes suficiente stamina para realizar un ritual.\n> Usa *${usedPrefix}heal* para curarte.`);
     }    
-    const magicConsumed = Math.floor(Math.random() * (12 - 1 + 1)) + 1;
+    const magicConsumed = randomInt(1, 12);
     if (user.magic < 10) {
       return msg.reply(`ꕥ No tienes suficiente magia para realizar un ritual.\n> Usa *${usedPrefix}pocion* para recuperarte.`);
     }    
-    const saludConsumed = Math.floor(Math.random() * (15 - 1 + 1)) + 1;
+    const saludConsumed = randomInt(1, 15);
     if (user.health < 10) {
       return msg.reply(`ꕥ No tienes suficiente salud para realizar el ritual.\nUsa *${usedPrefix}heal* para curarte.`);
     }    
@@ -57,14 +58,14 @@ export default {
     let narration = '';
     let bonusMsg = '';    
     if (roll < 0.05) {
-      reward = Math.floor(Math.random() * (13000 - 11000 + 1)) + 11000;
+      reward = randomInt(11000, 13000);
       narration = pickRandom(legendaryInvocations);
       bonusMsg = '\nꕥ Recompensa LEGENDARIA obtenida!';
     } else {
-      reward = Math.floor(Math.random() * (11000 - 8000 + 1)) + 8000;
+      reward = randomInt(8000, 11000);
       narration = pickRandom(normalInvocations);
       if (Math.random() < 0.15) {
-        const bonus = Math.floor(Math.random() * (4500 - 2500 + 1)) + 2500;
+        const bonus = randomInt(2500, 4500);
         reward += bonus;
         bonusMsg = `\n「✿」 ¡Energía extra! Ganaste *${bonus.toLocaleString()}* ${monedas} adicionales`;
       }
@@ -86,9 +87,6 @@ function msToTime(duration) {
   return `${minutes} minuto${minutes > 1 ? 's' : ''}, ${seconds} segundo${seconds > 1 ? 's' : ''}`;
 }
 
-function pickRandom(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
 
 const normalInvocations = [
   'Tu ritual abre un portal y caen riquezas ardientes del vacío',

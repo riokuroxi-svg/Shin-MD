@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['crime', 'crimen'],
@@ -14,7 +16,7 @@ export default {
     if (chat.adminonly || !chat.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const monedas = (db.getSettings(botId)).currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastcrime', 0);   
     const user = db.getChatUser(msg.chat, msg.sender);
@@ -25,10 +27,10 @@ export default {
     const éxito = Math.random() < 0.4;
     let cantidad;
     if (éxito) {
-      cantidad = Math.floor(Math.random() * (7500 - 5500 + 1)) + 5500;
+      cantidad = randomInt(5500, 7500);
       db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) + cantidad);
     } else {
-      cantidad = Math.floor(Math.random() * (6000 - 4000 + 1)) + 4000;
+      cantidad = randomInt(4000, 6000);
       const total = (user.coins || 0) + (user.bank || 0);
       if (total >= cantidad) {
         if (user.coins >= cantidad) {
@@ -88,6 +90,3 @@ function msToTime(duration) {
   return min === '00' ? `${sec} segundo${sec > 1 ? 's' : ''}` : `${min} minuto${min > 1 ? 's' : ''}, ${sec} segundo${sec > 1 ? 's' : ''}`;
 }
 
-function pickRandom(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}

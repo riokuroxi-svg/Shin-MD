@@ -4,16 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { loadCharacters } from "#lib/gacha-shared";
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 
-const charactersFilePath = './core/characters.json';
 
-async function loadCharacters() {
-  const data = await fs.readFile(charactersFilePath, 'utf-8');
-  return JSON.parse(data);
-}
 
 export default {
   command: ['serieinfo', 'ainfo', 'animeinfo'],

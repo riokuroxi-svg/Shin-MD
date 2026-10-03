@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { randomInt } from "#lib/random";
 import db from '../src/services/ginko-db.js';
 const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 1.5;
 
@@ -43,8 +44,8 @@ export async function before({ msg }) {
     user.level = (user.level || 0) + 1;
   }
   if (before !== user.level) {
-    const coinBonus = Math.floor(Math.random() * (8000 - 5000 + 1)) + 5000;
-    const expBonus = Math.floor(Math.random() * (500 - 100 + 1)) + 100;
+    const coinBonus = randomInt(5000, 8000);
+    const expBonus = randomInt(100, 500);
     if (user.level % 5 === 0) {
       db.setChatUser(msg.chat, msg.sender, 'coins', (users.coins || 0) + coinBonus);
       db.setUser(msg.sender, 'exp', (user.exp || 0) + expBonus);

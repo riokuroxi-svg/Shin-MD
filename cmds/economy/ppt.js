@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { randomInt, pickRandom } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['ppt'],
@@ -15,7 +17,7 @@ export default {
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';    
+    const botId = botJid(sock);    
     const botSettings = db.getSettings(botId);
     const monedas = botSettings.currency;
     const botname = botSettings.namebot;   
@@ -30,11 +32,11 @@ export default {
     if (!options.includes(userChoice)) {
       return msg.reply(`《✧》 Usa el comando así:\n› *${usedPrefix + command} piedra*, *papel* o *tijera*`);
     }
-    const botChoice = options[Math.floor(Math.random() * options.length)];
+    const botChoice = pickRandom(options);
     const result = determineWinner(userChoice, botChoice);
-    const reward = Math.floor(Math.random() * (5500 - 3000 + 1)) + 3000;
-    const loss = Math.floor(Math.random() * (3000 - 1000 + 1)) + 1000;
-    const tieReward = Math.floor(Math.random() * (1500 - 800 + 1)) + 800;    
+    const reward = randomInt(3000, 5500);
+    const loss = randomInt(1000, 3000);
+    const tieReward = randomInt(800, 1500);    
     let newCoins = user.coins || 0;
     let newBank = user.bank || 0;    
     if (result === 'win') {

@@ -4,32 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-import { flattenCharacters } from "#lib/gacha-shared";
-
-const charactersFilePath = './core/characters.json';
-
-async function loadCharacters() {
-  const data = await fs.readFile(charactersFilePath, 'utf-8');
-  return JSON.parse(data);
-}
-
-
-function getSeriesNameByCharacter(structure, characterId) {
-  return Object.values(structure).find(s => Array.isArray(s.characters) && s.characters.some(c => String(c.id) === String(characterId)))?.name || 'Desconocido';
-}
-
+import { flattenCharacters, getSeriesNameByCharacter, loadCharacters } from "#lib/gacha-shared";
 export default {
   command: ['vote', 'votar'],
   category: 'gacha',
   description: 'Votar por un personaje para subir su valor.',
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     try {
-      const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+      const botId = botJid(sock);
       const settings = db.getSettings(botId);
-      const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (global.sock.user.id.split(':')[0] + '@s.whatsapp.net')));
+      const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
       const isPremiumBot = settings?.botprem === 1;
       const isModBot = settings?.botmod === 1;
       if (!isOficialBot && !isPremiumBot && !isModBot) {

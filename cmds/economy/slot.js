@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { pickRandom } from "#lib/random";
 import { delay } from 'baileys';
 import db from '../../src/services/ginko-db.js';
 
@@ -16,7 +18,7 @@ export default {
     if (chat.adminonly || !chat.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const bot = db.getSettings(botId);
     const currency = bot.currency;    
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastslot', 0);
@@ -37,9 +39,9 @@ export default {
     }    
     const emojis = ['✾', '❃', '❁'];
     const getRandomEmojis = () => {
-      const x = Array.from({ length: 3 }, () => emojis[Math.floor(Math.random() * emojis.length)]);
-      const y = Array.from({ length: 3 }, () => emojis[Math.floor(Math.random() * emojis.length)]);
-      const z = Array.from({ length: 3 }, () => emojis[Math.floor(Math.random() * emojis.length)]);
+      const x = Array.from({ length: 3 }, () => pickRandom(emojis));
+      const y = Array.from({ length: 3 }, () => pickRandom(emojis));
+      const z = Array.from({ length: 3 }, () => pickRandom(emojis));
       return { x, y, z };
     };    
     const initialText = '「✿」| *SLOTS* \n────────\n';

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 export default {
@@ -12,7 +13,7 @@ export default {
   description: 'Crear un nuevo paquete de stickers.',
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     try {
-      const settings = db.getSettings(sock.user.id.split(':')[0] + '@s.whatsapp.net') || {}
+      const settings = db.getSettings(botJid(sock)) || {}
       const userId = db.getUser(msg.sender)
       const dev = userId.name || msg.pushName || 'Desconocido'
       const name = args.join(' ').trim()
