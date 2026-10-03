@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { ejecutarSqlOpcional } from "#lib/db-opcional";
 // ═══════════════════════════════════════════════════════════════════
 //  migrations.js — v2: economía, gacha, warns, user profiles
 // ═══════════════════════════════════════════════════════════════════
@@ -56,18 +57,16 @@ export const MIGRATIONS = [
         'inventory', 'tools', 'weapons', 'streak', 'last_daily_global'
       ];
       for (const col of columns) {
-        try {
-          db.exec(`ALTER TABLE users ADD COLUMN ${col} TEXT DEFAULT ''`);
-        } catch {}
+                  ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN ${col} TEXT DEFAULT ''`);
       }
       // Numeric defaults for specific columns
-      try { db.exec(`ALTER TABLE users ADD COLUMN coins INTEGER NOT NULL DEFAULT 0`); } catch {}
-      try { db.exec(`ALTER TABLE users ADD COLUMN bank INTEGER NOT NULL DEFAULT 0`); } catch {}
-      try { db.exec(`ALTER TABLE users ADD COLUMN exp INTEGER NOT NULL DEFAULT 0`); } catch {}
-      try { db.exec(`ALTER TABLE users ADD COLUMN health INTEGER NOT NULL DEFAULT 100`); } catch {}
-      try { db.exec(`ALTER TABLE users ADD COLUMN stamina INTEGER NOT NULL DEFAULT 100`); } catch {}
-      try { db.exec(`ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0`); } catch {}
-      try { db.exec(`ALTER TABLE users ADD COLUMN last_daily_global INTEGER NOT NULL DEFAULT 0`); } catch {}
+      ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN coins INTEGER NOT NULL DEFAULT 0`);
+      ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN bank INTEGER NOT NULL DEFAULT 0`);
+      ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN exp INTEGER NOT NULL DEFAULT 0`);
+      ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN health INTEGER NOT NULL DEFAULT 100`);
+      ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN stamina INTEGER NOT NULL DEFAULT 100`);
+      ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN streak INTEGER NOT NULL DEFAULT 0`);
+      ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN last_daily_global INTEGER NOT NULL DEFAULT 0`);
 
       // New tables
       db.exec(`

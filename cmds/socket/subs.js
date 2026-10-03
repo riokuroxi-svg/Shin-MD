@@ -176,7 +176,10 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
 
       // Guardar credenciales de forma inmediata y síncrona
       clearTimeout(saveCredsTimer);
-      try { await saveCredsDB(); } catch {}
+      // Si esto falla, la sesión del sub-bot no queda guardada y se cae al
+      // reiniciar. Antes fallaba en silencio: ahora deja rastro en el log.
+      try { await saveCredsDB(); }
+      catch (e) { log.warn("Sub-bot " + (socks.userId || id) + ": no se pudieron guardar las credenciales (" + (e.message || e) + ")"); }
 
       const sentFlagFile = path.join(socks.sessionFolder, 'msg_sent.flag');
       const hasSentMessage = fs.existsSync(sentFlagFile);

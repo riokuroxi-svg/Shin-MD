@@ -11,6 +11,7 @@
 // del sistema propio de Shin-MD (settings, users, groups_data...) que comparten
 // el mismo archivo data/shin.db.
 import { getDatabase } from "#db";
+import { ejecutarSqlOpcional } from "#lib/db-opcional";
 
 let _d = null;
 function db() {
@@ -32,10 +33,10 @@ function init(d) {
   d.exec("CREATE TABLE IF NOT EXISTS g_characters (id TEXT PRIMARY KEY, data TEXT)");
   d.exec("CREATE TABLE IF NOT EXISTS g_sticker_packs (id TEXT PRIMARY KEY, packs TEXT DEFAULT '[]')");
 
-  try { d.exec("ALTER TABLE g_users ADD COLUMN Subs INTEGER DEFAULT 0"); } catch {}
-  try { d.exec("ALTER TABLE g_chats ADD COLUMN autotr TEXT DEFAULT ''"); } catch {}
-  try { d.exec("ALTER TABLE g_settings ADD COLUMN menu_variant INTEGER DEFAULT 1"); } catch {}
-  try { d.exec("ALTER TABLE g_settings ADD COLUMN instagram TEXT DEFAULT 'https://www.instagram.com/__ikg.05'"); } catch {}
+  ejecutarSqlOpcional(d, "ALTER TABLE g_users ADD COLUMN Subs INTEGER DEFAULT 0");
+  ejecutarSqlOpcional(d, "ALTER TABLE g_chats ADD COLUMN autotr TEXT DEFAULT ''");
+  ejecutarSqlOpcional(d, "ALTER TABLE g_settings ADD COLUMN menu_variant INTEGER DEFAULT 1");
+  ejecutarSqlOpcional(d, "ALTER TABLE g_settings ADD COLUMN instagram TEXT DEFAULT 'https://www.instagram.com/__ikg.05'");
 
   // ── Columnas que el código escribía sin que existieran ──────────
   //  El SQL se arma pegando el nombre de la columna, así que escribir
@@ -82,7 +83,7 @@ function init(d) {
   };
   for (const [tabla, columnas] of Object.entries(EXTRAS)) {
     for (const [nombre, tipo] of columnas) {
-      try { d.exec(`ALTER TABLE ${tabla} ADD COLUMN ${nombre} ${tipo}`); } catch {}
+      ejecutarSqlOpcional(d, `ALTER TABLE ${tabla} ADD COLUMN ${nombre} ${tipo}`);
     }
   }
 
