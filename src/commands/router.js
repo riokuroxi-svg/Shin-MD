@@ -163,7 +163,7 @@ export function createRouter(engine, opts) {
       if (!cmd) return;
 
       // Cooldown / antispam
-      if (cooldown.check({ senderId: ctx.senderId, cmd })) return;
+      if (cooldown.check({ senderId: ctx.senderId, cmd, text: ctx.text })) return;
 
       // Permisos
       const denied = await checkPermissions(sock, ctx, cmd, engine);
