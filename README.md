@@ -7,21 +7,29 @@
 
 <br>
 
-<!-- Insignias de estado: números reales, verificados en cada push por la suite. -->
-[![Pruebas](https://img.shields.io/badge/pruebas-140%2F140%20·%2022%20archivos-4ADE80?style=flat-square&labelColor=0B131B)](https://github.com/riokuroxi-svg/Shin-MD/actions)
+<!-- Insignias dibujadas en casa (docs/assets): se animan solas y los números
+     salen del propio repo con `npm run docs:assets`. No se escriben a mano. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/insignias-oscuro.svg">
+  <img src="docs/assets/insignias-claro.svg" alt="140/140 pruebas · 210 comandos · 744 nombres · 15 categorías · Node ≥ 22.5 · Baileys 6.7.24 · AGPL-3.0-only" width="100%">
+</picture>
+
+<br><br>
+
 [![CI](https://img.shields.io/github/actions/workflow/status/riokuroxi-svg/Shin-MD/test.yml?style=flat-square&label=CI&labelColor=0B131B)](https://github.com/riokuroxi-svg/Shin-MD/actions)
-[![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.5-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white&labelColor=0B131B)](https://nodejs.org)
-[![Baileys](https://img.shields.io/badge/baileys-6.7.24-25D366?style=flat-square&labelColor=0B131B)](https://github.com/WhiskeySockets/Baileys)
 [![Licencia](https://img.shields.io/badge/licencia-AGPL--3.0--only-F0B429?style=flat-square&labelColor=0B131B)](LICENSE)
-[![Termux](https://img.shields.io/badge/termux-compatible-3DDC84?style=flat-square&logo=android&logoColor=white&labelColor=0B131B)](https://termux.com)
+[![Versión](https://img.shields.io/badge/versión-3.0.3-38BDF8?style=flat-square&labelColor=0B131B)](package.json)
 
 **El bot de WhatsApp que no se cae, no se banea y no borra tu sesión.**
-210 comandos · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
+
+210 comandos · 744 nombres con alias · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
 
 [🌐 Página del proyecto](docs/web/index.html) ·
 [⚡ Instalar](#-instalación-en-5-minutos) ·
+[🌀 Cómo funciona](#-cómo-funciona-shin) ·
 [🧩 Comandos](#-los-210-comandos) ·
 [🔒 Anti-ban](#-el-anti-ban-por-dentro) ·
+[🧯 Problemas típicos](#-problemas-típicos) ·
 [📜 Licencia](#-licencia-y-marca) ·
 [🧪 Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab)
 
@@ -55,9 +63,9 @@
 - **140 pruebas que arrancan el bot de verdad.** Una de ellas levanta el
   proceso real y comprueba que entrega el código de vinculación. Cada push las
   pasa en GitHub Actions.
-- **Todo separado en capas.** `core`, `network`, `commands`, `services`,
-  `storage`, `web`. Arreglar una cosa no rompe otra, y el bot arranca en
-  segundos.
+- **Interfaz nativa, no solo texto.** Botones, listas desplegables, encuestas,
+  álbumes, notas de voz con onda dibujada y menús que se adaptan al día o a la
+  noche. Si el WhatsApp del usuario no sabe mostrarlo, el bot cae solo a texto.
 
 ## ⚡ Instalación en 5 minutos
 
@@ -103,6 +111,91 @@ npm install -g pm2 && pm2 start index.js --name shin-md -- --code && pm2 save
 > 💡 En un servidor sin terminal interactiva el bot toma el número del `.env`
 > solo: nunca se queda esperando el teclado.
 
+### 🎛️ Lo mínimo que hay que tocar en `.env`
+
+| Variable | Para qué | Por defecto |
+|---|---|---|
+| `OWNER_NUMBER` | **Obligatoria.** Tu número (el personal), solo dígitos | — |
+| `PAIRING_METHOD` | `code` (código de 8 caracteres) o `qr` | `code` |
+| `NUMBER_PROFILE` | `nuevo` (1500 ms + 7 días) o `veterano` (700 ms + 2 días) | `nuevo` |
+| `PORT` / `LOOPBACK` | Panel local y si se abre a tu red | `3000` / `1` |
+| `WARMUP_LIMIT=0` | Quita el tope diario (los retardos **se mantienen**) | tope activo |
+| `SHIN_BRAIN=0` | Apaga el antispam (ráfagas y flood) | encendido |
+
+Todo está comentado dentro de `.env.example`, con el resto de opciones.
+
+## 🌀 Cómo funciona Shin
+
+Tres vistas del mismo bot: lo que **ves**, lo que **pasa por dentro** y lo que
+**decide solo** cuando algo va mal.
+
+### 1) Lo que ves en WhatsApp
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chat-demo.svg">
+  <img src="docs/assets/chat-demo.svg" alt="Conversación con Shin-MD: .menu devuelve una tarjeta con botones y lista de categorías; .warn avisa a un miembro" width="100%">
+</picture>
+
+### 2) Lo que pasa por dentro cuando escribes `.menu`
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/flujo-mensaje.svg">
+  <img src="docs/assets/flujo-mensaje.svg" alt="Pipeline: mensaje → antispam → router → permisos → handler → cola → WhatsApp" width="100%">
+</picture>
+
+| Etapa | Quién la hace | Qué decide |
+|---|---|---|
+| Antispam | `src/lib/brain.js` | Ráfagas, texto repetido y flood de comandos: se frenan antes de molestar al motor. |
+| Router | `src/commands/router.js` | Prefijo (`. / # !`), alias, self-mode y cooldown por usuario. |
+| Permisos | `src/commands/middleware/permissions.js` | ¿Es admin del grupo? ¿Es el dueño? ¿El bot puede administrar? |
+| Handler | `cmds/**` | El comando en sí: 210 repartidos en 15 categorías, con carga dinámica y recarga en caliente. |
+| Cola | `src/network/queue.js` | Prioridad para `.menu` `.ping` `.owner`, reintentos y tope de 120 s por envío. |
+| Envío | `src/core/engine/throttler.js` | Retardo gaussiano, penalización por contacto nuevo y tope del calentamiento diario. |
+
+### 3) Cómo arranca y cómo se recupera solo
+
+```mermaid
+flowchart TD
+    A([npm start]) --> B["Comprueba LICENSE y NOTICE<br/>AGPL-3.0 §7"]
+    B --> C["Perfil del número<br/>nuevo o veterano"]
+    C --> D["Auth en SQLite<br/>WAL + chmod 600"]
+    D --> E{"¿Hay sesión válida?"}
+    E -- "no" --> F["Código de 8 caracteres o QR"]
+    F --> G["Espera paciente:<br/>sin límite de reintentos"]
+    E -- "sí" --> H["Motor READY → RUNNING"]
+    G --> H
+    H --> I{"Se cae la conexión"}
+    I -- "408 · 428 · 503 o datos móviles" --> J["Modo paciente<br/>sesión INTACTA"]
+    I -- "logged out / forbidden" --> K["Limpia la sesión<br/>y sale ordenado"]
+    I -- "riesgo ≥ 80" --> L["El watchdog pausa envíos<br/>el bot sigue vivo"]
+    J --> H
+    L --> H
+
+    classDef arranque fill:#4ADE80,stroke:#16A34A,color:#062E1B
+    classDef espera fill:#38BDF8,stroke:#0369A1,color:#04233A
+    classDef malo fill:#E05468,stroke:#B91C1C,color:#2A0708
+    classDef motor fill:#A78BFA,stroke:#6D28D9,color:#1E1038
+    class A,B,C,D,H motor
+    class F,G,J espera
+    class K,L malo
+```
+
+<details>
+<summary><b>Los cinco estados del motor (y por qué no se queda colgado)</b></summary>
+
+`boot/index.js` monta el motor por fases — `BOOT → INIT → CONNECT → READY →
+RUNNING` — y cada fase deja el proceso en un estado conocido. Si algo revienta
+a mitad, el watchdog lo detecta:
+
+- **Cola atascada**: ningún envío bloquea a los demás más de 120 s.
+- **Socket mudo**: 5 minutos sin actividad en estado CONNECT+ ⇒ reconexión.
+- **Riesgo alto**: ≥ 80 pausa la cola, ≥ 95 reconecta. Tras 3 intentos sin
+  alivio, el bot lo dice en voz alta en vez de martillear la sesión.
+- **Nunca borra una sesión válida**: una tormenta de reconexiones termina el
+  proceso con el `auth.db` intacto y un aviso claro.
+
+</details>
+
 ## 🧩 Los 210 comandos
 
 Escribe `.menu` dentro de WhatsApp y verás la tarjeta con botones y la lista
@@ -126,10 +219,10 @@ desplegable por categorías. Aquí están todas:
 | 🔊 **Audio** | 1 | `audioeffect` |
 | 😄 **Diversión** | 1 | `chiste` |
 
-**210 comandos únicos · 744 nombres con alias · 15 categorías.** Nombres de
-ejemplo: `.play` (y sus alias `yt`, `mp3`, `musica`), `.sticker` (`s`),
-`.daily` (`diario`, `recompensa`), `.w` (`work`, `trabajar`), `.x` para Twitter,
-`.ig` para Instagram y `.menu` (`ayuda`, `h`).
+**210 comandos únicos · 534 alias (744 nombres) · 15 categorías · 5 hooks.**
+La mitad del código viene con nombre corto para escribir rápido: `.play` (`yt`,
+`mp3`, `musica`), `.sticker` (`s`), `.daily` (`diario`, `recompensa`), `.w`
+(`work`, `trabajar`), `.x` para Twitter y `.ig` para Instagram.
 
 🔑 *Instagram y Pinterest usan `FASTSAVER_KEY` (gratis en api.fastsaver.io).
 Twitter funciona sin clave, pero es más estable con ella.*
@@ -152,16 +245,44 @@ npm run docs:web
 Nada de "espero un `Math.random()`". Esto es lo que hace que el bot parezca
 una persona y se proteja solo:
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/medidor-riesgo.svg">
+  <img src="docs/assets/medidor-riesgo.svg" alt="Medidor de riesgo 0-100 con el watchdog: a 80 pausa los envíos y a 95 reconecta" width="100%">
+</picture>
+
 | Pieza | Qué hace |
 |---|---|
 | **Jitter gaussiano** | Los retardos siguen una distribución natural (Box-Muller, σ 0.25), no un rango plano y predecible. |
 | **Perfil del número** | Nuevo: base 1500 ms + 7 días de calentamiento. Veterano: base 700 ms + 2 días. La fecha se guarda: no se reinicia en cada arranque. |
 | **Calentamiento diario** | Empieza en 20 mensajes/día y sube hasta 500. El tope se consulta con `.warmup`. |
 | **Penalización a contactos nuevos** | ×1.5 de espera para el primer contacto, como haría una persona. |
-| **Monitor de riesgo (0-100)** | Puntúa desconexiones, errores y fallos de envío. |
+| **Monitor de riesgo (0-100)** | Puntúa desconexiones, errores y fallos de envío de la última hora. |
 | **Watchdog** | Con riesgo crítico pausa los envíos solo; no mata el bot. |
 | **Regla de oro** | Solo responde a quien le escribe: nunca inicia conversación con desconocidos. |
 | **Antispam con criterio** | Ráfagas, texto repetido e inundación de comandos se frenan (`.env`: `SHIN_BRAIN=0` lo apaga). |
+
+### El antispam y el tope diario no son lo mismo
+
+- **Antispam (`.env`: `SHIN_BRAIN`)** → protege al bot de *quien le escribe*:
+  corta ráfagas y flood antes de que lleguen al motor.
+- **Tope del calentamiento (`WARMUP_LIMIT`)** → protege al *número*: al llegar
+  al máximo del día los comandos normales esperan, pero `.menu`, `.ping`, las
+  reacciones y las respuestas directas **siguen pasando** (es lo menos
+  baneable que existe). No es un apagón: es una pausa con aviso.
+
+<details>
+<summary><b>Huella de Shin-MD (marcador de obras derivadas)</b></summary>
+
+El motor anti-ban tiene una combinación de parámetros propia:
+
+`shinJitter` gaussiano σ 0.25 · base **1200 ms** (400–5000, +25 ms por carácter)
+· perfil nuevo **1500 ms** / veterano **700 ms** · penalización **×1.5** a
+contactos nuevos · calentamiento **20→500** mensajes/día en **7 días**
+
+Si ves esos parámetros exactos en otro bot, es una obra derivada de Shin-MD y
+debe cumplir la atribución de la Sección 7 del `NOTICE`.
+
+</details>
 
 ## 🖥️ Panel local
 
@@ -184,7 +305,9 @@ Shin-MD/
 ├── index.js              → entrada (npm start)
 ├── boot/index.js         → perfil del número + motor + conexión
 ├── cmds/                 → 210 comandos en 15 categorías (carga dinámica)
-├── docs/web/             → página del proyecto (se regenera con npm run docs:web)
+├── docs/
+│   ├── assets/           → todos los SVG del README (npm run docs:assets)
+│   └── web/              → página del proyecto (npm run docs:web)
 ├── test/                 → 140 pruebas en 22 archivos (runner propio, sin dependencias)
 └── src/
     ├── core/             → ciclo de vida, conexión, auth SQLite, motor anti-ban
@@ -192,16 +315,65 @@ Shin-MD/
     ├── commands/         → cargador, router, interactivos, permisos
     ├── services/         → logger con rotación, descargador, watchdog
     ├── storage/          → SQLite WAL, migraciones, caché TTL
+    ├── lib/              → formateo, tarjetas, límites, herramientas
     └── web/server.js     → panel local
 ```
 
 ```bash
-npm start          # encender
-npm test           # 140 pruebas
-npm run lint       # 0 errores
-npm run typecheck  # tipos (JSDoc) sin migrar a TypeScript
+npm start             # encender
+npm test              # 140 pruebas (acepta filtro: npm test -- web)
+npm run lint          # 0 errores
+npm run typecheck     # tipos (JSDoc) sin migrar a TypeScript
+npm run docs:web      # regenera la página del proyecto
+npm run docs:assets   # redibuja los SVG del README con los números reales
 npm run test:pairing  # comprueba el código de vinculación de verdad
 ```
+
+## 🧯 Problemas típicos
+
+<details>
+<summary><b>El bot arranca pero no responde a los comandos</b></summary>
+
+Casi siempre es el tope diario del calentamiento. Míralo con `.warmup`: si estás
+en el día 1, son 20 mensajes al día. `.menu` y `.ping` siguen funcionando
+justo para eso. Puedes subir el tope con `WARMUP_START_MSGS` / `WARMUP_MAX_MSGS`
+o quitarlo con `WARMUP_LIMIT=0` (los retardos gaussianos se mantienen).
+
+</details>
+
+<details>
+<summary><b>No consigo vincular un dispositivo nuevo</b></summary>
+
+El parche de vinculación de Baileys se aplica en el `postinstall`. Si solo
+hiciste `git pull`, el `node_modules` quedó viejo: corre otra vez
+
+```bash
+npm install
+```
+
+El bot lo avisa en el arranque si detecta que el parche falta.
+
+</details>
+
+<details>
+<summary><b>¿Voy a perder la sesión cada vez que se corte la red?</b></summary>
+
+No. Los cortes 408/428/503 y las desconexiones de datos móviles entran en modo
+paciente (reintento cada ~5 min) con el `auth.db` intacto. Solo se limpia la
+sesión cuando WhatsApp confirma que ya no existe (logged out, forbidden,
+multidevice mismatch). Si el proceso muere por una tormenta de reconexiones,
+sale con un mensaje claro y **sin** borrar credenciales.
+
+</details>
+
+<details>
+<summary><b>¿Qué pasa si mi hosting no guarda archivos entre deploys?</b></summary>
+
+Fija `WARMUP_START_DATE=AAAA-MM-DD` con el día en que empezaste a usar el
+número, o el calentamiento se reiniciará en el día 0 (20 mensajes/día) cada
+vez que despliegues.
+
+</details>
 
 ## 🧪 El laboratorio
 
@@ -229,16 +401,14 @@ memoria RAG, sub-bots aislados, registro de herramientas, red-teaming.
    No es un virus: es la licencia defendiéndose.
 
 <details>
-<summary><b>Huella de Shin-MD (marcador de obras derivadas)</b></summary>
+<summary><b>Procedencia del código (Shin original + linaje Ginko)</b></summary>
 
-El motor anti-ban tiene una combinación de parámetros propia:
-
-`shinJitter` gaussiano σ 0.25 · base **1200 ms** (400–5000, +25 ms por carácter)
-· perfil nuevo **1500 ms** / veterano **700 ms** · penalización **×1.5** a
-contactos nuevos · calentamiento **20→500** mensajes/día en **7 días**
-
-Si ves esos parámetros exactos en otro bot, es una obra derivada de Shin-MD y
-debe cumplir la atribución de la Sección 7 del `NOTICE`.
+El detalle está en **[docs/PROCEDENCIA.md](docs/PROCEDENCIA.md)**: el motor
+anti-ban, la capa de resiliencia, el panel web y los comandos nativos son
+autoría de riokuroxi-svg; el resto viene del linaje Ginko / YukiBot (MIT),
+reescrito y adaptado aquí bajo AGPL-3.0-only. El propio cargador de comandos
+informa del reparto real en cada arranque (una línea del log: "N Shin, M
+Ginko"). Los plugins comerciales viven fuera del núcleo.
 
 </details>
 
@@ -253,8 +423,10 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 <br>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/divisor-oscuro.svg">
-  <img src="docs/assets/divisor-claro.svg" alt="" width="60%">
+  <img src="docs/assets/divisor-claro.svg" alt="" width="64%">
 </picture>
 <br>
 <b>反魂 Shin-MD</b> · hecho para quedarse encendido
+<br><br>
+<sub>Los SVG de este README se dibujan solos con <code>npm run docs:assets</code>: ningún número está escrito a mano.</sub>
 </div>

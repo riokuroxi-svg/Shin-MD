@@ -121,7 +121,7 @@ test("la página no miente con los requisitos ni con la licencia", () => {
   );
 });
 
-test("la página y el README anuncian los mismos números (y los archivos reales)", () => {
+test("la página y el README anuncian los mismos números (y los archivos reales)", async () => {
   const html = LEE(PAGINA);
   const readme = LEE(path.join(RAIZ, "README.md"));
 
@@ -151,5 +151,14 @@ test("la página y el README anuncian los mismos números (y los archivos reales
   assert.ok(
     html.includes(`${archivos.length} archivos`) || html.includes(`${archivos.length} pruebas`),
     `la página no menciona los ${archivos.length} archivos de prueba reales → npm run docs:web`
+  );
+
+  // Los comandos también viven en los dos sitios: la página los inyecta al
+  // regenerarse y el README los anuncia a mano. Si añades comandos y
+  // actualizas solo uno, aquí se ve (arreglo: npm run docs:assets).
+  const total = catalogoDelBot(await loadCommands()).length;
+  assert.ok(
+    readme.includes(`${total} comandos`),
+    `el README no anuncia los ${total} comandos reales → npm run docs:assets`
   );
 });
