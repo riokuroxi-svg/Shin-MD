@@ -1,7 +1,7 @@
 # 🔬 Investigación técnica — Shin-MD · Botones, juegos y rich messages
 
 _Fecha: 2026-09-01_
-_Fuentes: 5 bots MD clonados (YukiBot-MD, bunny-girl-bot-v2, Luna-Botv6, CuriosityBot-MD, GataBot-MD) + verificación contra Baileys 6.7.24 real instalado_
+_Fuentes: bots MD analizados (YukiBot-MD, Luna-Botv6, CuriosityBot-MD, GataBot-MD) + verificación contra Baileys 6.7.24 real instalado_
 
 ---
 
@@ -10,7 +10,6 @@ _Fuentes: 5 bots MD clonados (YukiBot-MD, bunny-girl-bot-v2, Luna-Botv6, Curiosi
 | Bot | Stack | Menú | Botones | Juegos |
 |---|---|---|---|---|
 | **YukiBot-MD** | Baileys fork, ESM, import maps | Texto por categorías + banner link-preview | ❌ | ❌ |
-| **bunny-girl-bot-v2** | TS, Baileys fork, better-sqlite3 | Texto por categorías + banner imagen cacheado | ❌ | ❌ |
 | **Luna-Botv6** | Baileys, ESM, LowDB | Texto por categorías, multi-idioma | ✅ `sendButtonMessages`/`sendNCarousel`/`sendCarousel` | ✅ 25+ (TTT, batalla naval, buscaminas, sopa de letras, ahorcado, veoveo, slots...) |
 | **CuriosityBot-MD** | Baileys, CommonJS | Texto + `externalAdReply` con newsletter | ✅ `interactiveMessage` en lib/func.js | ❌ |
 | **GataBot-MD** | Baileys, CommonJS | Texto + imagen `Menu2.jpg` | ❌ (usa template legacy) | ✅ PPT, slots, TTT (con animación por `edit`) |
@@ -136,7 +135,7 @@ for (let i = 0; i < pasos; i++) {
 
 ## 5. Cómo hacen los menús estéticos (con imagen/banner)
 
-**Patrón "banner + link preview"** (YukiBot, bunny-girl) — usan `prepareWAMessageMedia` con `mediaTypeOverride: 'thumbnail-link'` para que el menú de texto tenga una imagen de preview encima:
+**Patrón "banner + link preview"** (YukiBot) — usan `prepareWAMessageMedia` con `mediaTypeOverride: 'thumbnail-link'` para que el menú de texto tenga una imagen de preview encima:
 
 ```js
 const prepared = await prepareWAMessageMedia(

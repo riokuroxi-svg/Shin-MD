@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -29,7 +30,7 @@ async function reloadCommands(dir = path.join(__dirname, '..')) {
             });
           }
         } catch (err) {
-          console.error(`Error recargando comando ${file}:`, err);
+          log.error(`Error recargando comando ${file}:`, err);
         }
       }
     }

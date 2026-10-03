@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import makeWASocket, { Browsers, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, DisconnectReason, jidDecode } from 'baileys';
 import { useSQLiteAuthState } from '#lib/sqliteAuth';
 import NodeCache from 'node-cache';
@@ -153,10 +154,10 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
         if ((raw.messageTimestamp * 1000) < bootTime - 15_000) continue;
         if (raw.message.ephemeralMessage) raw.message = raw.message.ephemeralMessage.message;
         const m = await smsg(socks, raw);
-      } catch (e) { console.log(e); }
+      } catch (e) { log.ui(e); }
     }
   });
-  try { await events(socks, msg); } catch (err) { console.log(chalk.gray(`[ EVENT ERROR  ]  → ${err}`)); }
+  try { await events(socks, msg); } catch (err) { log.ui(chalk.gray(`[ EVENT ERROR  ]  → ${err}`)); }
   socks.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (connection === 'open') {
       bootTime = Date.now();
@@ -170,7 +171,7 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       const conss = global.conns.findIndex((c) => c.userId === socks.userId);
       if (conss !== -1) { global.conns[conss] = socks; } else { global.conns.push(socks); }
       delete reintentos[socks.userId || id];
-      console.log(chalk.gray(`[ ✿  ]  SUB-BOT conectado: ${socks.userId}`));
+      log.ui(chalk.gray(`[ ✿  ]  SUB-BOT conectado: ${socks.userId}`));
       
       // Guardar credenciales de forma inmediata y síncrona
       clearTimeout(saveCredsTimer);
@@ -197,12 +198,12 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       // Si es un sub-bot YA registrado, NUNCA borrar la sesión por cortes de red o reinicios
       if (isRegistered) {
         if ([401, 403].includes(reason) && reason === 401 && String(lastDisconnect?.error?.message || '').includes('logged out')) {
-          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Sesión cerrada desde el teléfono. Limpiando.`));
+          log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Sesión cerrada desde el teléfono. Limpiando.`));
           try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch {}
           delete reintentos[botId];
           return;
         }
-        console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} reconectando sesión existente en ${Math.round(delay/1000)}s...`));
+        log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} reconectando sesión existente en ${Math.round(delay/1000)}s...`));
         setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
         return;
       }
@@ -210,16 +211,16 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       // Si estaba en fase de pairing (aún no registrado)
       if ([401, 403].includes(reason)) {
         if (intentos < 5) {
-          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Pairing en progreso (${reason}) intento ${intentos}/5 → Reintentando en ${Math.round(delay/1000)}s...`));
+          log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Pairing en progreso (${reason}) intento ${intentos}/5 → Reintentando en ${Math.round(delay/1000)}s...`));
           setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
         } else {
-          console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Código de pairing expirado. Limpiando temporales.`));
+          log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Código de pairing expirado. Limpiando temporales.`));
           try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (e) {}
           delete reintentos[botId];
         }
         return;
       }
-      console.log(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} desconectado (${reason}), reconectando en ${Math.round(delay/1000)}s...`));
+      log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} desconectado (${reason}), reconectando en ${Math.round(delay/1000)}s...`));
       setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
     }
 
@@ -276,7 +277,7 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
             try { await socks.client.sendMessage(chatId, { delete: sentMsgKey }); } catch {}
           }
         }, 60000);
-      } catch (err) { console.error('[Código Error]', err); }
+      } catch (err) { log.error('[Código Error]', err); }
     }
 
     // ── Envío de Código QR (TODO EN UN SOLO MENSAJE CON QR GENERADO) ──
@@ -306,7 +307,7 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
             try { await socks.client.sendMessage(chatId, { delete: msgQR.key }); } catch {}
           }
         }, 60000);
-      } catch (err) { console.error('[QR Error]', err); }
+      } catch (err) { log.error('[QR Error]', err); }
     }
   });
   return socks;

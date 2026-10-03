@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 // ============================================================
 //  ytdlp.js (v2.1 · turbo + AUTO-UPDATE) — Plugin para Ginko-MD-Lab
 //  Descarga video/canciones con yt-dlp LOCAL
@@ -144,7 +145,7 @@ export async function versionYtdlp() {
 // y contención de disco en VPS de 1 core); reintenta en el siguiente ciclo.
 export async function actualizarYtdlp() {
   if (global.__ytdlpBusy) {
-    console.log('[ytdlp] ⏭️ auto-update pospuesto (hay una descarga en curso)')
+    log.info('[ytdlp] ⏭️ auto-update pospuesto (hay una descarga en curso)')
     return { ok: false, pospuesto: true }
   }
   const antes = await versionYtdlp()
@@ -157,13 +158,13 @@ export async function actualizarYtdlp() {
     await exec('python3', args, { timeout: 300 * 1000 })
     const despues = await versionYtdlp()
     if (despues !== antes && despues !== '?') {
-      console.log(`[ytdlp] 🔄 auto-update (pip/${canal}): ${antes} → ${despues}`)
+      log.info(`[ytdlp] 🔄 auto-update (pip/${canal}): ${antes} → ${despues}`)
       return { ok: true, antes, despues }
     }
-    console.log(`[ytdlp] ✅ yt-dlp al día (${despues}, canal pip/${canal})`)
+    log.info(`[ytdlp] ✅ yt-dlp al día (${despues}, canal pip/${canal})`)
     return { ok: true, antes, despues }
   } catch (e) {
-    console.log(`[ytdlp] update por pip no disponible (${e.message?.slice(0, 80)}), probando binario…`)
+    log.info(`[ytdlp] update por pip no disponible (${e.message?.slice(0, 80)}), probando binario…`)
   }
 
   // 2) Binario suelto: yt-dlp -U (o --update-to nightly para cambiar de canal)
@@ -171,10 +172,10 @@ export async function actualizarYtdlp() {
     const cmdUpd = canal === 'nightly' ? ['--update-to', 'nightly'] : ['-U']
     await exec(YTDLP, cmdUpd, { timeout: 300 * 1000 })
     const despues = await versionYtdlp()
-    console.log(`[ytdlp] 🔄 auto-update (binario/${canal}): ${antes} → ${despues}`)
+    log.info(`[ytdlp] 🔄 auto-update (binario/${canal}): ${antes} → ${despues}`)
     return { ok: true, antes, despues }
   } catch (e) {
-    console.log(`[ytdlp] ⚠️ no se pudo auto-actualizar: ${e.message?.slice(0, 120)}`)
+    log.info(`[ytdlp] ⚠️ no se pudo auto-actualizar: ${e.message?.slice(0, 120)}`)
     return { ok: false, error: String(e.message || e).slice(0, 200) }
   }
 }
@@ -202,10 +203,10 @@ async function actualizarPlugin() {
     if (!m) return
     if (compararVersiones(m[1], VERSION) > 0) {
       fs.writeFileSync(__filename, texto)
-      console.log(`[ytdlp] 🚀 plugin auto-actualizado ${VERSION} → ${m[1]} (hot-reload del bot)`)
+      log.info(`[ytdlp] 🚀 plugin auto-actualizado ${VERSION} → ${m[1]} (hot-reload del bot)`)
     }
   } catch (e) {
-    console.log(`[ytdlp] plugin: no se pudo auto-actualizar (${e.message?.slice(0, 100)})`)
+    log.info(`[ytdlp] plugin: no se pudo auto-actualizar (${e.message?.slice(0, 100)})`)
   }
 }
 
@@ -380,7 +381,7 @@ export default {
               try { fs.writeFileSync(rutaCache, audioFinal) } catch { /* sin caché, no pasa nada */ }
             }
           } catch (e) {
-            console.log('[ytdlp] Error procesando MP3:', e.message)
+            log.info('[ytdlp] Error procesando MP3:', e.message)
           }
         } else {
           segundos = await getMp3Duration(rutaCache)
@@ -414,7 +415,7 @@ export default {
       await msg.react('✅')
     } catch (e) {
       await msg.react('❌')
-      console.log(`[ytdlp] error: ${e.message}`)
+      log.info(`[ytdlp] error: ${e.message}`)
       await msg.reply(
         `《✧》 Falló la descarga con yt-dlp.\n> ${e.message}\n\n` +
         `*Tips:* ¿yt-dlp está instalado? ¿ffmpeg (solo necesario para mp3)? ` +

@@ -39,15 +39,15 @@ import { spawnSync } from "node:child_process";
   ];
   for (const r of __required) {
     if (!fs.existsSync(path.join(__root, r.file))) {
-      console.error(chalk.red("[Shin-MD] ERROR AGPL: falta el archivo " + r.file + " (" + r.desc + ")."));
-      console.error(chalk.red("[Shin-MD] Esta copia no respeta la licencia; el bot no arrancará."));
-      console.error(chalk.yellow("[Shin-MD] Descarga oficial: https://github.com/riokuroxi-svg/Shin-MD"));
+      log.error(chalk.red("[Shin-MD] ERROR AGPL: falta el archivo " + r.file + " (" + r.desc + ")."));
+      log.error(chalk.red("[Shin-MD] Esta copia no respeta la licencia; el bot no arrancará."));
+      log.error(chalk.yellow("[Shin-MD] Descarga oficial: https://github.com/riokuroxi-svg/Shin-MD"));
       process.exit(1);
     }
   }
   let __ver = "dev";
   try { __ver = JSON.parse(fs.readFileSync(path.join(__root, "package.json"), "utf8")).version || __ver; } catch {}
-  console.log(chalk.magenta("Shin-MD v" + __ver + " - Powered by riokuroxi-svg"));
+  log.ui(chalk.magenta("Shin-MD v" + __ver + " - Powered by riokuroxi-svg"));
 }
 
 // Red de seguridad de vinculación (companion_reg_refresh):
@@ -64,7 +64,7 @@ import { spawnSync } from "node:child_process";
   if (fs.existsSync(__patchScript) && fs.existsSync(__baileysSocket)) {
     const r = spawnSync(process.execPath, [__patchScript], { stdio: "inherit" });
     if (r.status !== 0) {
-      console.log(chalk.red("[ ✗ ]  AVISO: no se pudo aplicar el parche de vinculación. Si no puedes vincular un dispositivo nuevo, ejecuta \"npm install\"."));
+      log.ui(chalk.red("[ ✗ ]  AVISO: no se pudo aplicar el parche de vinculación. Si no puedes vincular un dispositivo nuevo, ejecuta \"npm install\"."));
     }
   }
 }
@@ -117,7 +117,7 @@ function printBanner() {
     font: "chrome", align: "center",
     gradient: ["blue", "magenta"], letterSpacing: 2,
   });
-  console.log(chalk.cyan("      🍁 Hecho por riokuroxi-svg · Anti-ban nativo") + "\n");
+  log.ui(chalk.cyan("      🍁 Hecho por riokuroxi-svg · Anti-ban nativo") + "\n");
 }
 
 function logIncomingMessage(ctx, usedPrefix) {
@@ -126,15 +126,15 @@ function logIncomingMessage(ctx, usedPrefix) {
   const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
   const isCmd = !!usedPrefix;
   const boxColor = isCmd ? chalk.hex("#00ff88") : chalk.hex("#38bdf8");
-  console.log("");
-  console.log(boxColor("  ╭───────────────────────────────────────"));
-  console.log(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
-  console.log(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
-  console.log(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
-  console.log(boxColor("  │") + chalk.magenta("  Remitente: ") + chalk.magentaBright(ctx.senderId || ctx.chatId));
-  console.log(boxColor("  │") + chalk.green("  " + (ctx.isGroup ? "Grupo" : "Privado") + ": ") + chalk.white(g));
-  console.log(boxColor("  │") + chalk.cyanBright("  " + (isCmd ? "Comando" : "Mensaje") + ": ") + chalk.white(ctx.text.slice(0, 70)));
-  console.log(boxColor("  ╰───────────────────────────────────────"));
+  log.ui("");
+  log.ui(boxColor("  ╭───────────────────────────────────────"));
+  log.ui(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
+  log.ui(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
+  log.ui(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
+  log.ui(boxColor("  │") + chalk.magenta("  Remitente: ") + chalk.magentaBright(ctx.senderId || ctx.chatId));
+  log.ui(boxColor("  │") + chalk.green("  " + (ctx.isGroup ? "Grupo" : "Privado") + ": ") + chalk.white(g));
+  log.ui(boxColor("  │") + chalk.cyanBright("  " + (isCmd ? "Comando" : "Mensaje") + ": ") + chalk.white(ctx.text.slice(0, 70)));
+  log.ui(boxColor("  ╰───────────────────────────────────────"));
 }
 
 function logCommand(ctx, cmdName, ms) {
@@ -142,14 +142,14 @@ function logCommand(ctx, cmdName, ms) {
   const name = ctx.pushName || ctx.pushname || "Usuario";
   const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
   const boxColor = chalk.hex("#00ff88");
-  console.log("");
-  console.log(boxColor("  ╭───────────────────────────────────────"));
-  console.log(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
-  console.log(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
-  console.log(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
-  console.log(boxColor("  │") + chalk.magenta("  Grupo: ") + chalk.white(g));
-  console.log(boxColor("  │") + chalk.cyanBright("  Comando: ") + chalk.white(cmdName) + boxColor(` (${ms}ms)`));
-  console.log(boxColor("  ╰───────────────────────────────────────"));
+  log.ui("");
+  log.ui(boxColor("  ╭───────────────────────────────────────"));
+  log.ui(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
+  log.ui(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
+  log.ui(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
+  log.ui(boxColor("  │") + chalk.magenta("  Grupo: ") + chalk.white(g));
+  log.ui(boxColor("  │") + chalk.cyanBright("  Comando: ") + chalk.white(cmdName) + boxColor(` (${ms}ms)`));
+  log.ui(boxColor("  ╰───────────────────────────────────────"));
 }
 
 // ==================================================================
@@ -179,9 +179,9 @@ if (args.menu) {
   phoneNumber = args.phone || normalizePhone(envNumber);
   if (!phoneNumber) {
     if (!process.stdin.isTTY) {
-      console.error(chalk.red("[Shin-MD] --code sin número y sin consola interactiva."));
-      console.error(chalk.yellow("[Shin-MD] Usa: node index.js --code +521XXXXXXXXXX"));
-      console.error(chalk.yellow("[Shin-MD] o define PAIRING_NUMBER en tu archivo .env"));
+      log.error(chalk.red("[Shin-MD] --code sin número y sin consola interactiva."));
+      log.error(chalk.yellow("[Shin-MD] Usa: node index.js --code +521XXXXXXXXXX"));
+      log.error(chalk.yellow("[Shin-MD] o define PAIRING_NUMBER en tu archivo .env"));
       process.exit(1);
     }
     phoneNumber = normalizePhone(readlineSync.question(
@@ -190,15 +190,15 @@ if (args.menu) {
       chalk.bold.magentaBright("---> ")
     ));
   } else {
-    console.log(chalk.gray(`[ ✿ ] Vinculación por código (número: ${phoneNumber})\n`));
+    log.ui(chalk.gray(`[ ✿ ] Vinculación por código (número: ${phoneNumber})\n`));
   }
 } else if (sessionValida) {
   opcion = "0";
-  console.log(chalk.gray("[ ✿ ] Sesión existente detectada, cargando...\n"));
+  log.ui(chalk.gray("[ ✿ ] Sesión existente detectada, cargando...\n"));
 } else if (methodCodeByEnv) {
   opcion = "2";
   phoneNumber = normalizePhone(envNumber);
-  console.log(chalk.gray(`[ ✿ ] Vinculación por código (número desde .env: ${phoneNumber})\n`));
+  log.ui(chalk.gray(`[ ✿ ] Vinculación por código (número desde .env: ${phoneNumber})\n`));
 }
 
 // Menú interactivo si no se decidió antes
@@ -208,21 +208,21 @@ if (!opcion) {
     log.warn("No hay consola interactiva. Usa --qr, --code o configura .env");
     opcion = "1";
   } else {
-    console.log(chalk.yellow("\n  ╔═══════════════════════════════╗"));
-    console.log(chalk.yellow("  ║") + chalk.cyan("     📲  CONEXIÓN  📲        ") + chalk.yellow("║"));
-    console.log(chalk.yellow("  ╚═══════════════════════════════╝\n"));
-    console.log(chalk.white("     [1]") + chalk.cyan(" QR Code"));
-    console.log(chalk.white("     [2]") + chalk.cyan(" Pairing Code\n"));
+    log.ui(chalk.yellow("\n  ╔═══════════════════════════════╗"));
+    log.ui(chalk.yellow("  ║") + chalk.cyan("     📲  CONEXIÓN  📲        ") + chalk.yellow("║"));
+    log.ui(chalk.yellow("  ╚═══════════════════════════════╝\n"));
+    log.ui(chalk.white("     [1]") + chalk.cyan(" QR Code"));
+    log.ui(chalk.white("     [2]") + chalk.cyan(" Pairing Code\n"));
 
     opcion = readlineSync.question(chalk.yellow("     ❯ Opción: "));
     while (!/^[1-2]$/.test(opcion)) {
-      console.log(chalk.bold.redBright("     ✗ Solo 1 o 2"));
+      log.ui(chalk.bold.redBright("     ✗ Solo 1 o 2"));
       opcion = readlineSync.question(chalk.yellow("     ❯ Opción: "));
     }
 
     if (opcion === "2") {
-      console.log(chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp."));
-      console.log(chalk.bold.yellowBright("Ejemplo: 521234567890\n"));
+      log.ui(chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp."));
+      log.ui(chalk.bold.yellowBright("Ejemplo: 521234567890\n"));
       phoneNumber = normalizePhone(readlineSync.question(chalk.magenta("---> ")));
     }
   }

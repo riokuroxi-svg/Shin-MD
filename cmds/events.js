@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import { botJid, deleteCachedMeta, getCachedMeta, normalizeJid, resolveJidSync, resolveParticipantJid, setCachedMeta } from "#serialize";
 import chalk from 'chalk';
 import moment from 'moment-timezone';
@@ -120,7 +121,7 @@ export default async (sock, msg) => {
         }
       }
     } catch (err) {
-      console.log(chalk.gray(`[ EVENT ERROR ]  → ${err}`));
+      log.info(chalk.gray(`[ EVENT ERROR ]  → ${err}`));
     }
   });
 };

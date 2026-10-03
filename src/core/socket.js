@@ -290,9 +290,9 @@ export function connectSocket(engine, opts) {
       const { qr, connection, lastDisconnect, isNewLogin } = upd;
 
       if (qr != null && !state.creds.registered && pairingMethod !== "code") {
-        console.log(chalk.green.bold("[ ✿ ] Escanea este código QR\n"));
+        log.info(chalk.green.bold("[ ✿ ] Escanea este código QR\n"));
         qrcode.generate(qr, { small: true });
-        console.log("");
+        log.info("");
       }
 
       if (connection === "open") {
@@ -461,7 +461,7 @@ export function connectSocket(engine, opts) {
             const phone = pairingNumber.replace(/\D/g, "");
             const pair = await s.requestPairingCode(phone);
             const code = pair ? (pair.match(/.{1,4}/g) || [pair]).join("-") : pair;
-            console.log(chalk.bold.white(chalk.bgMagenta("Código de emparejamiento:")), chalk.bold.white(code));
+            log.info(chalk.bold.white(chalk.bgMagenta("Código de emparejamiento:")), chalk.bold.white(code));
           }
         } catch (e) { log.error("Pairing: " + (e.message || e)); }
       }, 3000);

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import fetch from 'node-fetch'
 
 const MAX_REINTENTOS = 3
@@ -31,7 +32,7 @@ async function fetchJson(url, opciones = {}, intentos = MAX_REINTENTOS) {
       return await res.json()
     } catch (e) {
       ultimoError = e
-      console.log(`[tiktok] ⚠️ Intento ${intento} falló: ${e.message}`)
+      log.info(`[tiktok] ⚠️ Intento ${intento} falló: ${e.message}`)
       clearTimeout(timer)
       if (intento < intentos) await dormir(ESPERA_BASE_MS * intento)
     }
@@ -129,7 +130,7 @@ export default {
           }, { quoted: msg })
           return true
         } catch (e) {
-          console.log('[tiktok] cover falló, enviando sin miniatura:', e.message)
+          log.info('[tiktok] cover falló, enviando sin miniatura:', e.message)
           return false
         }
       })()
@@ -164,13 +165,13 @@ export default {
             }, { quoted: msg })
           }
         } catch (e) {
-          console.log('[tiktok] audio falló:', e.message)
+          log.info('[tiktok] audio falló:', e.message)
         }
       }
 
       await msg.react('✔️')
     } catch (e) {
-      console.error('[tiktok] error:', e)
+      log.error('[tiktok] error:', e)
       await msg.react('✖️')
       await msg.reply(
         `> Error al descargar de TikTok después de ${MAX_REINTENTOS} intentos: ${e?.message || 'error desconocido'}\n` +
