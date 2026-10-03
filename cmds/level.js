@@ -6,22 +6,14 @@
  */
 import { randomInt } from "#lib/random";
 import db from '../src/services/ginko-db.js';
-const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 1.5;
-
-function xpRange(level, multiplier = global.multiplier || 2) {
-  if (level < 0) throw new TypeError('level cannot be negative value');
-  level = Math.floor(level);
-  const min = level === 0 ? 0 : Math.round(Math.pow(level, growth) * multiplier) + 1;
-  const max = Math.round(Math.pow(level + 1, growth) * multiplier);
-  return { min, max, xp: max - min };
-}
+import { xpRange, CRECIMIENTO_LEVEL } from "#lib/xp";
 
 function findLevel(xp, multiplier = global.multiplier || 2) {
   if (xp === Infinity) return Infinity;
   if (isNaN(xp)) return NaN;
   if (xp <= 0) return -1;
   let level = 0;
-  do { level++; } while (xpRange(level, multiplier).min <= xp);
+  do { level++; } while (xpRange(level, multiplier, CRECIMIENTO_LEVEL).min <= xp);
   return --level;
 }
 
@@ -50,7 +42,7 @@ export async function before({ msg }) {
       db.setChatUser(msg.chat, msg.sender, 'coins', (users.coins || 0) + coinBonus);
       db.setUser(msg.sender, 'exp', (user.exp || 0) + expBonus);
     }
-    const { min, max } = xpRange(user.level, global.multiplier);
+    const { min, max } = xpRange(user.level, global.multiplier, CRECIMIENTO_LEVEL);
     db.setUser(msg.sender, 'minxp', min);
     db.setUser(msg.sender, 'maxxp', max);
   }
