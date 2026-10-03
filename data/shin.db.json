@@ -11,7 +11,12 @@
       "applied_at": 1790744451935
     }
   },
-  "settings": {},
+  "settings": {
+    "warmup_start_date": {
+      "key": "warmup_start_date",
+      "value": "\"2026-10-03\""
+    }
+  },
   "users": {},
   "groups_data": {},
   "message_log": {},

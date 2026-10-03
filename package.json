@@ -15,7 +15,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test:pairing": "node scripts/verificar-pairing.js"
   },
   "imports": {
     "#engine": "./src/core/engine.js",
