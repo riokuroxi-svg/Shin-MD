@@ -39,13 +39,13 @@ export default {
       currentStreak = Math.min(currentStreak + 1, 8);
       db.setUser(msg.sender, 'monthlyStreak', currentStreak);
       db.setUser(msg.sender, 'lastMonthlyGlobal', now);
-    }    
+    }
     const coins = Math.min(60000 + (currentStreak - 1) * 5000, 95000);
     db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) + coins);
-    db.setChatUser(msg.chat, msg.sender, 'lastmonthly', now + gap);    
+    db.setChatUser(msg.chat, msg.sender, 'lastmonthly', now + gap);
     let next = Math.min(60000 + currentStreak * 5000, 95000).toLocaleString();
     let caption = `> Mes *${currentStreak + 1}* » *+${next}*`;
-    if (lost) caption += `\n> ☆ ¡Has perdido tu racha de meses!`;    
+    if (lost) caption += `\n> ☆ ¡Has perdido tu racha de meses!`;
     await sock.sendMessage(msg.chat, { text: `「❁」 Has reclamado tu recompensa mensual de *+${coins.toLocaleString()} ${currency}* (Mes *${currentStreak}*)\n${caption}` }, { quoted: msg });
   }
 };

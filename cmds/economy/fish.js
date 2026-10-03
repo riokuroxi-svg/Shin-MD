@@ -19,42 +19,42 @@ export default {
     const settings = db.getSettings(botId);
     const currency = settings.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'tools', {});
-    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastfish', 0);    
+    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastfish', 0);
     let user = db.getChatUser(msg.chat, msg.sender);
     if (user.tools && typeof user.tools === 'string') {
       try { user.tools = JSON.parse(user.tools); } catch { user.tools = {}; }
-    }    
+    }
     const staminaConsumed = randomInt(1, 5);
     if (user.stamina < staminaConsumed) {
       return msg.reply(`ꕥ No tienes suficiente energía para salir de pescar.\n> Usa *${usedPrefix}heal* para curarte.`);
-    }    
+    }
     if (!user.tools?.caña) {
       return msg.reply(`ꕥ Necesitas una Caña de pescar para pescar.\n> Compra una en la tienda con: *${usedPrefix}buy caña*`);
-    }    
+    }
     if (user.tools.caña.durability <= 10) {
       delete user.tools.caña;
       db.setChatUser(msg.chat, msg.sender, 'tools', user.tools);
       return msg.reply(`ꕥ Tu Caña de pescar se ha roto por el uso y ha sido eliminada de tu inventario.\n> Compra una nueva con: *${usedPrefix}buy caña*`);
-    }    
+    }
     const remainingTime = user.lastfish - Date.now();
     if (remainingTime > 0) {
       return msg.reply(`ꕥ Debes esperar *${msToTime(remainingTime)}* antes de volver a pescar.`);
-    }    
+    }
     user.stamina -= staminaConsumed;
-    db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);    
+    db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);
     const rand = Math.random();
     const durabilityConsumed = randomInt(1, 15);
     let cantidad;
-    let message;    
+    let message;
     if (rand < 0.4) {
       user.tools.caña.durability -= durabilityConsumed;
       if (user.tools.caña.durability <= 10) {
         delete user.tools.caña;
       }
-      db.setChatUser(msg.chat, msg.sender, 'tools', user.tools);      
+      db.setChatUser(msg.chat, msg.sender, 'tools', user.tools);
       cantidad = randomInt(6000, 8000);
       user.coins += cantidad;
-      db.setChatUser(msg.chat, msg.sender, 'coins', user.coins);      
+      db.setChatUser(msg.chat, msg.sender, 'coins', user.coins);
       const successMessages = [
         `¡Has pescado un Salmón con tu Caña! Ganaste *¥${cantidad.toLocaleString()} ${currency}*!`,
         `¡Has pescado una Trucha con tu Caña! Ganaste *¥${cantidad.toLocaleString()} ${currency}*!`,
@@ -73,7 +73,7 @@ export default {
       if (user.tools.caña.durability <= 10) {
         delete user.tools.caña;
       }
-      db.setChatUser(msg.chat, msg.sender, 'tools', user.tools);      
+      db.setChatUser(msg.chat, msg.sender, 'tools', user.tools);
       cantidad = randomInt(5000, 6500);
       const total = (user.coins || 0) + (user.bank || 0);
       if (total >= cantidad) {
@@ -93,7 +93,7 @@ export default {
         user.bank = 0;
         db.setChatUser(msg.chat, msg.sender, 'coins', 0);
         db.setChatUser(msg.chat, msg.sender, 'bank', 0);
-      }      
+      }
       const failMessages = [
         `El anzuelo de tu Caña se enredó y perdiste parte de tu equipo, perdiste *¥${cantidad.toLocaleString()} ${currency}*.`,
         `Una corriente fuerte arrastró tu Caña, perdiste *¥${cantidad.toLocaleString()} ${currency}*.`,
@@ -113,7 +113,7 @@ export default {
         `El río estuvo lleno de peces curiosos que se acercaban sin ser capturados por tu Caña.`
       ];
       message = pickRandom(neutralMessages);
-    }    
+    }
     db.setChatUser(msg.chat, msg.sender, 'lastfish', Date.now() + 8 * 60 * 1000);
     await sock.sendMessage(msg.chat, { text: `「✿」 ${message}` }, { quoted: msg });
   }

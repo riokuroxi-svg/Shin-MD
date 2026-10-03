@@ -74,11 +74,11 @@ async function xvideosdl(url) {
     fetch(url, { method: "get" }).then(res => res.text()).then(res => {
       const $ = cheerio.load(res, { xmlMode: false });
       const title = $("meta[property='og:title']").attr("content");
-      const duration = (() => { 
+      const duration = (() => {
         const s = parseInt($('meta[property="og:duration"]').attr("content"), 10) || 0;
-        return s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s` 
-             : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` 
-             : `${s}s`; 
+        return s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`
+             : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s`
+             : `${s}s`;
       })();
       const views = $("span.nb_views").text().trim() || $("strong.mobile-hide").text().trim();
       const likes = $("span.rating-good-nbr").text().trim();

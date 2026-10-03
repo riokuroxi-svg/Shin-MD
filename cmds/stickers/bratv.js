@@ -11,7 +11,7 @@ import { runGuarded } from '#lib/apiBreaker';
 import { state } from '#lib/theme';
 
 const fetchStickerVideo = async (text) => {
-  const response = await runGuarded('bratv', async () => axios.get(`https://skyzxu-brat.hf.space/brat-animated`, { params: { text }, responseType: 'arraybuffer' }));  
+  const response = await runGuarded('bratv', async () => axios.get(`https://skyzxu-brat.hf.space/brat-animated`, { params: { text }, responseType: 'arraybuffer' }));
   if (!response.data) throw new Error('Error al obtener el video de la API.');
   return response.data;
 };

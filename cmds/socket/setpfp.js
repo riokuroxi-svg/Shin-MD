@@ -40,7 +40,7 @@ export default {
       });
     } else {
       await sock.updateProfilePicture(idBot, media);
-    }    
+    }
     return msg.reply(`✿ Se ha actualizado la foto de perfil de *${config.namebot || 'Bot'}*!`);
   },
 };

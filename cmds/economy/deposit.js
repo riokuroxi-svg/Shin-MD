@@ -14,7 +14,7 @@ export default {
     const chatData = db.getChat(msg.chat);
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
-    }    
+    }
     const idBot = botJid(sock);
     const settings = db.getSettings(idBot);
     const monedas = settings.currency;
@@ -32,16 +32,16 @@ export default {
       db.setChatUser(msg.chat, msg.sender, 'bank', (user.bank || 0) + count);
       await msg.reply(`ꕥ Has depositado *¥${count.toLocaleString()} ${monedas}* en tu Banco`);
       return true;
-    }        
+    }
     if (!Number(args[0]) || parseInt(args[0]) < 1) {
       return msg.reply('《✧》 Ingresa una cantidad *válida* para depositar');
-    }    
-    const count = parseInt(args[0]);        
+    }
+    const count = parseInt(args[0]);
     if (user.coins <= 0 || user.coins < count) {
       return msg.reply(`❀ No tienes suficientes *${monedas}* para depositar`);
-    }        
+    }
     db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) - count);
-    db.setChatUser(msg.chat, msg.sender, 'bank', (user.bank || 0) + count);    
+    db.setChatUser(msg.chat, msg.sender, 'bank', (user.bank || 0) + count);
     await msg.reply(`ꕥ Has depositado *¥${count.toLocaleString()} ${monedas}* en tu Banco`);
   }
 };

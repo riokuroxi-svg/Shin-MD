@@ -18,44 +18,44 @@ export default {
     const botSettings = db.getSettings(botId);
     const monedas = botSettings?.currency || 'Coins';
     db.setCreate('chat_users', [msg.chat, msg.sender], 'inventory', {});
-    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastinvoke', 0);    
+    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastinvoke', 0);
     let user = db.getChatUser(msg.chat, msg.sender);
     if (user.inventory && typeof user.inventory === 'string') {
       try { user.inventory = JSON.parse(user.inventory); } catch { user.inventory = {}; }
-    }    
+    }
     const staminaConsumed = randomInt(1, 5);
     if (user.stamina < 10) {
       return msg.reply(`ꕥ No tienes suficiente stamina para realizar un ritual.\n> Usa *${usedPrefix}heal* para curarte.`);
-    }    
+    }
     const magicConsumed = randomInt(1, 12);
     if (user.magic < 10) {
       return msg.reply(`ꕥ No tienes suficiente magia para realizar un ritual.\n> Usa *${usedPrefix}pocion* para recuperarte.`);
-    }    
+    }
     const saludConsumed = randomInt(1, 15);
     if (user.health < 10) {
       return msg.reply(`ꕥ No tienes suficiente salud para realizar el ritual.\nUsa *${usedPrefix}heal* para curarte.`);
-    }    
+    }
     if (!user.inventory?.totem || user.inventory.totem <= 0) {
       return msg.reply(`ꕥ Necesitas un Tótem de Invocación para realizar el ritual.\n> Compra en la tienda con: *${usedPrefix}buy totem*`);
-    }    
+    }
     const remaining = user.lastinvoke - Date.now();
     if (remaining > 0) {
       return msg.reply(`ꕥ Debes esperar *${msToTime(remaining)}* para invocar otro ritual.`);
-    }    
+    }
     user.stamina -= staminaConsumed;
     user.magic -= magicConsumed;
     user.health -= saludConsumed;
-    user.inventory.totem -= 1;   
+    user.inventory.totem -= 1;
     db.setChatUser(msg.chat, msg.sender, 'stamina', user.stamina);
     db.setChatUser(msg.chat, msg.sender, 'magic', user.magic);
     db.setChatUser(msg.chat, msg.sender, 'health', user.health);
-    db.setChatUser(msg.chat, msg.sender, 'inventory', user.inventory);    
+    db.setChatUser(msg.chat, msg.sender, 'inventory', user.inventory);
     user.lastinvoke = Date.now() + 12 * 60 * 1000;
-    db.setChatUser(msg.chat, msg.sender, 'lastinvoke', user.lastinvoke);    
+    db.setChatUser(msg.chat, msg.sender, 'lastinvoke', user.lastinvoke);
     const roll = Math.random();
     let reward = 0;
     let narration = '';
-    let bonusMsg = '';    
+    let bonusMsg = '';
     if (roll < 0.05) {
       reward = randomInt(11000, 13000);
       narration = pickRandom(legendaryInvocations);
@@ -68,9 +68,9 @@ export default {
         reward += bonus;
         bonusMsg = `\n「✿」 ¡Energía extra! Ganaste *${bonus.toLocaleString()}* ${monedas} adicionales`;
       }
-    }    
+    }
     user.coins += reward;
-    db.setChatUser(msg.chat, msg.sender, 'coins', user.coins);    
+    db.setChatUser(msg.chat, msg.sender, 'coins', user.coins);
     let caption = `「✿」 ${narration}\nGanaste *${reward.toLocaleString()} ${monedas}*`;
     if (bonusMsg) caption += `\n${bonusMsg}`;
     await sock.reply(msg.chat, caption, msg);

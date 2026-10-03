@@ -19,36 +19,36 @@ export default {
     if (blocked) return msg.reply(avisoEconomia);
     const botId = botJid(sock);
     const bot = db.getSettings(botId);
-    const currency = bot.currency;    
+    const currency = bot.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastslot', 0);
-    const user = db.getChatUser(msg.chat, msg.sender);    
+    const user = db.getChatUser(msg.chat, msg.sender);
     if (!args[0] || isNaN(args[0]) || parseInt(args[0]) <= 0) {
       return msg.reply(`❀ Por favor, ingresa la cantidad que deseas apostar.`);
-    }    
+    }
     const apuesta = parseInt(args[0]);
     if (Date.now() - user.lastslot < 30000) {
       const restante = user.lastslot + 30000 - Date.now();
       return msg.reply(`ꕥ Debes esperar *${formatTime(restante)}* para usar *${usedPrefix + command}* nuevamente.`);
-    }    
+    }
     if (apuesta < 100) {
       return msg.reply(`ꕥ El mínimo para apostar es de 100 *${currency}*.`);
     }
     if (user.coins < apuesta) {
       return msg.reply(`ꕥ Tus *${currency}* no son suficientes para apostar esa cantidad.`);
-    }    
+    }
     const emojis = ['✾', '❃', '❁'];
     const getRandomEmojis = () => {
       const x = Array.from({ length: 3 }, () => pickRandom(emojis));
       const y = Array.from({ length: 3 }, () => pickRandom(emojis));
       const z = Array.from({ length: 3 }, () => pickRandom(emojis));
       return { x, y, z };
-    };    
+    };
     const initialText = '「✿」| *SLOTS* \n────────\n';
     let { key } = await sock.sendMessage(msg.chat, { text: initialText }, { quoted: msg });
     const animateSlots = async () => {
       for (let i = 0; i < 5; i++) {
         const { x, y, z } = getRandomEmojis();
-        const animationText = `「✿」| *SLOTS* 
+        const animationText = `「✿」| *SLOTS*
 ────────
 ${x[0]} : ${y[0]} : ${z[0]}
 ${x[1]} : ${y[1]} : ${z[1]}
@@ -58,10 +58,10 @@ ${x[2]} : ${y[2]} : ${z[2]}
         await delay(300);
       }
     };
-    await animateSlots();    
+    await animateSlots();
     const { x, y, z } = getRandomEmojis();
     let resultado;
-    let newCoins = user.coins;    
+    let newCoins = user.coins;
     if (x[0] === y[0] && y[0] === z[0]) {
       resultado = `❀ Ganaste! *¥${(apuesta * 2).toLocaleString()} ${currency}*.`;
       newCoins += apuesta;
@@ -74,7 +74,7 @@ ${x[2]} : ${y[2]} : ${z[2]}
     }
     db.setChatUser(msg.chat, msg.sender, 'lastslot', Date.now());
     db.setChatUser(msg.chat, msg.sender, 'coins', newCoins);
-    const finalText = `「✿」| *SLOTS* 
+    const finalText = `「✿」| *SLOTS*
 ────────
 ${x[0]} : ${y[0]} : ${z[0]}
 ${x[1]} : ${y[1]} : ${z[1]}

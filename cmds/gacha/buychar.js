@@ -21,16 +21,16 @@ export default {
     }
     if (chat.sales && typeof chat.sales === 'string') {
       try { chat.sales = JSON.parse(chat.sales); } catch { chat.sales = {}; }
-    }    
+    }
     try {
       if (!args.length) {
         return msg.reply(`❀ Debes especificar un personaje para comprar.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
-      }      
+      }
       const queryBuy = args.join(' ').toLowerCase();
       const idBuy = Object.keys(chat.sales).find(id => (chat.sales[id]?.name || '').toLowerCase() === queryBuy);
-      if (!idBuy) return msg.reply(`ꕥ No se ha encontrado al personaje *${args.join(' ')}* en venta.`);     
+      if (!idBuy) return msg.reply(`ꕥ No se ha encontrado al personaje *${args.join(' ')}* en venta.`);
       const venta = chat.sales[idBuy];
-      if (venta.user === userId) return msg.reply(`ꕥ No puedes comprar tu propio personaje.`);     
+      if (venta.user === userId) return msg.reply(`ꕥ No puedes comprar tu propio personaje.`);
       const ahora = Date.now();
       if (ahora - venta.time >= 3 * 864e5) {
         delete chat.sales[idBuy];

@@ -19,8 +19,8 @@ export default {
       const user = db.getUser(msg.sender);
       if (user.claimMessage) {
         db.setUser(msg.sender, 'claimMessage', '');
-      }      
-      await msg.reply('❀ Mensaje de reclamación restablecido.');      
+      }
+      await msg.reply('❀ Mensaje de reclamación restablecido.');
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

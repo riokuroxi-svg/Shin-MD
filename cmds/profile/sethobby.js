@@ -11,9 +11,9 @@ export default {
   description: 'Establecer tu pasatiempo.',
   run: async ({ msg, args, usedPrefix }) => {
     const user = db.getUser(msg.sender);
-    const input = args.join(' ').trim();    
+    const input = args.join(' ').trim();
     const pasatiemposDisponibles = [
-      '📚 Leer', '✍️ Escribir', '🎤 Cantar', '💃 Bailar', '🎮 Jugar', 
+      '📚 Leer', '✍️ Escribir', '🎤 Cantar', '💃 Bailar', '🎮 Jugar',
       '🎨 Dibujar', '🍳 Cocinar', '✈️ Viajar', '🏊 Nadar', '📸 Fotografía',
       '🎧 Escuchar música', '🏀 Deportes', '🎬 Ver películas', '🌿 Jardinería',
       '🧵 Manualidades', '🎲 Juegos de mesa', '🏋️‍♂️ Gimnasio', '🚴 Ciclismo',
@@ -27,7 +27,7 @@ export default {
       '🔍 Investigar', '💄 Maquillaje', '💇‍♂️ Peluquería', '🛌 Dormir', '🍺 Cervecería',
       '🪓 Carpintería', '🧪 Experimentos', '📻 Radioafición', '🗺️ Geografía', '💎 Joyería',
       'Otro 🌟'
-    ];    
+    ];
     if (!input) {
       let lista = '🎯 *Elige un pasatiempo:*\n\n';
       pasatiemposDisponibles.forEach((pasatiempo, index) => {
@@ -35,7 +35,7 @@ export default {
       });
       lista += `\n*Ejemplos:*\n${usedPrefix}setpasatiempo 1\n${usedPrefix}setpasatiempo Leer\n${usedPrefix}setpasatiempo "Otro 🌟"`;
       return msg.reply(lista);
-    }    
+    }
     let pasatiempoSeleccionado = '';
     if (/^\d+$/.test(input)) {
       const index = parseInt(input) - 1;
@@ -52,10 +52,10 @@ export default {
       } else {
         return msg.reply('《✧》 Pasatiempo no encontrado. Usa el comando sin argumentos para ver la lista disponible.');
       }
-    }    
+    }
     if (user.pasatiempo === pasatiempoSeleccionado) {
       return msg.reply(`《✧》 Ya tienes establecido este pasatiempo: *${user.pasatiempo}*`);
-    }    
+    }
     db.setUser(msg.sender, 'pasatiempo', pasatiempoSeleccionado);
     return msg.reply(`✐ Se ha establecido tu pasatiempo:\n> *${pasatiempoSeleccionado}*`);
   },

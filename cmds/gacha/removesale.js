@@ -20,19 +20,19 @@ export default {
     }
     if (chat.sales && typeof chat.sales === 'string') {
       try { chat.sales = JSON.parse(chat.sales); } catch { chat.sales = {}; }
-    }    
+    }
     if (!args.length) {
       return msg.reply(`❀ Debes especificar un personaje para eliminar.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
-    }    
+    }
     try {
       const nameRemove = args.join(' ').toLowerCase();
-      const idRemove = Object.keys(chat.sales).find(id => (chat.sales[id]?.name || '').toLowerCase() === nameRemove);      
+      const idRemove = Object.keys(chat.sales).find(id => (chat.sales[id]?.name || '').toLowerCase() === nameRemove);
       if (!idRemove || chat.sales[idRemove].user !== userId) {
         return msg.reply(`ꕥ El personaje *${args.join(' ')}* no está a la venta por ti.`);
-      }      
+      }
       delete chat.sales[idRemove];
       db.setChat(chatId, 'sales', chat.sales);
-      await msg.reply(`❀ *${args.join(' ')}* ha sido eliminado de la lista de ventas.`);      
+      await msg.reply(`❀ *${args.join(' ')}* ha sido eliminado de la lista de ventas.`);
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

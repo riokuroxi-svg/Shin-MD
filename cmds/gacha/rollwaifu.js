@@ -45,7 +45,7 @@ async function buscarImagenDelirius(tag) {
     `https://danbooru.donmai.us/posts.json?tags=${query}`,
     `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${query}&api_key=98f554258c88c44f4dd28ccde0c28f36682b2a992490ab35ebcc7baf7e196a86d7550b174bce577b8cc3f544e9b3ad0f6aeb09ad63bf89a9141cc3eddb6fbfd2&user_id=1917269`
   ];
-  
+
   // BUSCAR EN LAS 3 FUENTES EN PARALELO (no esperar que termine una para probar la otra)
   const results = await Promise.allSettled(urls.map(async (url) => {
     try {
@@ -62,7 +62,7 @@ async function buscarImagenDelirius(tag) {
       return [];
     }
   }));
-  
+
   // Juntar todos los resultados válidos
   const allUrls = [];
   for (const r of results) {
@@ -106,10 +106,10 @@ export default {
       return msg.reply(`ꕥ Debes esperar *${timeText.trim()}* para usar *${usedPrefix + 'rw'}* de nuevo.`);
     }
     rollLocks.set(userId, now);
-    
+
     // Reaccionar INMEDIATAMENTE para que el usuario vea que el bot respondió
     try { await sock.sendMessage(chatId, { react: { text: '🎲', key: msg.key } }); } catch {}
-    
+
     try {
       // Cargar personajes del caché (no lee disco si ya está cargado)
       const chars = await loadCharacters();
@@ -118,11 +118,11 @@ export default {
       const id = String(selected.id);
       const source = getSeriesNameByCharacter(chars, selected.id);
       const baseTag = formatTag(selected.tags?.[0] || '');
-      
+
       // Buscar imágenes en paralelo
       const mediaList = await buscarImagenDelirius(baseTag);
       const media = mediaList.length > 0 ? pickRandom(mediaList) : null;
-      
+
       if (!media) {
         rollLocks.delete(userId);
         try { await sock.sendMessage(chatId, { react: { text: '❌', key: msg.key } }); } catch {}
@@ -146,7 +146,7 @@ export default {
       const claimedBy = chatChar?.user || null;
       const owner = claimedBy ? (db.getUser(claimedBy))?.name || claimedBy.split('@')[0] : 'desconocido';
       const caption = `❀ Nombre » *${chatChar.name}*\n⚥ Género » *${selected.gender || 'Desconocido'}*\n✰ Valor » *${chatChar.value.toLocaleString()}*\n♡ Estado » *${claimedBy ? `Reclamado por ${owner}` : 'Libre'}*\n❖ Fuente » *${source}*\u206c`;
-      
+
       // Descargar imagen con fastFetch (más rápido con keep-alive)
       const imgRes = await fastFetch(media, {
         timeout: 10000,
@@ -156,9 +156,9 @@ export default {
         }
       });
       const buffer = Buffer.from(await imgRes.arrayBuffer());
-      
+
       const sent = await sock.sendMessage(chatId, { image: buffer, caption: caption }, { quoted: msg });
-      
+
       if (!chat.rolls) chat.rolls = {};
       chat.rolls[sent.key.id] = { id, charKey, name: chatChar.name, expiresAt: chatChar.expiresAt, reservedBy: userId, reservedUntil: chatChar.reservedUntil };
       db.setChat(chatId, 'rolls', chat.rolls);

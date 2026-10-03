@@ -20,10 +20,10 @@ export default {
     const botId = botJid(sock);
     const botSettings = db.getSettings(botId);
     const currency = botSettings.currency
-    const user = db.getChatUser(chatId, senderId);    
+    const user = db.getChatUser(chatId, senderId);
     if (!args[0]) {
       return msg.reply(`《✧》 Ingresa la cantidad de *${currency}* que quieras retirar.`);
-    }    
+    }
     if (args[0].toLowerCase() === 'all') {
       if ((user.bank || 0) <= 0) {
         return msg.reply(`No tienes suficientes *${currency}* en tu Banco para poder retirar.`);
@@ -32,16 +32,16 @@ export default {
       db.setChatUser(chatId, senderId, 'bank', 0);
       db.setChatUser(chatId, senderId, 'coins', (user.coins || 0) + amount);
       return msg.reply(`✎ Has retirado *¥${amount.toLocaleString()} ${currency}* del banco, ahora podras usarlo pero tambien podran robartelo.`);
-    }    
+    }
     const count = parseInt(args[0]);
     if (isNaN(count) || count < 1) {
       return msg.reply(`《✧》 Debes retirar una cantidad válida.\n > Ejemplo 1 » *${usedPrefix + command} ¥25000*\n> Ejemplo 2 » *${usedPrefix + command} all*`);
-    }    
+    }
     if ((user.bank || 0) < count) {
       return msg.reply(`《✧》 No tienes suficientes *${currency}* en tu banco para retirar esa cantidad.\n> Solo tienes *¥${user.bank.toLocaleString()} ${currency}* en tu cuenta.`);
-    }    
+    }
     db.setChatUser(chatId, senderId, 'bank', user.bank - count);
-    db.setChatUser(chatId, senderId, 'coins', (user.coins || 0) + count);    
+    db.setChatUser(chatId, senderId, 'coins', (user.coins || 0) + count);
     await msg.reply(`✎ Has retirado *¥${count.toLocaleString()} ${currency}* del banco, ahora podras usarlo pero tambien podran robartelo.`);
   }
 };

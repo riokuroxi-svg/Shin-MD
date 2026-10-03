@@ -10,7 +10,7 @@ import fs from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 
-const captions = {      
+const captions = {
   anal: (from, to) => from === to ? 'se la metió en el ano.' : 'se la metió en el ano a',
   cum: (from, to) => from === to ? 'se vino dentro de... Omitiremos eso.' : 'se vino dentro de',
   undress: (from, to) => from === to ? 'se está quitando la ropa' : 'le está quitando la ropa a',
@@ -97,7 +97,7 @@ export default {
     if (!captions[currentCommand]) return;
     const who = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     const from = db.getUser(msg.sender);
-    const fromName = from?.name || '@'+msg.sender.split('@')[0];    
+    const fromName = from?.name || '@'+msg.sender.split('@')[0];
     const to = db.getUser(who);
     const toName = to?.name || '@'+who.split('@')[0];
     const captionText = captions[currentCommand](fromName, toName);

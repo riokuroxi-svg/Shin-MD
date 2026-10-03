@@ -6,7 +6,7 @@
  */
 // ═══════════════════════════════════════════════════════════════════
 //  router.js — Router de comandos
-//  Pipeline: mensaje → middlewares before → serializar → 
+//  Pipeline: mensaje → middlewares before → serializar →
 //            detectar prefijo/comando → cooldown → permisos → handler
 //  Todo envío pasa por la cola anti-ban del engine.
 // ═══════════════════════════════════════════════════════════════════

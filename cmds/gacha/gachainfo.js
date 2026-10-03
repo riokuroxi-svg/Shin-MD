@@ -48,16 +48,16 @@ export default {
       const totalSeries = Object.keys(structure).length;
       if (user.characters && typeof user.characters === 'string') {
         try { user.characters = JSON.parse(user.characters); } catch { user.characters = []; }
-      }      
+      }
       const claimedIDs = Array.isArray(user.characters) ? user.characters : [];
       let totalValue = 0;
       for (const id of claimedIDs) {
         const character = db.getCharacter(id);
         totalValue += character?.value || 0;
-      }      
+      }
       const userName = userGlobal?.name || msg.sender.split('@')[0];
-      const replyText = `*❀ Usuario \`<${userName}>\`*\n\nⴵ RollWaifu » *${formatTime(rollLeft)}*\nⴵ Claim » *${formatTime(claimLeft)}*\nⴵ Vote » *${formatTime(voteLeft)}*\nⴵ Robwaifu » *${formatTime(robLeft)}*\n\n♡ Personajes reclamados » *${claimedIDs.length}*\n✰ Valor total » *${totalValue.toLocaleString()}*\n❏ Personajes totales » *${totalCharacters}*\n❏ Series totales » *${totalSeries}*`;     
-      await sock.sendMessage(msg.chat, { text: replyText.trim() }, { quoted: msg });      
+      const replyText = `*❀ Usuario \`<${userName}>\`*\n\nⴵ RollWaifu » *${formatTime(rollLeft)}*\nⴵ Claim » *${formatTime(claimLeft)}*\nⴵ Vote » *${formatTime(voteLeft)}*\nⴵ Robwaifu » *${formatTime(robLeft)}*\n\n♡ Personajes reclamados » *${claimedIDs.length}*\n✰ Valor total » *${totalValue.toLocaleString()}*\n❏ Personajes totales » *${totalCharacters}*\n❏ Series totales » *${totalSeries}*`;
+      await sock.sendMessage(msg.chat, { text: replyText.trim() }, { quoted: msg });
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

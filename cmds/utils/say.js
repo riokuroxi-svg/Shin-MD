@@ -37,14 +37,14 @@ export default {
       if (hasAudio) {
         const media = await src.download();
         return sock.sendMessage(msg.chat, { audio: media, mimetype: 'audio/mp4', fileName: 'hidetag.mp3', ...options });
-      }      
+      }
       if (hasSticker) {
         const media = await src.download();
         return sock.sendMessage(msg.chat, { sticker: media, ...options });
-      }      
+      }
       if (textToCheck) {
         return sock.sendMessage(msg.chat, { text: textToCheck, ...options });
-      }      
+      }
       return msg.reply('《✧》 Por favor, escribe el texto que deseas repetir.');
     } catch (e) {
       return msg.reply(state('error', { detail: e.message }));

@@ -24,7 +24,7 @@ export default {
       return msg.reply(`❀ Debes mencionar a quien quieras transferir *${monedas}*.\n> Ejemplo » *${usedPrefix + command} 25000 @mencion*`);
     }
     const senderData = db.getChatUser(chatId, msg.sender);
-    const targetData = db.getChatUser(chatId, who);   
+    const targetData = db.getChatUser(chatId, who);
     if (!targetData) {
       return msg.reply(`ꕥ El usuario mencionado no está registrado en el bot.`);
     }
@@ -35,7 +35,7 @@ export default {
     }
     if (senderData.bank < cantidad) {
       return msg.reply(`ꕥ No tienes suficientes *${monedas}* en el banco para transferir.\n> Tu saldo actual: *¥${senderData.bank.toLocaleString()} ${monedas}*`);
-    }        
+    }
     db.setChatUser(chatId, msg.sender, 'bank', senderData.bank - cantidad);
     db.setChatUser(chatId, who, 'bank', (targetData.bank || 0) + cantidad);
     const userData = db.getUser(who);

@@ -17,7 +17,7 @@ export default {
     if (blocked) return msg.reply(avisoEconomia);
     const botId = botJid(sock);
     const monedas = (db.getSettings(botId)).currency;
-    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastcrime', 0);   
+    db.setCreate('chat_users', [msg.chat, msg.sender], 'lastcrime', 0);
     const user = db.getChatUser(msg.chat, msg.sender);
     const remainingTime = user.lastcrime - Date.now();
     if (remainingTime > 0) {
@@ -44,7 +44,7 @@ export default {
         db.setChatUser(msg.chat, msg.sender, 'coins', 0);
         db.setChatUser(msg.chat, msg.sender, 'bank', 0);
       }
-    }        
+    }
     db.setChatUser(msg.chat, msg.sender, 'lastcrime', Date.now() + 7 * 60 * 1000);
     const successMessages = [
       `Hackeaste un cajero automático usando un exploit del sistema y retiraste efectivo sin alertas, ganaste *¥${cantidad.toLocaleString()} ${monedas}*!`,

@@ -29,7 +29,7 @@ export default {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       db.setCreate('chat_users', [msg.chat, msg.sender], 'lastrobwaifu', 0);
-      db.setCreate('chat_users', [msg.chat, msg.sender], 'robVictims', {});      
+      db.setCreate('chat_users', [msg.chat, msg.sender], 'robVictims', {});
       let userData = db.getChatUser(msg.chat, msg.sender);
       if (userData.robVictims && typeof userData.robVictims === 'string') {
         try { userData.robVictims = JSON.parse(userData.robVictims); } catch { userData.robVictims = {}; }
@@ -72,12 +72,12 @@ export default {
       if (last && now - last < 24 * 60 * 60 * 1000) {
         const targetName = (db.getUser(target))?.name?.trim() || target.split('@')[0];
         return msg.reply(`ꕥ Ya robaste a *${targetName}* hoy. Solo puedes robarle a alguien una vez cada 24 horas.`);
-      }      
+      }
       const targetName = (db.getUser(target))?.name?.trim() || target.split('@')[0];
-      const robberName = (db.getUser(msg.sender))?.name?.trim() || msg.sender.split('@')[0];      
+      const robberName = (db.getUser(msg.sender))?.name?.trim() || msg.sender.split('@')[0];
       const success = Math.random() < 0.4;
       userData.lastrobwaifu = now + cooldown;
-      db.setChatUser(msg.chat, msg.sender, 'lastrobwaifu', userData.lastrobwaifu);      
+      db.setChatUser(msg.chat, msg.sender, 'lastrobwaifu', userData.lastrobwaifu);
       if (!success) {
         return msg.reply(`ꕥ El intento de robo ha fallado. *${targetName}* defendió a su waifu heroicamente.`);
       }
@@ -87,7 +87,7 @@ export default {
       const stealableCharacters = victim.characters.filter(id => id !== victimFavorite);
       if (stealableCharacters.length === 0) {
         return msg.reply(`ꕥ *${targetName}* solo tiene a su favorito protegido, no puedes robarlo.`);
-      }      
+      }
       const stolenId = pickRandom(stealableCharacters);
       const charKey = msg.chat + '__' + stolenId;
       db.setCreate('characters', charKey, 'name', '');
@@ -110,9 +110,9 @@ export default {
       if (victim.favorite === stolenId) {
         db.setChatUser(msg.chat, target, 'favorite', '');
         db.setUser(target, 'favorite', '');
-      }      
+      }
       const charName = characterData.name || `ID:${stolenId}`;
-      await msg.reply(`❀ *${robberName}* ha robado a *${charName}* del harem de *${targetName}*.`);      
+      await msg.reply(`❀ *${robberName}* ha robado a *${charName}* del harem de *${targetName}*.`);
     } catch (e) {
       return msg.reply(state('error', { detail: e.message }));
     }

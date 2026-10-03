@@ -22,17 +22,17 @@ export default {
       let user = db.getChatUser(msg.chat, msg.sender);
       if (!Array.isArray(user.characters) || !user.characters.length) {
         return msg.reply(`❀ No tienes personajes reclamados en tu harem.`);
-      }      
+      }
       if (!args.length) {
         return msg.reply(`❀ Debes especificar un personaje para eliminar.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
-      }      
+      }
       const inputName = args.join(' ').toLowerCase().trim();
       const structure = await loadCharacters();
       const allCharacters = flattenCharacters(structure);
       const character = allCharacters.find(c => c.name.toLowerCase() === inputName);
       if (!character) {
         return msg.reply(`ꕥ No se ha encontrado ningún personaje con el nombre *${inputName}*\n> Puedes sugerirlo usando *${usedPrefix}suggest personaje ${inputName}*`);
-      }      
+      }
       if (!user.characters.includes(character.id)) {
         return msg.reply(`ꕥ *${character.name}* no está reclamado por ti.`);
       }
@@ -49,7 +49,7 @@ export default {
         db.setChatUser(msg.chat, msg.sender, 'favorite', '');
         db.setUser(msg.sender, 'favorite', '');
       }
-      await sock.sendMessage(msg.chat, { text: `❀ *${character.name}* ha sido eliminado de tu lista de reclamados.` }, { quoted: msg });      
+      await sock.sendMessage(msg.chat, { text: `❀ *${character.name}* ha sido eliminado de tu lista de reclamados.` }, { quoted: msg });
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

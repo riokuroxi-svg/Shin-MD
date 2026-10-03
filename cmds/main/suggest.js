@@ -47,7 +47,7 @@ export default {
       try {
         await sock.sendMessage(`${num}@s.whatsapp.net`, { text: reportMsg });
       } catch {}
-    }    
+    }
     db.setUser(msg.sender, userKey, now + cooldownMs);
     await msg.reply(`《✧》 Gracias por tu *${esReporte ? 'reporte' : 'sugerencia'}*\n\n> Tu mensaje fue enviado correctamente a los moderadores`);
   },

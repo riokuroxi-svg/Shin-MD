@@ -17,7 +17,7 @@ export default {
   run: async ({ msg, sock, text }) => {
     if (!text.trim()) {
       return sock.reply(msg.chat, '《✧》 Debes escribir un comando a ejecutar.', msg);
-    }    
+    }
     let o;
     try {
       await msg.react('🕒');

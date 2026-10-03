@@ -39,7 +39,7 @@ export const globalFetchCache = new FastCache(15 * 60 * 1000);
 export async function fastFetch(url, options = {}) {
   const { cache = false, cacheKey, cacheTTL, timeout = 15000, headers = {}, ...rest } = options;
   const key = cacheKey || (cache ? (typeof url === 'string' ? url : url?.href || url?.url) : null);
-  
+
   // Devolver de caché si existe
   if (key) {
     const cached = globalFetchCache.get(key);
