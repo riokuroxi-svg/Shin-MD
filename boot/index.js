@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { normalizePhone, parseArgs } from "../src/lib/cli-args.js";
 // ═══════════════════════════════════════════════════════════════════
 //  boot/index.js — Punto de arranque estilo Ginko-MD
 //  Uso: node index.js [--qr | --code | --menu]
@@ -70,27 +71,7 @@ import { spawnSync } from "node:child_process";
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
-function normalizePhone(input) {
-  let s = String(input).replace(/\D/g, '');
-  if (!s) return '';
-  if (s.startsWith('0')) s = s.replace(/^0+/, '');
-  if (s.startsWith('52') && !s.startsWith('521') && s.length >= 12) s = '521' + s.slice(2);
-  if (s.startsWith('54') && !s.startsWith('549') && s.length >= 11) s = '549' + s.slice(2);
-  return s;
-}
 
-function parseArgs(argv) {
-  const r = { qr: false, code: false, menu: false, phone: "" };
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--qr") r.qr = true;
-    if (argv[i] === "--menu") r.menu = true;
-    if (argv[i] === "--code") r.code = true;
-    if (argv[i] === "--code" && argv[i+1] && /^\+?\d{7,15}$/.test(argv[i+1])) {
-      r.phone = normalizePhone(argv[++i]);
-    }
-  }
-  return r;
-}
 
 function hasValidSession(sessionDir) {
   const authDb = path.join(sessionDir, "auth.db");
@@ -159,7 +140,9 @@ function logCommand(ctx, cmdName, ms) {
 printBanner();
 
 const args = parseArgs(process.argv.slice(2));
-const sessionDir = "./Sessions/Owner";
+// SESSION_DIR permite arrancar con otra sesión (ej. para probar la
+// vinculación sin tocar la del dueño: SESSION_DIR=/tmp/prueba).
+const sessionDir = process.env.SESSION_DIR || "./Sessions/Owner";
 const sessionValida = hasValidSession(sessionDir);
 const methodCodeByEnv = (process.env.PAIRING_METHOD || "").trim().toLowerCase() === "code" && process.env.PAIRING_NUMBER;
 const envNumber = (process.env.PAIRING_NUMBER || "").trim();

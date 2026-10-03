@@ -12,6 +12,7 @@
 import chalk from "chalk";
 import fs from "fs";
 import path from "path";
+import util from "node:util";
 
 // ── B5.3: log a archivo rotativo diario ────────────────────────────
 // logs/shin-YYYY-MM-DD.log. Clave para debuggear bans: reconstruye qué
@@ -48,13 +49,26 @@ function writeLog(level, msg) {
   } catch { fileLogBroken = true; } // nunca dejar que el log tumbe al bot
 }
 
+// ── Por qué los métodos aceptan varios argumentos ───────────────────
+// Antes eran de UN solo argumento, y una llamada como
+//     log.info("Código de emparejamiento:", code)
+// tiraba el segundo sin decir nada: el bot avisaba que había un código
+// pero nunca lo mostraba. Ahora se juntan todos (texto tal cual; el
+// resto con util.inspect) para que NADA se pierda en silencio.
+function unir(args) {
+  return args
+    .map((a) => (typeof a === "string" ? a : util.inspect(a, { depth: 2, breakLength: 120 })))
+    .join(" ");
+}
+
 const log = {
-  info: (msg) => { writeLog("INFO", msg); console.log(chalk.cyan(" ◐ "), chalk.white(msg)); },
-  success: (msg) => { writeLog("SUCCESS", msg); console.log(chalk.green(" ✓ "), chalk.greenBright(msg)); },
-  warn: (msg) => { writeLog("WARN", msg); console.log(chalk.yellow(" ◑ "), chalk.yellow(msg)); },
+  info: (...args) => { const msg = unir(args); writeLog("INFO", msg); console.log(chalk.cyan(" ◐ "), chalk.white(msg)); },
+  success: (...args) => { const msg = unir(args); writeLog("SUCCESS", msg); console.log(chalk.green(" ✓ "), chalk.greenBright(msg)); },
+  warn: (...args) => { const msg = unir(args); writeLog("WARN", msg); console.log(chalk.yellow(" ◑ "), chalk.yellow(msg)); },
   error: (msg, err) => {
-    writeLog("ERROR", msg + (err?.stack ? "\n" + err.stack : ""));
-    console.log(chalk.red(" ✕ "), chalk.redBright(msg));
+    const suelto = typeof err === "string" ? " " + err : "";
+    writeLog("ERROR", msg + suelto + (err?.stack ? "\n" + err.stack : ""));
+    console.log(chalk.red(" ✕ "), chalk.redBright(msg + suelto));
     if (err?.stack) console.log(chalk.red(err.stack.split("\n").slice(1, 3).join("\n")));
   },
   fatal: (msg, err) => {
@@ -62,7 +76,7 @@ const log = {
     console.log(chalk.bgRed.white.bold(" ✕✕ "), chalk.redBright.bold(msg));
     if (err?.stack) console.log(chalk.red(err.stack));
   },
-  gray: (msg) => { writeLog("GRAY", msg); console.log(chalk.gray(msg)); },
+  gray: (...args) => { const msg = unir(args); writeLog("GRAY", msg); console.log(chalk.gray(msg)); },
 
   // ── log.ui(): para las salidas que SON diseño ───────────────────
   // El banner de arranque y los avisos de sub-bots ya vienen con su
@@ -72,7 +86,7 @@ const log = {
   // logs/shin-YYYY-MM-DD.log, que es de donde se reconstruye qué pasó
   // antes de una desconexión. Antes, esas líneas solo existían en la
   // pantalla y se perdían.
-  ui: (msg) => { writeLog("UI", msg); console.log(msg); },
+  ui: (...args) => { const msg = unir(args); writeLog("UI", msg); console.log(msg); },
 };
 
 export default log;

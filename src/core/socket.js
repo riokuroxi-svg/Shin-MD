@@ -54,11 +54,34 @@ export function esRelayLigero(message) {
   return tipo === 0 || tipo === 14;
 }
 
+/**
+ * Da al código de vinculación el formato que se teclea en el teléfono:
+ * "ABCD1234" → "ABCD-1234". Si WhatsApp no devuelve nada, devuelve lo
+ * mismo que recibió (null/undefined) para que quien llame decida.
+ * @param {string|null} pair
+ * @returns {string|null}
+ */
+export function formatearCodigoDeVinculacion(pair) {
+  if (!pair) return pair;
+  return (pair.match(/.{1,4}/g) || [pair]).join("-");
+}
+
 export function connectSocket(engine, opts) {
   opts = opts || {};
   const sessionDir = opts.sessionDir || "./Sessions/Owner";
   const pairingNumber = opts.pairingNumber || "";
   const pairingMethod = opts.pairingMethod || "";
+
+  // Costuras para pruebas: permiten sustituir la fábrica de socket y la
+  // consulta de versión (que sale a internet). En producción no se pasan
+  // y todo usa Baileys de verdad. Sin esto, probar la vinculación exigía
+  // una cuenta real y una red.
+  const deps = opts.deps || {};
+  const crearSocket = deps.makeSocket || makeWASocket;
+  const obtenerVersion = deps.fetchVersion || fetchLatestBaileysVersion;
+  // WhatsApp necesita un momento antes de aceptar la petición del código.
+  // Configurable para que los tests no esperen 3 segundos reales.
+  const pairingDelayMs = opts.pairingDelayMs ?? 3000;
   const onMessage = opts.onMessage || null;
   const onReady = opts.onReady || null;
   const watchdog = opts.watchdog || null;
@@ -113,7 +136,7 @@ export function connectSocket(engine, opts) {
     const { state, saveCreds: sc } = await useSQLiteAuthState(sessionDir);
 
     let ver;
-    try { const v = await fetchLatestBaileysVersion(); ver = v.version; }
+    try { const v = await obtenerVersion(); ver = v.version; }
     // Fallback verificado en vivo (2026-09): 1044802095 conecta y da QR.
     catch { ver = [2, 3000, 1044802095]; }
 
@@ -123,7 +146,7 @@ export function connectSocket(engine, opts) {
     console.info = () => {};
     console.debug = () => {};
 
-    const s = makeWASocket({
+    const s = crearSocket({
       version: ver,
       logger: pino({ level: "silent" }),
       browser: Browsers.macOS("Chrome"),
@@ -459,12 +482,16 @@ export function connectSocket(engine, opts) {
         try {
           if (!state.creds.registered) {
             const phone = pairingNumber.replace(/\D/g, "");
+            // Marca de diagnóstico: deja constancia en la consola de que el
+            // bot SÍ llegó a pedir el código. La usa scripts/verificar-pairing.js,
+            // que comprueba el arranque real con un número inventado.
+            if (process.env.SHIN_PAIRING_DEBUG === "1") log.info("Pairing: solicitando código de vinculación…");
             const pair = await s.requestPairingCode(phone);
-            const code = pair ? (pair.match(/.{1,4}/g) || [pair]).join("-") : pair;
-            log.info(chalk.bold.white(chalk.bgMagenta("Código de emparejamiento:")), chalk.bold.white(code));
+            const code = formatearCodigoDeVinculacion(pair);
+            log.info(chalk.bold.white(chalk.bgMagenta(" Código de emparejamiento: ")) + " " + chalk.bold.white(code));
           }
         } catch (e) { log.error("Pairing: " + (e.message || e)); }
-      }, 3000);
+      }, pairingDelayMs);
     }
 
     isRestarting = false;
