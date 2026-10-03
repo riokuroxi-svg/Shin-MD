@@ -183,3 +183,31 @@ Clasificación por lo que hay DENTRO del `try` (lo que puede fallar en silencio)
 | `src/storage/database.js` | 34 | `fs.chmodSync()` |
 
 _(+4 más en el proyecto)_
+
+---
+
+## Revisión uno por uno de los 🔴 (2026-10-03)
+
+Se leyeron los 23 avisos de riesgo alto. Resultado: **casi todos eran
+correctos**, pero dos grupos sí escondían fallos de verdad.
+
+### Arreglados
+
+| Dónde | Qué pasaba | Qué se hizo |
+|---|---|---|
+| 13 × `ALTER TABLE ... ADD COLUMN` (5 en `ginko-db.js`, 8 en `migrations.js`) | `catch {}` tapaba lo mismo "la columna ya existe" (esperado) que "database is locked" o "disk I/O error" (la columna NO se crea y después se escribe en el vacío) | Pasan por `#lib/db-opcional`: lo esperado sigue en silencio, lo demás deja aviso en el log |
+| `cmds/socket/subs.js` — `saveCredsDB()` | Si no se podían guardar las credenciales del sub-bot, se perdía la sesión al reiniciar sin ningún rastro | Ahora `log.warn` con el id del sub-bot y el motivo |
+
+### Revisados y dejados como estaban (a propósito)
+
+| Dónde | Por qué el `catch {}` está bien |
+|---|---|
+| `PRAGMA wal_checkpoint` (`auth.js`, `storage/database.js`) | Es una optimización: si falla, la base sigue funcionando. Ya llevan su comentario explicando la intención |
+| `db.close()` en el apagado (`boot/index.js`, `storage/database.js`) | Al cerrar, si algo falla no hay nada que hacer: el proceso se va igual |
+| `fs.writeFileSync` de la caché de disco (`play.js`, `ytdlp.js`) | Es caché: si no se guarda, la próxima vez se descarga. No vale la pena avisar |
+| `fs.rmSync` de temporales | Limpieza best-effort |
+| `db.getUser()` en `getpack` | Hay sustituto: si falla, se usa el número del dueño del pack |
+| `reacciones`/`tokens` en `play.js` | Cosmético: si la reacción no sale, la descarga sigue |
+
+**Regla que queda escrita:** un `catch {}` solo vale si el fallo no cambia
+lo que ve el usuario *y* no pierde datos. Si pierde datos, `log.warn`.
