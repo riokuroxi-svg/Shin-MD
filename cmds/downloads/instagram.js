@@ -68,7 +68,7 @@ async function getInstagramMedia(url) {
 
   for (const { endpoint, extractor } of apis) {
     try {
-      const res = await fetch(endpoint).then(r => r.json())
+      const res = await (await fetch(endpoint)).json()
       const result = extractor(res)
       if (result) return result
     } catch (error) {
