@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import os from 'os';
 import db from '../../src/services/ginko-db.js';
 
@@ -12,14 +13,14 @@ export default {
   category: 'main',
   description: 'Obtener información del bot.',
   run: async ({ msg, sock, usedPrefix, command }) => {
-    const botId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
     const botname = botSettings.botname || 'Bot';
     const namebot = botSettings.namebot || 'Bot';
     const monedas = botSettings.currency || 'Yenes';
     const prefijo = botSettings.prefix;
     const owner = botSettings.owner || '';
-    const isOficialBot = global.sock?.user?.id && botId === (global.sock.user.id.split(':')[0] + '@s.whatsapp.net');
+    const isOficialBot = global.sock?.user?.id && botId === (botJid(global.sock));
     const botType = isOficialBot ? 'Principal/Owner' : 'Sub Bot';
 
     let desar = 'Oculto';

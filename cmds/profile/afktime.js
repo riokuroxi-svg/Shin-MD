@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 const formatTiempo = (ms) => {
   if (typeof ms !== 'number' || isNaN(ms)) return 'desconocido';
@@ -18,7 +20,7 @@ const formatTiempo = (ms) => {
 };
 
 export async function before({ msg, sock }) {
-  const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+  const botJid = botJid(sock);
   const chatData = db.getChat(msg.chat);
   const primaryBot = chatData.primaryBot;
   if (primaryBot && botJid !== primaryBot) return;
@@ -32,7 +34,7 @@ export async function before({ msg, sock }) {
     let coins = minutos * 8;
     const bonos = Math.floor(horas / 3);
     for (let i = 0; i < bonos; i++) {
-      coins += Math.floor(Math.random() * (1500 - 300 + 1)) + 300;
+      coins += randomInt(300, 1500);
     }
     const newCoins = (user.coins || 0) + coins;
     db.setChatUser(msg.chat, msg.sender, 'coins', newCoins);

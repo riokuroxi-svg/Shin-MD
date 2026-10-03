@@ -4,29 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { flattenCharacters, getSeriesNameByCharacter, loadCharacters } from "#lib/gacha-shared";
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 
-const FILE_PATH = './core/characters.json';
 
-async function loadCharacters() {
-  try {
-    await fs.access(FILE_PATH);
-  } catch {
-    await fs.writeFile(FILE_PATH, '{}');
-  }
-  const raw = await fs.readFile(FILE_PATH, 'utf-8');
-  return JSON.parse(raw);
-}
 
-function flattenCharacters(db) {
-  return Object.values(db).flatMap(s => Array.isArray(s.characters) ? s.characters : []);
-}
 
-function getSeriesNameByCharacter(db, id) {
-  return Object.entries(db).find(([, serie]) => Array.isArray(serie.characters) && serie.characters.some(c => String(c.id) === String(id)))?.[1]?.name || 'Desconocido';
-}
 
 function formatElapsed(ms) {
   if (!ms || ms <= 0) return '—';

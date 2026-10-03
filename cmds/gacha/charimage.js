@@ -4,33 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom } from "#lib/random";
 import axios from 'axios';
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-import { formatTag } from "#lib/gacha-shared";
-
-const FILE_PATH = './core/characters.json';
-
-async function loadCharacters() {
-  try {
-    await fs.access(FILE_PATH);
-  } catch {
-    await fs.writeFile(FILE_PATH, '{}');
-  }
-  const raw = await fs.readFile(FILE_PATH, 'utf-8');
-  return JSON.parse(raw);
-}
-
-function flattenCharacters(db) {
-  return Object.values(db).flatMap(s => Array.isArray(s.characters) ? s.characters : []);
-}
-
-function getSeriesNameByCharacter(db, id) {
-  return Object.entries(db).find(([, serie]) => Array.isArray(serie.characters) && serie.characters.some(c => String(c.id) === String(id)))?.[1]?.name || 'Desconocido';
-}
-
-
+import { flattenCharacters, formatTag, getSeriesNameByCharacter, loadCharacters } from "#lib/gacha-shared";
 function getRefererForUrl(url) {
   if (url.includes('safebooru.org')) return 'https://safebooru.org/';
   if (url.includes('danbooru.donmai.us')) return 'https://danbooru.donmai.us/';
@@ -81,7 +60,7 @@ export default {
         return msg.reply(`ꕥ El personaje *${character.name}* no tiene un tag válido para buscar imágenes.`);
       }
       const mediaList = await buscarImagenDelirius(tag);
-      const media = mediaList[Math.floor(Math.random() * mediaList.length)];
+      const media = pickRandom(mediaList);
       if (!media) {
         return msg.reply(`ꕥ No se encontraron imágenes para *${character.name}* con el tag *${tag}*.`);
       }

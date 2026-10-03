@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom } from "#lib/random";
 import fetch from 'node-fetch';
 import fs from 'fs';
 import db from '../../src/services/ginko-db.js';
@@ -47,7 +48,7 @@ const captions = {
 const symbols = ['(⁠◠⁠‿⁠◕⁠)', '˃͈◡˂͈', '૮(˶ᵔᵕᵔ˶)ა', '(づ｡◕‿‿◕｡)づ', '(✿◡‿◡)', '(꒪⌓꒪)', '(✿✪‿✪｡)', '(*≧ω≦)', '(✧ω◕)', '˃ 𖥦 ˂', '(⌒‿⌒)', '(¬‿¬)', '(✧ω✧)',  '✿(◕ ‿◕)✿',  'ʕ•́ᴥ•̀ʔっ', '(ㅇㅅㅇ❀)',  '(∩︵∩)',  '(✪ω✪)',  '(✯◕‿◕✯)', '(•̀ᴗ•́)و ̑̑'];
 
 function getRandomSymbol() {
-  return symbols[Math.floor(Math.random() * symbols.length)];
+  return pickRandom(symbols);
 }
 
 const alias = {
@@ -105,7 +106,7 @@ export default {
       const shares = './core/shares.json'
       const sharesData = JSON.parse(fs.readFileSync(shares))
       const videos = sharesData.nsfw[currentCommand]
-      const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+      const randomVideo = pickRandom(videos);
       await sock.sendMessage(msg.chat, { video: { url: randomVideo }, gifPlayback: true, caption, mentions: [who, msg.sender] }, { quoted: msg });
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));

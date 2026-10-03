@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 export default {
@@ -43,7 +44,7 @@ export default {
       if (page < 1 || page > totalPaginas) {
         return msg.reply(`ꕥ Página inválida. Solo hay *${totalPaginas}* disponible${totalPaginas > 1 ? 's' : ''}.`);
       }
-      const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+      const botId = botJid(sock);
       const settings = db.getSettings(botId);
       const currency = settings?.currency;
       const listado = [];

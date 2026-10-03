@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['w', 'work', 'chambear', 'trabajar'],
@@ -14,7 +16,7 @@ export default {
     if (chat.adminonly || !chat.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const settings = db.getSettings(botId);
     const monedas = settings.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastwork', 0);
@@ -24,7 +26,7 @@ export default {
       const tiempoRestante = formatTime(user.lastwork - Date.now());
       return sock.reply(msg.chat, `ꕥ Debes esperar *${tiempoRestante}* para usar *${usedPrefix + command}* de nuevo.`, msg);
     }
-    const rsl = Math.floor(Math.random() * (4000 - 2000 + 1)) + 2000;
+    const rsl = randomInt(2000, 4000);
     db.setChatUser(msg.chat, msg.sender, 'lastwork', Date.now() + cooldown);
     db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) + rsl);    
     await sock.sendMessage(msg.chat, { text: `❀ ${pickRandom(trabajo)} *¥${rsl.toLocaleString()} ${monedas}*.` }, { quoted: msg });
@@ -41,9 +43,6 @@ function formatTime(ms) {
   return parts.join(' ');
 }
 
-function pickRandom(list) {
-  return list[Math.floor(Math.random() * list.length)];
-}
 
 const trabajo = [
   "Trabajas como recolector de fresas y ganas",

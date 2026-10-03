@@ -4,33 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { pickRandom } from "#lib/random";
 import fs from 'node:fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-import { flattenCharacters } from "#lib/gacha-shared";
-const charactersFilePath = './core/characters.json';
-
-async function loadCharacters() {
-  // Si el catálogo no existe o está corrupto no se tumba el comando: el
-  // código de abajo ya sabe trabajar con nombres '???' y valor 100.
-  try {
-    const data = await fs.readFile(charactersFilePath, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return {};
-  }
-}
-
-
+import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
 export default {
   command: ['robwaifu', 'robarwaifu'],
   category: 'gacha',
   description: 'Robar un personaje a otro usuario.',
   run: async ({ msg, sock, usedPrefix, command }) => {
     try {
-      const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+      const botId = botJid(sock);
       const settings = db.getSettings(botId);
-      const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (global.sock.user.id.split(':')[0] + '@s.whatsapp.net')));
+      const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
       const isPremiumBot = settings?.botprem === 1;
       const isModBot = settings?.botmod === 1;
       if (!isOficialBot && !isPremiumBot && !isModBot) {
@@ -100,7 +88,7 @@ export default {
       if (stealableCharacters.length === 0) {
         return msg.reply(`ꕥ *${targetName}* solo tiene a su favorito protegido, no puedes robarlo.`);
       }      
-      const stolenId = stealableCharacters[Math.floor(Math.random() * stealableCharacters.length)];
+      const stolenId = pickRandom(stealableCharacters);
       const charKey = msg.chat + '__' + stolenId;
       db.setCreate('characters', charKey, 'name', '');
       let characterData = db.getCharacter(charKey);

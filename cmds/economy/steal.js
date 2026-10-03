@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['robar', 'steal', 'rob'],
@@ -14,7 +16,7 @@ export default {
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
     }    
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const bot = db.getSettings(botId);
     const currency = bot.currency;
     db.setCreate('chat_users', [msg.chat, msg.sender], 'laststeal', 0);
@@ -39,7 +41,7 @@ export default {
     }
     const chance = Math.random();
     if (chance < 0.3) {
-      let loss = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
+      let loss = randomInt(2000, 5000);
       const total = (user.coins || 0) + (user.bank || 0);      
       if (total >= loss) {
         if (user.coins >= loss) {
@@ -57,7 +59,7 @@ export default {
       db.setChatUser(msg.chat, msg.sender, 'laststeal', Date.now() + 3600000);
       return sock.reply(msg.chat, `ꕥ El robo salió mal y perdiste *¥${loss.toLocaleString()} ${currency}*.`, msg);
     }    
-    const rob = Math.floor(Math.random() * (9000 - 3000 + 1)) + 3000;    
+    const rob = randomInt(3000, 9000);    
     if ((target.coins || 0) < rob) {
       return sock.reply(msg.chat, `ꕥ *${name}* no tiene suficientes *${currency}* fuera del banco como para que valga la pena intentar robar.`, msg, { mentions: [who] });
     }    

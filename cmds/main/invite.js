@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import defaultAvatar from '../../lib/default-avatar.js';
 import db from '../../src/services/ginko-db.js';
 const linkRegex = /chat\.whatsapp\.com\/([0-9A-Za-z]{20,24})(?:\s+[0-9]{1,3})?/i;
@@ -25,7 +26,7 @@ export default {
     db.setCreate('users', [msg.sender], 'jointime', 0);
     let user = db.getUser(msg.sender);
     const grupo = msg.isGroup ? await getGroupName(sock, msg.chat) : 'Chat privado';
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
     const botname = botSettings.botname || 'Bot';
     const dueño = botSettings.owner || '';
@@ -42,7 +43,7 @@ export default {
     if (!match || !match[1]) {
       return msg.reply('《✧》 El enlace ingresado no es válido o está incompleto.');
     }
-    const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (global.sock.user.id.split(':')[0] + '@s.whatsapp.net')));
+    const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
     const botType = isOficialBot ? 'Principal/Owner' : 'Sub Bot';
     const pp = await sock.profilePictureUrl(msg.sender, 'image').catch(() => defaultAvatar());
     const userName = user?.name || 'Usuario';

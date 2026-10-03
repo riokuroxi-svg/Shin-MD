@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom } from "#lib/random";
 import { fastFetch } from '#lib/fastFetch';
 import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
-import { formatTag } from "#lib/gacha-shared";
-
-const FILE_PATH = './core/characters.json';
+import { flattenCharacters, formatTag, getSeriesNameByCharacter, loadCharacters } from "#lib/gacha-shared";
 const rollLocks = new Map();
 
 // Cache en memoria de personajes (leer disco UNA SOLA VEZ, no cada vez que se usa el comando)
@@ -25,36 +24,11 @@ function cleanOldLocks() {
   }
 }
 
-async function loadCharacters() {
-  try {
-    const stat = await fs.stat(FILE_PATH);
-    const now = Date.now();
-    // Usar caché si el archivo no cambió y no expiró
-    if (charactersCache && stat.mtimeMs === lastMtime && now - charactersCacheTime < CHARACTERS_CACHE_TTL) {
-      return charactersCache;
-    }
-    const raw = await fs.readFile(FILE_PATH, 'utf-8');
-    const parsed = JSON.parse(raw);
-    charactersCache = parsed;
-    charactersCacheTime = now;
-    lastMtime = stat.mtimeMs;
-    return parsed;
-  } catch (e) {
-    await fs.writeFile(FILE_PATH, '{}');
-    return {};
-  }
-}
 
 // Precalentar caché al cargar el comando
 loadCharacters().catch(() => {});
 
-function flattenCharacters(chars) {
-  return Object.values(chars).flatMap(s => Array.isArray(s.characters) ? s.characters : []);
-}
 
-function getSeriesNameByCharacter(chars, id) {
-  return Object.entries(chars).find(([, serie]) => Array.isArray(serie.characters) && serie.characters.some(c => String(c.id) === String(id)))?.[1]?.name || 'Desconocido';
-}
 
 
 function getRefererForUrl(url) {
@@ -140,14 +114,14 @@ export default {
       // Cargar personajes del caché (no lee disco si ya está cargado)
       const chars = await loadCharacters();
       const all = flattenCharacters(chars);
-      const selected = all[Math.floor(Math.random() * all.length)];
+      const selected = pickRandom(all);
       const id = String(selected.id);
       const source = getSeriesNameByCharacter(chars, selected.id);
       const baseTag = formatTag(selected.tags?.[0] || '');
       
       // Buscar imágenes en paralelo
       const mediaList = await buscarImagenDelirius(baseTag);
-      const media = mediaList.length > 0 ? mediaList[Math.floor(Math.random() * mediaList.length)] : null;
+      const media = mediaList.length > 0 ? pickRandom(mediaList) : null;
       
       if (!media) {
         rollLocks.delete(userId);

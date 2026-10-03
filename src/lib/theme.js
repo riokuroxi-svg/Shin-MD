@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom } from "#lib/random";
 // ═══════════════════════════════════════════════════════════════════
 //  theme.js — Sistema de diseño de Shin-MD (Tanda 1)
 //
@@ -266,7 +267,7 @@ export function listBanners(mode = bannerMode()) {
 export function pickBanner(mode = bannerMode()) {
   const lista = listBanners(mode);
   if (!lista.length) return null;
-  return lista[Math.floor(Math.random() * lista.length)];
+  return pickRandom(lista);
 }
 
 export default {

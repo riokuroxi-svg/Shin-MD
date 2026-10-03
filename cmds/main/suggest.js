@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 import defaultAvatar from '../../lib/default-avatar.js';
 export default {
@@ -37,9 +38,9 @@ export default {
     const name = user?.name || msg.pushName || 'Usuario desconocido';
     const numero = msg.sender.split('@')[0];
     const pp = await sock.profilePictureUrl(msg.sender, 'image').catch(() => defaultAvatar());
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
-    const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (global.sock.user.id.split(':')[0] + '@s.whatsapp.net')));
+    const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
     const botType = isOficialBot ? 'Principal/Owner' : 'Sub Bot';
     let reportMsg = `🫗۫᷒ᰰ⃘ׅ᷒  ۟　\`${tipo}\`　ׅ　ᩡ\n\n𖹭  ׄ  ְ ❖ *Nombre*\n> ${name}\n\n𖹭  ׄ  ְ ❖ *Número*\n> wa.me/${numero}\n\n𖹭  ׄ  ְ ❖ *Fecha*\n> ${fechaLocal}\n\n𖹭  ׄ  ְ ❖ *Socket*\n> ${botType}\n\n𖹭  ׄ  ְ ❖ *Mensaje*\n> ${texto}\n\n`;
     for (const num of global.owner) {

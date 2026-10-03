@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
+import { pickRandom } from "#lib/random";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,7 +48,7 @@ function getRandomBanner() {
     if (fs.existsSync(shuffleDir)) {
       const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
       if (files.length > 0) {
-        const chosen = files[Math.floor(Math.random() * files.length)];
+        const chosen = pickRandom(files);
         return fs.readFileSync(path.join(shuffleDir, chosen));
       }
     }

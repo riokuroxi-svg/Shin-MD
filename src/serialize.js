@@ -42,6 +42,22 @@ export function normalizeJid(jid) {
 /**
  * Parte de usuario de un JID: sin servidor (@...) ni sufijo de dispositivo (:0, :1...)
  */
+/**
+ * JID del propio bot a partir del socket, sin el sufijo de dispositivo.
+ *
+ * Reemplaza el `sock.user.id.split(":")[0] + "@s.whatsapp.net"` que
+ * estaba copiado en 62 archivos. Además corrige un fallo latente del
+ * original: si `sock.user.id` llega YA sin dispositivo
+ * ("5215...@s.whatsapp.net"), la expresión vieja producía
+ * "5215...@s.whatsapp.net@s.whatsapp.net" (JID inválido); `normalizeJid`
+ * lo detecta y lo deja bien.
+ * @param {{user?: {id?: string}}} sock
+ * @returns {string} JID del bot, o "" si el socket aún no tiene usuario
+ */
+export function botJid(sock) {
+  return normalizeJid(sock?.user?.id || "");
+}
+
 export function userPart(jid) {
   if (!jid) return "";
   return String(jid).split("@")[0].split(":")[0].replace(/\D/g, "");

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['givecoins', 'pay', 'coinsgive'],
@@ -11,7 +12,7 @@ export default {
   description: 'Dar coins a un usuario.',
   run: async ({ msg, sock, args, usedPrefix, command, text }) => {
     const chatId = msg.chat;
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId);
     const monedas = botSettings.currency || 'coins';
     const chatData = db.getChat(chatId);

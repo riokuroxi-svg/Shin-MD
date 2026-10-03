@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { pickRandom } from "#lib/random";
 import fetch from 'node-fetch'
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
@@ -24,7 +25,7 @@ export default {
       const json = await res.json()
       const mediaList = json.map(p => p?.file_url).filter(u => typeof u === 'string' && /\.(jpe?g|png|gif)$/.test(u))
       if (!mediaList.length) return sock.reply(msg.chat, `《✧》 No se encontraron resultados para ${tag}`, msg)
-      const media = mediaList[Math.floor(Math.random() * mediaList.length)]
+      const media = pickRandom(mediaList)
       const caption = `ꕥ Resultados para » ${tag}`
       await sock.sendMessage(msg.chat, { image: { url: media }, caption, mentions: [msg.sender] })
       await msg.react('✔️')

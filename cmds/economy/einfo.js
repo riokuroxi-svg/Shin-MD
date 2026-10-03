@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 const formatTime = (ms) => {
   const totalSeconds = Math.floor(ms / 1000);
@@ -25,7 +26,7 @@ export default {
   description: 'Ver tu información de economía y cooldowns.',
   run: async ({ msg, sock, usedPrefix, text }) => {
     const chatId = msg.chat;
-    const botId = sock.user.id.split(':')[0] + "@s.whatsapp.net";
+    const botId = botJid(sock);
     const chatData = db.getChat(chatId);
     if (chatData.adminonly || !chatData.economy) {
       return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
