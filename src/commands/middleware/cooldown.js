@@ -58,6 +58,13 @@ export function createCooldown(opts) {
    * Inyecta el middleware de cooldown en el router.
    * Retorna true si debe bloquearse la ejecución.
    */
+  /**
+   * @param {{ senderId?: string, cmd?: { name?: string, cooldown?: number, ownerOnly?: boolean },
+   *           text?: string, ahora?: number }} opciones
+   *   `text` es lo que escribió el usuario (para el brain) y `ahora` solo lo
+   *   usan las pruebas para simular el paso del tiempo.
+   * @returns {boolean} true si hay que ignorar el mensaje
+   */
   function check({ senderId, cmd, text, ahora }) {
     if (cmd && cmd.ownerOnly) return false; // el owner no se limita
 
