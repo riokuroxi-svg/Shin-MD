@@ -7,6 +7,7 @@
 import { economyGate } from "#lib/economy-guard";
 import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 export default {
   command: ['cf', 'flip', 'coinflip'],
   category: 'economy',
@@ -56,10 +57,6 @@ export default {
   }
 };
 
-function msToTime(duration) {
-  const seconds = Math.floor(duration / 1000);
-  return `${seconds} segundo${seconds !== 1 ? 's' : ''}`;
-}
 
 function capitalize(txt) {
   return txt.charAt(0).toUpperCase() + txt.slice(1);

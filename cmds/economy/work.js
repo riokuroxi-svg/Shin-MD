@@ -8,6 +8,7 @@ import { economyGate } from "#lib/economy-guard";
 import { botJid } from "#serialize";
 import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as formatTime } from "#lib/tiempo";
 export default {
   command: ['w', 'work', 'chambear', 'trabajar'],
   category: 'economy',
@@ -32,15 +33,6 @@ export default {
   }
 };
 
-function formatTime(ms) {
-  const totalSec = Math.ceil(ms / 1000);
-  const minutes = Math.floor((totalSec % 3600) / 60);
-  const seconds = totalSec % 60;
-  const parts = [];
-  if (minutes > 0) parts.push(`${minutes} minuto${minutes !== 1 ? 's' : ''}`);
-  parts.push(`${seconds} segundo${seconds !== 1 ? 's' : ''}`);
-  return parts.join(' ');
-}
 
 
 const trabajo = [

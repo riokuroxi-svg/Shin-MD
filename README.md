@@ -39,7 +39,7 @@
 **Reglas:**
 
 - Todo lo experimental nace en [**Shin-Lab**](https://github.com/riokuroxi-svg/Shin-Lab) y solo migra aquí cuando está probado.
-- Cada bloque de trabajo termina con la suite de tests pasando (32/32) y un arranque verificado.
+- Cada bloque de trabajo termina con la suite de tests pasando (104/104) y un arranque verificado.
 - Cada push corre tests automáticamente en GitHub Actions (CI).
 - Historial limpio: un commit descriptivo por bloque, nada de commits "update" ni archivos basura.
 
@@ -62,7 +62,7 @@
 | **Logging** | Consola con iconos + archivo rotativo 7 días | console.log espartano |
 | **Backoff** | Exponencial con jitter + modo paciente | Lineal o inexistente |
 | **Seguridad** | DB con chmod 600 + panel con usuario verificado y bloqueo anti fuerza bruta | Panel abierto en tu red |
-| **Tests** | Suite de 34 tests + CI en cada push | Cero tests |
+| **Tests** | Suite de 104 tests + CI en cada push | Cero tests |
 | **Licencia** | AGPL-3.0 (protección real anti-comercial) | MIT sin restricciones |
 
 ## ✨ Características interactivas
@@ -220,7 +220,7 @@ Shin-MD/
 ├── index.js              ← Entry point (npm start)
 ├── boot/index.js         ← Arranque: perfil del número + engine + socket
 ├── cmds/                 ← 197 comandos en 14 categorías (carga dinámica)
-├── test/                 ← Suite de 32 tests (node --test)
+├── test/                 ← Suite de 104 tests (node --test)
 ├── src/
 │   ├── core/
 │   │   ├── engine.js     ← Ciclo de vida + ventana de prioridad

@@ -8,6 +8,7 @@ import { economyGate } from "#lib/economy-guard";
 import { pickRandom } from "#lib/random";
 import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 export default {
   command: ['cofre', 'coffer'],
   category: 'economy',
@@ -74,15 +75,4 @@ export default {
   }
 };
 
-function msToTime(ms) {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  const txt = [];
-  if (h > 0) txt.push(`${h} hora${h !== 1 ? 's' : ''}`);
-  if (m > 0 || h > 0) txt.push(`${m} minuto${m !== 1 ? 's' : ''}`);
-  txt.push(`${s} segundo${s !== 1 ? 's' : ''}`);
-  return txt.join(' ');
-}
 

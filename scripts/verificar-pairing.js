@@ -15,7 +15,7 @@
 //       pero con la sesión en una carpeta temporal, para no tocar la
 //       sesión real del dueño.
 //    3. Vigila la consola y confirma que el bot llegó a PEDIR el código.
-//    4. Cierra el bot y borra la carpeta temporal.
+//    4. Cierra el bot y borra la carpeta temporal (sesión y base de datos).
 //
 //  Qué NO hace: no toca tu sesión, no vincula nada, no escribe en tu
 //  base de datos. Solo abre una conexión con WhatsApp y pide el código
@@ -43,6 +43,9 @@ const PAIS = (process.argv[2] || "MX").toUpperCase();
 const ESPERA_MS = 45000;
 const numero = telefonoAleatorio({ pais: PAIS });
 const sesionTemporal = fs.mkdtempSync(path.join(os.tmpdir(), "shin-pairing-"));
+// La base de datos también va a la carpeta temporal: la prueba no debe
+// escribir en data/shin.db del bot (ni en absoluto).
+const baseTemporal = path.join(sesionTemporal, "prueba.db");
 
 const lineas = [];
 let pidioCodigo = false;
@@ -53,6 +56,7 @@ let evidencia = ""; // la línea exacta donde apareció el código
 console.log("── Prueba de arranque del paring code ─────────────────────");
 console.log(`   Número inventado: +${numero}  (país ${PAIS})`);
 console.log(`   Sesión temporal:  ${sesionTemporal}`);
+console.log(`   Base de datos:    ${baseTemporal}  (temporal)`);
 console.log("   Arrancando el bot...\n");
 
 const hijo = spawn(process.execPath, ["index.js", "--code", numero], {
@@ -60,6 +64,7 @@ const hijo = spawn(process.execPath, ["index.js", "--code", numero], {
   env: {
     ...process.env,
     SESSION_DIR: sesionTemporal,   // no tocar Sessions/Owner
+    SHIN_DB_PATH: baseTemporal,    // no tocar data/shin.db
     SHIN_PAIRING_DEBUG: "1",       // deja la marca "solicitando código…"
     NODE_ENV: "test",
   },

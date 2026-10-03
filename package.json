@@ -62,11 +62,9 @@
     "express": "4.22.2",
     "file-type": "^21.3.4",
     "form-data": "^4.0.6",
-    "gradient-string": "^3.0.0",
     "grapheme-splitter": "^1.0.4",
     "human-readable": "^0.2.1",
     "jimp": "^1.6.1",
-    "lodash": "^4.18.1",
     "mime-types": "^3.0.2",
     "moment": "^2.30.1",
     "moment-timezone": "^0.5.43",
@@ -79,8 +77,7 @@
     "readline-sync": "^1.4.10",
     "sharp": "^0.35.4",
     "syntax-error": "^1.4.0",
-    "ws": "^8.21.3",
-    "ytsr": "^3.8.4"
+    "ws": "^8.21.3"
   },
   "overrides": {
     "libsignal": "npm:libsignal@6.0.0",

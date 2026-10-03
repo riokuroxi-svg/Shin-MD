@@ -6,6 +6,7 @@
  */
 import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
+import { tiempoCorto as formatTime } from "#lib/tiempo";
 const getLastActive = (usedTime) => {
   if (!usedTime) return 0;
   if (typeof usedTime === 'number') return usedTime;
@@ -16,14 +17,6 @@ const getLastActive = (usedTime) => {
   return 0;
 };
 
-const formatTime = ms => {
-  const sec = Math.floor(ms / 1000);
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  return [d ? `${d}d` : '', h ? `${h}h` : '', m ? `${m}m` : '', s || (!d && !h && !m) ? `${s}s` : ''].filter(Boolean).join(' ');
-};
 
 const getDuration = start => { const ms = Date.now() - start; return ms < 1 ? 1 : ms; };
 const normalizeNumber = jid => String(jid).replace(/\D/g, '');

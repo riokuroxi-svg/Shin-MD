@@ -19,7 +19,10 @@ import log from "#logger";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export function createDatabase(dbPath) {
-  const resolved = dbPath || path.join(__dirname, "../../data", "shin.db");
+  // SHIN_DB_PATH permite usar otra base (una copia, o una carpeta temporal
+  // en las pruebas) sin tocar la del bot. Sin esta variable, todo igual
+  // que siempre: data/shin.db.
+  const resolved = dbPath || process.env.SHIN_DB_PATH || path.join(__dirname, "../../data", "shin.db");
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
 
   let db;

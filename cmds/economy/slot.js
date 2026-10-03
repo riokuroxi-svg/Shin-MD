@@ -9,6 +9,7 @@ import { botJid } from "#serialize";
 import { pickRandom } from "#lib/random";
 import { delay } from 'baileys';
 import db from '../../src/services/ginko-db.js';
+import { tiempoLargo as formatTime } from "#lib/tiempo";
 
 export default {
   command: ['slot'],
@@ -84,13 +85,3 @@ ${resultado}`;
     await sock.sendMessage(msg.chat, { text: finalText, edit: key }, { quoted: msg });
   }
 };
-
-function formatTime(ms) {
-  const totalSec = Math.ceil(ms / 1000);
-  const minutes = Math.floor((totalSec % 3600) / 60);
-  const seconds = totalSec % 60;
-  const parts = [];
-  if (minutes > 0) parts.push(`${minutes} minuto${minutes !== 1 ? 's' : ''}`);
-  parts.push(`${seconds} segundo${seconds !== 1 ? 's' : ''}`);
-  return parts.join(' ');
-}
