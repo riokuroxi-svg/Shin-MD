@@ -17,7 +17,8 @@
     "format": "prettier --write \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
     "typecheck": "tsc",
-    "test:pairing": "node scripts/verificar-pairing.js"
+    "test:pairing": "node scripts/verificar-pairing.js",
+    "docs:web": "node scripts/actualizar-web.mjs"
   },
   "imports": {
     "#engine": "./src/core/engine.js",

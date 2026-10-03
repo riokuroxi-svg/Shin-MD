@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Shin-MD">
+  <title>Shin-MD</title>
+  <defs>
+    <linearGradient id="fondoc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7FBF8"/><stop offset="0.55" stop-color="#EAF5EE"/><stop offset="1" stop-color="#F2F9F5"/>
+    </linearGradient>
+    <linearGradient id="tituloc" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0A1620"/><stop offset="1" stop-color="#0E7A45"/>
+    </linearGradient>
+    <radialGradient id="haloc" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#12A15A" stop-opacity="0.22"/><stop offset="1" stop-color="#12A15A" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo2c" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.16"/><stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="barridoc" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#12A15A" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#12A15A" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#12A15A" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="rejac" width="26" height="26" patternUnits="userSpaceOnUse">
+      <path d="M26 0H0V26" fill="none" stroke="rgba(10,40,25,0.045)" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="lineac" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#12A15A" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#12A15A" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#12A15A" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="suavec" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+  </defs>
+<rect width="1200" height="300" rx="22" fill="url(#fondoc)"/>
+<rect width="1200" height="300" rx="22" fill="url(#rejac)"/>
+<ellipse cx="180" cy="30" rx="330" ry="230" fill="url(#haloc)"/>
+<ellipse cx="1060" cy="300" rx="340" ry="240" fill="url(#halo2c)"/>
+<g>
+<circle cx="1002" cy="150" r="46" fill="none" stroke="rgba(18,161,90,0.18)" stroke-opacity="0.3" stroke-width="1.2"/>
+<circle cx="1002" cy="150" r="82" fill="none" stroke="rgba(18,161,90,0.18)" stroke-opacity="0.22" stroke-width="1.2"/>
+<circle cx="1002" cy="150" r="118" fill="none" stroke="rgba(18,161,90,0.18)" stroke-opacity="0.16" stroke-width="1.2"/>
+<circle cx="1002" cy="150" r="154" fill="none" stroke="rgba(18,161,90,0.18)" stroke-opacity="0.1" stroke-width="1.2"/>
+<circle cx="1002" cy="150" r="12" fill="#12A15A" fill-opacity="0.20"/>
+<circle cx="1002" cy="150" r="5" fill="#12A15A"/>
+<circle cx="1102" cy="150" r="4.5" fill="#12A15A"><animateTransform attributeName="transform" type="rotate" from="0 1002 150" to="360 1002 150" dur="22s" repeatCount="indefinite"/></circle>
+</g>
+
+  <g transform="rotate(-6 133.0 151.0)">
+    <rect x="78" y="96" width="110" height="110" rx="24" fill="#C6303F"/>
+    <rect x="81" y="99" width="104" height="104" rx="21" fill="none" stroke="#FFFFFF" stroke-opacity="0.35" stroke-width="1.5"/>
+    <g fill="#FFFFFF" fill-opacity="1.0">
+    <path transform="translate(105.72 138.72) scale(0.02455)" d="M155.0 202.0V482.0C155.0 641.0 146.0 866.0 36.0 1017.0C65.0 1031.0 116.0 1066.0 138.0 1088.0C236.0 950.0 266.0 744.0 273.0 578.0H311.0C354.0 691.0 409.0 787.0 480.0 865.0C405.0 917.0 318.0 955.0 222.0 979.0C247.0 1006.0 278.0 1057.0 293.0 1090.0C398.0 1057.0 493.0 1012.0 575.0 952.0C657.0 1014.0 756.0 1060.0 876.0 1090.0C894.0 1056.0 929.0 1004.0 957.0 978.0C846.0 954.0 753.0 916.0 675.0 865.0C764.0 771.0 831.0 648.0 870.0 491.0L785.0 457.0L763.0 462.0H275.0V321.0H916.0V202.0ZM710.0 578.0C678.0 658.0 633.0 727.0 576.0 785.0C518.0 726.0 472.0 657.0 439.0 578.0Z"/>
+    <path transform="translate(135.73 138.72) scale(0.02455)" d="M68.0 235.0V339.0H382.0V235.0ZM422.0 247.0V665.0H491.0C485.0 755.0 475.0 829.0 436.0 887.0C421.0 815.0 382.0 711.0 340.0 630.0L250.0 658.0C268.0 695.0 285.0 737.0 300.0 780.0L191.0 798.0C210.0 731.0 228.0 649.0 245.0 574.0H410.0V467.0H39.0V574.0H127.0C117.0 652.0 100.0 745.0 82.0 816.0L26.0 824.0L54.0 931.0L329.0 873.0C334.0 891.0 337.0 908.0 340.0 924.0L433.0 892.0C399.0 940.0 346.0 976.0 260.0 1003.0C283.0 1024.0 312.0 1066.0 323.0 1094.0C545.0 1015.0 585.0 872.0 598.0 665.0H642.0V944.0C642.0 1043.0 664.0 1073.0 763.0 1073.0C783.0 1073.0 853.0 1073.0 874.0 1073.0C946.0 1073.0 974.0 1046.0 987.0 950.0C958.0 944.0 915.0 928.0 895.0 911.0C891.0 967.0 886.0 976.0 863.0 976.0C847.0 976.0 791.0 976.0 778.0 976.0C749.0 976.0 745.0 973.0 745.0 943.0V868.0L761.0 919.0L901.0 891.0L905.0 917.0L971.0 894.0C966.0 856.0 945.0 798.0 922.0 755.0L860.0 775.0C868.0 791.0 875.0 809.0 882.0 827.0L835.0 832.0L878.0 703.0L791.0 687.0C786.0 731.0 775.0 793.0 763.0 840.0L745.0 841.0V665.0H935.0V247.0H714.0C726.0 222.0 740.0 193.0 752.0 165.0L620.0 150.0C615.0 178.0 606.0 214.0 596.0 247.0ZM528.0 498.0H621.0V574.0H528.0ZM727.0 498.0H824.0V574.0H727.0ZM528.0 337.0H621.0V413.0H528.0ZM727.0 337.0H824.0V413.0H727.0Z"/>
+    </g>
+  </g>
+<text x="214" y="118" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="700" letter-spacing="5" fill="#0E8B4E">EL RENACER DE UN BOT</text>
+<text x="212" y="180" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="76" font-weight="800" letter-spacing="1.5" fill="url(#tituloc)">SHIN-MD</text>
+<text x="214" y="212" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="16.5" fill="#3D4E5C">Bot de WhatsApp que no se cae, no se banea y <tspan fill="#0E8B4E" font-weight="600">no borra tu sesión</tspan>.</text>
+<rect x="214" y="236" width="136" height="30" rx="15.0" fill="rgba(18,161,90,0.08)" stroke="rgba(18,161,90,0.32)" stroke-width="1"/><text x="282" y="256" text-anchor="middle" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0B6B3C">210 comandos</text>
+<rect x="360.84640625" y="236" width="121" height="30" rx="15.0" fill="rgba(18,161,90,0.08)" stroke="rgba(18,161,90,0.32)" stroke-width="1"/><text x="421" y="256" text-anchor="middle" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0B6B3C">136 pruebas</text>
+<rect x="493.11046875" y="236" width="130" height="30" rx="15.0" fill="rgba(18,161,90,0.08)" stroke="rgba(18,161,90,0.32)" stroke-width="1"/><text x="558" y="256" text-anchor="middle" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0B6B3C">15 categorías</text>
+<rect x="633.8509375" y="236" width="120" height="30" rx="15.0" fill="rgba(18,161,90,0.08)" stroke="rgba(18,161,90,0.32)" stroke-width="1"/><text x="694" y="256" text-anchor="middle" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0B6B3C">Node ≥ 22.5</text>
+<rect x="764.8028125" y="236" width="97" height="30" rx="15.0" fill="rgba(18,161,90,0.08)" stroke="rgba(18,161,90,0.32)" stroke-width="1"/><text x="813" y="256" text-anchor="middle" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="12.5" font-weight="600" fill="#0B6B3C">AGPL-3.0</text>
+<rect x="-320" y="0" width="320" height="300" fill="url(#barridoc)" opacity="0.9"><animate attributeName="x" values="-320;1200" dur="9s" repeatCount="indefinite"/></rect>
+<rect x="0" y="297" width="1200" height="3" fill="url(#lineac)"/>
+</svg>
