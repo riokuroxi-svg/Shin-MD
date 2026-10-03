@@ -613,7 +613,6 @@ function flujoMensaje() {
     const x = margen + i * (ancho + hueco);
     dibujo +=
       `<g>` +
-      `<animate attributeName="opacity" values="0;1" dur="0.4s" begin="${(i * paso).toFixed(2)}s" fill="freeze"/>` +
       `<rect x="${x}" y="${y}" width="${ancho}" height="${alto}" rx="14" fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.10)"/>` +
       `<rect x="${x}" y="${y}" width="${ancho}" height="${alto}" rx="14" fill="none" stroke="${n.c}" stroke-width="1.6" stroke-opacity="0">` +
       `<animate attributeName="stroke-opacity" values="0;0.85;0" dur="${(paso * nodos.length).toFixed(2)}s" begin="${(i * paso).toFixed(2)}s" repeatCount="indefinite"/></rect>` +
@@ -754,8 +753,8 @@ function medidorRiesgo() {
     `<text x="${xl}" y="${yl + 6}" font-family="${SANS}" font-size="12.5" font-weight="700" fill="#8CF0B4">Cola de envíos</text>` +
     `<text x="${xl}" y="${yl + 26}" font-family="${MONO}" font-size="11" fill="#A7C4B4">0 en espera · prioridad activa · tope de 120 s por envío</text>` +
     `<rect x="${xl}" y="${yl + 38}" width="${W - xl - 46}" height="6" rx="3" fill="rgba(255,255,255,0.07)"/>` +
-    `<rect x="${xl}" y="${yl + 38}" width="0" height="6" rx="3" fill="#4ADE80">` +
-    `<animate attributeName="width" values="0;${W - xl - 46};0" dur="6s" repeatCount="indefinite"/></rect>`;
+    `<rect x="${xl}" y="${yl + 38}" width="${W - xl - 46}" height="6" rx="3" fill="#4ADE80">` +
+    `<animate attributeName="width" values="${W - xl - 46};${W - xl - 46};0;0;${W - xl - 46}" keyTimes="0;0.4;0.6;0.9;1" dur="6s" repeatCount="indefinite"/></rect>`;
   void aux;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Medidor de riesgo y watchdog de Shin-MD">
@@ -770,6 +769,352 @@ function medidorRiesgo() {
   <rect x="0" y="0" width="${W}" height="3" rx="1.5" fill="url(#filorgb)"/>
   <text x="${W / 2}" y="30" text-anchor="middle" font-family="${MONO}" font-size="12.5" fill="#7D90A0">shin-md · el watchdog decide por ti (y no borra tu sesión)</text>
   ${cuerpo}
+</svg>`;
+}
+
+/* ─── Portada anime (personaje dibujado a mano, sin IA) ─────────── */
+
+const ANIME = {
+  crema: "#F7F5ED",
+  cremaOsc: "#EFEBDF",
+  blanco: "#FFFFFF",
+  lima: "#CBEA6A",
+  limaOsc: "#A9CE45",
+  limaSuave: "#E4F1CF",
+  tinta: "#141414",
+  tintaSuave: "#6B6B63",
+  pelo: "#6FD3E6",
+  peloOsc: "#4FBBD4",
+  peloLuz: "#B6EEF7",
+  piel: "#FFE7DB",
+  pielSombra: "#F7CFC0",
+  ojo: "#1B9FC4",
+  ojoLuz: "#DFF7FF",
+  pupila: "#123A4A",
+  rosa: "#F6AFC4",
+  rosaSuave: "#FBD9E3",
+  borde: "#E4E0D2",
+};
+
+/**
+ * La mascota del bot: chibi con gorro de gato, todo trazado a mano.
+ * Vive en un lienzo de 320x400 con los pies en y=400. Parpadea, flota y
+ * lleva destellos animados; el párpado arranca colapsado para que en un
+ * render estático (o en un visor sin SMIL) los ojos se vean abiertos.
+ */
+function personaje(cx, cy, escala) {
+  const P = ANIME;
+  let d = "";
+
+  // coletas altas (detrás de todo) + ligas
+  const coleta = (x, s) => `<g transform="translate(${x} 200) scale(${s})">
+    <path d="M0 -60 C -46 -40 -58 30 -30 84 C -14 114 10 116 22 96 C 34 74 30 6 16 -34 Z" fill="${P.pelo}" stroke="${P.peloOsc}" stroke-width="3"/>
+    <path d="M-6 -30 C -30 -8 -34 42 -20 74" fill="none" stroke="${P.peloLuz}" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
+  </g>`;
+  d += coleta(58, 1);
+  d += coleta(262, -1);
+  d += `<g>
+    <ellipse cx="66" cy="152" rx="15" ry="11" fill="${P.lima}" stroke="${P.limaOsc}" stroke-width="3" transform="rotate(-18 66 152)"/>
+    <ellipse cx="254" cy="152" rx="15" ry="11" fill="${P.lima}" stroke="${P.limaOsc}" stroke-width="3" transform="rotate(18 254 152)"/>
+  </g>`;
+
+  // mochila
+  d += `<g>
+    <rect x="58" y="286" width="52" height="96" rx="24" fill="${P.tinta}"/>
+    <rect x="212" y="286" width="52" height="96" rx="24" fill="${P.tinta}"/>
+    <rect x="66" y="300" width="10" height="60" rx="5" fill="${P.lima}" opacity="0.85"/>
+    <rect x="246" y="300" width="10" height="60" rx="5" fill="${P.lima}" opacity="0.85"/>
+  </g>`;
+
+  // capucha con orejas de gato
+  d += `<path d="M160 42 C 78 42 44 108 44 190 C 44 268 96 318 160 318 C 224 318 276 268 276 190 C 276 108 242 42 160 42 Z" fill="${P.blanco}" stroke="${P.borde}" stroke-width="4"/>`;
+  const oreja = (x, s) => `<g transform="translate(${x} 92) scale(${s})">
+    <path d="M0 40 C -6 4 6 -34 30 -52 C 46 -20 44 16 34 44 Z" fill="${P.blanco}" stroke="${P.borde}" stroke-width="4"/>
+    <path d="M12 32 C 10 10 16 -14 30 -28 C 36 -8 34 14 28 32 Z" fill="${P.rosaSuave}"/>
+  </g>`;
+  d += oreja(70, 1.06);
+  d += oreja(250, -1.06);
+
+  // aro del gorro + pelo de atrás + cara
+  d += `<ellipse cx="160" cy="168" rx="86" ry="92" fill="none" stroke="#E9F6F9" stroke-width="10"/>`;
+  d += `<ellipse cx="160" cy="164" rx="88" ry="94" fill="${P.peloOsc}"/>`;
+  d += `<ellipse cx="160" cy="172" rx="72" ry="78" fill="${P.piel}"/>`;
+  d += `<ellipse cx="88" cy="180" rx="12" ry="17" fill="${P.piel}" stroke="${P.pielSombra}" stroke-width="2"/>`;
+  d += `<ellipse cx="232" cy="180" rx="12" ry="17" fill="${P.piel}" stroke="${P.pielSombra}" stroke-width="2"/>`;
+
+  // ojos
+  const ojo = (x) => `<g transform="translate(${x} 178)">
+    <ellipse cx="0" cy="0" rx="19" ry="24" fill="${P.blanco}"/>
+    <ellipse cx="0" cy="4" rx="15.5" ry="20" fill="${P.ojo}"/>
+    <ellipse cx="0" cy="10" rx="11" ry="13" fill="${P.ojoLuz}" opacity="0.85"/>
+    <ellipse cx="0" cy="4" rx="8.5" ry="13" fill="${P.pupila}"/>
+    <circle cx="-6.5" cy="-7.5" r="6.6" fill="${P.blanco}"/>
+    <circle cx="6" cy="9" r="3.4" fill="${P.blanco}" opacity="0.95"/>
+    <path d="M-20 -22 C -12 -30 12 -30 20 -22" fill="none" stroke="${P.tinta}" stroke-width="3.6" stroke-linecap="round"/>
+  </g>`;
+  d += ojo(126);
+  d += ojo(194);
+  const parpado = (x) => `<g transform="translate(${x} 154)"><g transform="scale(1 0)">
+    <animateTransform attributeName="transform" type="scale" values="1 0;1 0;1 1;1 1;1 0;1 0" keyTimes="0;0.86;0.9;0.94;0.97;1" dur="4.6s" repeatCount="indefinite"/>
+    <rect x="-21" y="-2" width="42" height="52" rx="18" fill="${P.piel}"/>
+  </g></g>`;
+  d += parpado(126);
+  d += parpado(194);
+
+  // cejas, rubor y boca
+  d += `<path d="M114 141 C 124 135 136 136 143 141" fill="none" stroke="${P.peloOsc}" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>`;
+  d += `<path d="M206 141 C 196 135 184 136 177 141" fill="none" stroke="${P.peloOsc}" stroke-width="3.2" stroke-linecap="round" opacity="0.85"/>`;
+  d += `<ellipse cx="108" cy="206" rx="16" ry="9" fill="${P.rosa}" opacity="0.55"/>`;
+  d += `<ellipse cx="212" cy="206" rx="16" ry="9" fill="${P.rosa}" opacity="0.55"/>`;
+  d += `<path d="M154 216 C 158 222 162 222 166 216" fill="none" stroke="${P.tinta}" stroke-width="3.2" stroke-linecap="round" opacity="0.75"/>`;
+
+  // flequillo
+  d += `<path d="M74 168 C 74 108 112 74 160 74 C 208 74 246 108 246 168 C 234 148 226 134 214 126 C 206 146 196 158 182 166 C 176 142 168 126 160 118 C 150 134 140 150 128 162 C 118 150 108 142 100 138 C 92 148 82 158 74 168 Z" fill="${P.pelo}"/>`;
+  d += `<path d="M120 96 C 132 84 148 78 160 78" fill="none" stroke="${P.peloLuz}" stroke-width="7" stroke-linecap="round" opacity="0.9"/>`;
+  d += `<path d="M196 100 C 208 108 216 118 222 130" fill="none" stroke="${P.peloLuz}" stroke-width="6" stroke-linecap="round" opacity="0.7"/>`;
+
+  // sudadera, cuello, cordones, bolsillo con huellita
+  d += `<path d="M160 250 C 220 250 268 286 282 344 L 282 400 L 38 400 L 38 344 C 52 286 100 250 160 250 Z" fill="${P.blanco}" stroke="${P.borde}" stroke-width="4"/>`;
+  d += `<rect x="132" y="240" width="56" height="40" rx="18" fill="${P.piel}"/>`;
+  d += `<path d="M118 258 C 138 286 182 286 202 258" fill="none" stroke="${P.lima}" stroke-width="12" stroke-linecap="round"/>`;
+  d += `<path d="M160 300 V 400" stroke="${P.borde}" stroke-width="4"/>`;
+  d += `<path d="M126 288 C 122 320 122 356 126 392" fill="none" stroke="${P.borde}" stroke-width="4"/>`;
+  d += `<path d="M194 288 C 198 320 198 356 194 392" fill="none" stroke="${P.borde}" stroke-width="4"/>`;
+  d += `<path d="M146 292 C 142 314 144 336 150 352" fill="none" stroke="${P.limaOsc}" stroke-width="4.5" stroke-linecap="round"/>`;
+  d += `<circle cx="150" cy="356" r="6" fill="${P.lima}"/>`;
+  d += `<rect x="112" y="342" width="96" height="46" rx="14" fill="${P.lima}" opacity="0.5"/>`;
+  d += `<g transform="translate(160 365)" fill="${P.limaOsc}" opacity="0.75">
+    <circle cx="-9" cy="-6" r="4.4"/><circle cx="0" cy="-9" r="4.4"/><circle cx="9" cy="-6" r="4.4"/>
+    <path d="M-11 4 C -6 -3 6 -3 11 4 C 6 9 -6 9 -11 4 Z"/>
+  </g>`;
+
+  // mangas y manos
+  d += `<g><ellipse cx="60" cy="360" rx="30" ry="46" fill="${P.blanco}" stroke="${P.borde}" stroke-width="4"/>
+        <circle cx="62" cy="392" r="21" fill="${P.piel}" stroke="${P.pielSombra}" stroke-width="2"/></g>`;
+  d += `<g><ellipse cx="260" cy="360" rx="30" ry="46" fill="${P.blanco}" stroke="${P.borde}" stroke-width="4"/>
+        <circle cx="258" cy="392" r="21" fill="${P.piel}" stroke="${P.pielSombra}" stroke-width="2"/></g>`;
+
+  // destellos
+  const estrella = (x, y, r, c, dur, retardo) =>
+    `<g transform="translate(${x} ${y})"><g><animateTransform attributeName="transform" type="scale" values="0.7;1.15;0.7" dur="${dur}s" begin="${retardo}s" repeatCount="indefinite"/>
+      <path d="M0 ${-r} L ${r * 0.32} ${-r * 0.32} L ${r} 0 L ${r * 0.32} ${r * 0.32} L 0 ${r} L ${-r * 0.32} ${r * 0.32} L ${-r} 0 L ${-r * 0.32} ${-r * 0.32} Z" fill="${c}"/></g></g>`;
+  d += estrella(30, 150, 13, P.lima, 3.2, 0);
+  d += estrella(292, 132, 10, P.rosa, 3.8, 0.6);
+  d += estrella(44, 300, 8, "#7FD3EE", 3.4, 1.1);
+  d += estrella(286, 262, 11, P.lima, 4.1, 0.3);
+
+  return `<g transform="translate(${cx} ${cy}) scale(${escala}) translate(-160 -400)">
+    <g><animateTransform attributeName="transform" type="translate" values="0 0; 0 -12; 0 0" dur="5.2s" repeatCount="indefinite"/>${d}</g>
+  </g>`;
+}
+
+/** Píldora blanca con icono (barra superior, barra lateral y stats). */
+/** Tarjeta blanca de dato: etiqueta, unidad y valor grande. */
+function tarjetaDato(x, y, ancho, alto, etiqueta, valor, unidad, acento) {
+  return (
+    `<g>` +
+    `<rect x="${x}" y="${y}" width="${ancho}" height="${alto}" rx="26" fill="${ANIME.blanco}"/>` +
+    `<rect x="${x}" y="${y}" width="${ancho}" height="${alto}" rx="26" fill="none" stroke="${ANIME.borde}" stroke-width="1.5" opacity="0.75"/>` +
+    `<rect x="${x + 20}" y="${y + 18}" width="26" height="6" rx="3" fill="${acento}"/>` +
+    `<text x="${x + ancho - 20}" y="${y + 30}" text-anchor="end" font-family="${SANS}" font-size="12" font-weight="600" fill="${ANIME.tintaSuave}">${xml(unidad)}</text>` +
+    `<text x="${x + 20}" y="${y + 50}" font-family="${SANS}" font-size="15.5" font-weight="600" fill="${ANIME.tintaSuave}">${xml(etiqueta)}</text>` +
+    `<text x="${x + 20}" y="${y + alto - 18}" font-family="${SANS}" font-size="40" font-weight="800" fill="${ANIME.tinta}">${xml(valor)}</text>` +
+    `</g>`
+  );
+}
+
+/**
+ * Portada con la mascota: pastel, tarjetas y píldoras, al estilo de un
+ * panel de anime. Todo son formas y trazados: no hay ni una imagen
+ * generada con IA ni un recurso de fuera.
+ */
+function portadaAnime(n) {
+  const W = 1200;
+  const H = 720;
+  const A = ANIME;
+  const S = `font-family="${SANS}"`;
+
+  const icono = {
+    casa: `<path d="M-8 0 L0 -7 L8 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M-5.5 -1 V7 H5.5 V-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+    grafica: `<path d="M-8 7 h16 M-5 4 V-4 M0 4 V-7 M5 4 V0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+    estrella: `<path d="M0 -8 L2.4 -2.6 L8 -2.4 L3.6 1.4 L5 7 L0 4 L-5 7 L-3.6 1.4 L-8 -2.4 L-2.4 -2.6 Z" fill="currentColor"/>`,
+    persona: `<circle cx="0" cy="-3.4" r="4" fill="currentColor"/><path d="M-7.4 8 C-6.6 1.6 -3.6 -0.4 0 -0.4 C3.6 -0.4 6.6 1.6 7.4 8 Z" fill="currentColor"/>`,
+    lupa: `<circle cx="0" cy="0" r="6.4" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4.6 4.6 L9 9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+    rayo: `<path d="M2 -9 L-5 1.6 H-0.6 L-2 9 L5 -2 H0.6 Z" fill="currentColor"/>`,
+    escudo: `<path d="M0 -8 L7 -5 V0 C7 4.4 4 7.6 0 8.6 C-4 7.6 -7 4.4 -7 0 V-5 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M-2.6 0.6 L-0.8 2.4 L3 -1.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+  };
+
+  /** Píldora con icono opcional. */
+  const pastilla = (x, y, ancho, alto, texto, o = {}) => {
+    const {
+      relleno = A.blanco,
+      tinta = A.tinta,
+      borde = null,
+      tam = 14,
+      ico = null,
+      peso = 600,
+    } = o;
+    return (
+      `<g>` +
+      `<rect x="${x}" y="${y}" width="${ancho}" height="${alto}" rx="${alto / 2}" fill="${relleno}"${borde ? ` stroke="${borde}" stroke-width="1.4"` : ""}/>` +
+      (ico
+        ? `<g color="${tinta}" transform="translate(${x + 20} ${y + alto / 2})">${ico}</g>`
+        : "") +
+      `<text x="${ico ? x + 36 : x + ancho / 2}" y="${y + alto / 2 + tam * 0.36}" ${ico ? "" : 'text-anchor="middle" '}${S} font-size="${tam}" font-weight="${peso}" fill="${tinta}">${xml(texto)}</text>` +
+      `</g>`
+    );
+  };
+
+  let d = "";
+
+  // ── barra superior ────────────────────────────────────────────────
+  d += pastilla(40, 34, 306, 50, "riokuroxi-svg/Shin-MD", {
+    tam: 14,
+    ico: icono.lupa,
+    tinta: A.tintaSuave,
+  });
+  d += kanji(496, 58, 30, A.tinta);
+  d += `<text x="540" y="51" ${S} font-size="17" font-weight="800" letter-spacing="4" fill="${A.tinta}">SHIN-MD</text>`;
+  d += `<text x="540" y="71" ${S} font-size="9.5" letter-spacing="2.4" fill="${A.tintaSuave}">BOT DE WHATSAPP · MULTI-DEVICE</text>`;
+  d += pastilla(918, 36, 88, 46, "Hola", { tam: 13.5, borde: A.borde, ico: icono.casa, peso: 700 });
+  d += pastilla(1018, 36, 142, 46, "Anti-ban ON", {
+    relleno: A.lima,
+    tam: 13.5,
+    ico: icono.escudo,
+    peso: 700,
+  });
+
+  // ── banda decorativa con barrido ──────────────────────────────────
+  d += `<path d="M0 214 H430 L520 300 H0 Z" fill="${A.limaSuave}"/>`;
+  d += `<path d="M0 258 H466 L556 344 H0 Z" fill="${A.lima}">
+    <animate attributeName="opacity" values="0.88;1;0.88" dur="4.4s" repeatCount="indefinite"/>
+  </path>`;
+  d += `<path d="M470 214 L560 300 L520 300 L430 214 Z" fill="${A.tinta}"/>`;
+
+  // ── láminas de degradado (los "cuadros" del panel de referencia) ──
+  const lamina = (
+    x,
+    y,
+    rot,
+    c1,
+    c2,
+    kanjiTexto,
+    etiqueta,
+    retardo
+  ) => `<g transform="rotate(${rot} ${x + 70} ${y + 55})">
+    <g><animateTransform attributeName="transform" type="translate" values="0 0; 0 -8; 0 0" dur="6.5s" begin="${retardo}s" repeatCount="indefinite"/>
+    <rect x="${x}" y="${y}" width="140" height="110" rx="18" fill="${c1}"/>
+    <rect x="${x}" y="${y}" width="140" height="110" rx="18" fill="url(#degradadoLamina)"/>
+    <path d="M${x + 12} ${y + 92} q 34 -16 54 -5 t 62 -11" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-opacity="0.6" stroke-linecap="round"/>
+    <circle cx="${x + 108}" cy="${y + 26}" r="14" fill="#FFFFFF" fill-opacity="0.5"/>
+    <text x="${x + 14}" y="${y + 30}" ${S} font-size="10.5" font-weight="700" letter-spacing="1.3" fill="#FFFFFF">${xml(etiqueta)}</text>
+    <text x="${x + 14}" y="${y + 78}" font-family="${MONO}" font-size="26" fill="#FFFFFF" fill-opacity="0.92">${xml(kanjiTexto)}</text>
+    </g></g>`;
+  d += lamina(112, 108, -6, "#BFE9F5", "#8FD8ED", "魂", "ECOSISTEMA", 1.1);
+  d += lamina(104, 348, 5, "#F7C6D6", "#EFA9C4", "反", "ANIME", 0.4);
+
+  // ── barra lateral de iconos ───────────────────────────────────────
+  [icono.casa, icono.grafica, icono.estrella, icono.persona].forEach((ico, i) => {
+    const y = 252 + i * 76;
+    const activo = i === 3;
+    d +=
+      `<g color="${activo ? A.tinta : A.tintaSuave}">` +
+      `<g><animateTransform attributeName="transform" type="translate" values="0 0; 0 -3; 0 0" dur="${(5 + i * 0.6).toFixed(1)}s" repeatCount="indefinite"/>` +
+      `<circle cx="72" cy="${y}" r="22" fill="${activo ? A.lima : A.blanco}"${activo ? "" : ` stroke="${A.borde}" stroke-width="1.4"`}/>` +
+      `<g transform="translate(72 ${y})">${ico}</g>` +
+      `</g></g>`;
+  });
+  d += pastilla(48, 556, 48, 46, "ES", { tam: 13, borde: A.borde, peso: 700 });
+
+  // ── personaje ─────────────────────────────────────────────────────
+  d += `<ellipse cx="470" cy="548" rx="152" ry="26" fill="${A.cremaOsc}"/>`;
+  d += personaje(470, 548, 1.06);
+
+  // ── bloque de texto (a la izquierda de la tarjeta de anti-ban) ────
+  const xt = 664;
+  d += `<text x="${xt}" y="240" font-family="${MONO}" font-size="12" fill="${A.tintaSuave}">Node ≥ ${xml(n.node)} · Baileys ${xml(n.baileys)}</text>`;
+  d += `<text x="${xt}" y="302" ${S} font-size="52" font-weight="800" letter-spacing="-1" fill="${A.tinta}">Shin</text>`;
+  d += `<g transform="skewX(-8)"><rect x="${xt + 118}" y="262" width="86" height="46" rx="8" fill="${A.lima}"/></g>`;
+  d += `<text x="${xt + 126}" y="302" ${S} font-size="52" font-weight="800" letter-spacing="-1" fill="${A.tinta}">MD</text>`;
+  d += `<rect x="${xt}" y="320" width="260" height="4" rx="2" fill="${A.limaSuave}"/>`;
+  d += `<rect x="${xt}" y="320" width="90" height="4" rx="2" fill="${A.lima}">
+    <animate attributeName="x" values="${xt};${xt + 170};${xt}" dur="6.5s" repeatCount="indefinite"/>
+  </rect>`;
+  d += `<text x="${xt}" y="356" ${S} font-size="14.5" fill="${A.tintaSuave}">${xml(n.comandos)} comandos · anti-ban nativo.</text>`;
+  d += pastilla(xt, 380, 172, 46, "Código de 8 dígitos", {
+    relleno: A.tinta,
+    tinta: "#FFFFFF",
+    tam: 13,
+    radio: 14,
+  });
+  d += pastilla(xt + 184, 380, 68, 46, "QR", {
+    relleno: A.tinta,
+    tinta: "#FFFFFF",
+    tam: 13,
+    radio: 14,
+  });
+  d += pastilla(xt, 442, 158, 42, `+ ${n.pruebas}/${n.pruebasTotal} pruebas`, {
+    tam: 12.5,
+    borde: A.borde,
+  });
+  [A.lima, A.rosa, "#7FD3EE", A.tinta].forEach((c, i) => {
+    d +=
+      `<circle cx="${xt + 178 + i * 22}" cy="463" r="11" fill="${c}" stroke="${A.crema}" stroke-width="2.5">` +
+      `<animate attributeName="opacity" values="0.7;1;0.7" dur="3s" begin="${(i * 0.3).toFixed(1)}s" repeatCount="indefinite"/></circle>`;
+  });
+
+  // ── tarjeta de uso responsable (la "Performance" del panel) ───────
+  const cx = 930;
+  d +=
+    `<g>` +
+    `<rect x="${cx}" y="214" width="230" height="288" rx="26" fill="${A.blanco}"/>` +
+    `<rect x="${cx}" y="214" width="230" height="288" rx="26" fill="none" stroke="${A.borde}" stroke-width="1.5" opacity="0.75"/>` +
+    `<text x="${cx + 24}" y="252" ${S} font-size="16" font-weight="700" fill="${A.tinta}">Anti-ban</text>` +
+    `<rect x="${cx + 24}" y="268" width="182" height="10" rx="5" fill="${A.cremaOsc}"/>` +
+    `<rect x="${cx + 24}" y="268" width="164" height="10" rx="5" fill="${A.lima}">` +
+    `<animate attributeName="width" values="164;164;0;0;164" keyTimes="0;0.45;0.62;0.9;1" dur="9s" repeatCount="indefinite"/></rect>` +
+    `<circle cy="273" r="8" fill="${A.lima}" stroke="${A.blanco}" stroke-width="3">` +
+    `<animate attributeName="cx" values="${cx + 188};${cx + 188};${cx + 24};${cx + 24};${cx + 188}" keyTimes="0;0.45;0.62;0.9;1" dur="9s" repeatCount="indefinite"/></circle>` +
+    `<text x="${cx + 24}" y="306" font-family="${MONO}" font-size="11.5" fill="${A.tintaSuave}">riesgo 4/100 · cola 0</text>` +
+    `<text x="${cx + 24}" y="342" ${S} font-size="12.5" font-weight="800" letter-spacing="1.5" fill="${A.tinta}">USO RESPONSABLE</text>` +
+    `<text x="${cx + 24}" y="364" ${S} font-size="12.5" font-weight="800" letter-spacing="1.5" fill="${A.tinta}">NÚMERO SECUNDARIO</text>` +
+    `<text x="${cx + 24}" y="386" ${S} font-size="12.5" font-weight="800" letter-spacing="1.5" fill="${A.tinta}">LICENCIA AGPL-3.0</text>` +
+    `<rect x="${cx + 24}" y="404" width="182" height="1.4" fill="${A.borde}"/>` +
+    `<text x="${cx + 24}" y="428" font-family="${MONO}" font-size="10.5" fill="${A.tintaSuave}">jitter gaussiano σ 0.25</text>` +
+    `<text x="${cx + 24}" y="446" font-family="${MONO}" font-size="10.5" fill="${A.tintaSuave}">base 1200 ms · ×1.5 nuevo</text>` +
+    `<text x="${cx + 24}" y="464" font-family="${MONO}" font-size="10.5" fill="${A.tintaSuave}">warm-up 20 → 500 / día</text>` +
+    `<text x="${cx + 24}" y="486" font-family="${MONO}" font-size="10.5" fill="${A.tinta}">shin-gauss-0.25-1200ms</text>` +
+    `</g>`;
+
+  // ── tarjetas de datos ─────────────────────────────────────────────
+  const yT = 570;
+  const ancho = 264;
+  const hueco = 14;
+  const x0 = (W - (ancho * 4 + hueco * 3)) / 2;
+  const datos = [
+    ["Comandos", String(n.comandos), "únicos", A.lima],
+    ["Nombres", String(n.nombres), "con alias", "#7FD3EE"],
+    ["Categorías", String(n.categorias), "en el menú", A.rosa],
+    ["Pruebas", `${n.pruebas}/${n.pruebasTotal}`, "en CI", A.lima],
+  ];
+  datos.forEach(([etiqueta, valor, unidad, acento], i) => {
+    d += tarjetaDato(x0 + i * (ancho + hueco), yT, ancho, 116, etiqueta, valor, unidad, acento);
+  });
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Portada de Shin-MD: mascota anime con gorro de gato, tarjetas de datos y panel de anti-ban">
+  <title>Shin-MD — portada</title>
+  <defs>
+    <linearGradient id="degradadoLamina" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.45"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="puntosSuaves" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.2" fill="#141414" fill-opacity="0.05"/>
+    </pattern>
+  </defs>
+  <rect width="${W}" height="${H}" fill="${A.crema}"/>
+  <rect width="${W}" height="${H}" fill="url(#puntosSuaves)"/>
+  ${d}
+  <text x="${W / 2}" y="${H - 10}" text-anchor="middle" font-family="${MONO}" font-size="10.5" letter-spacing="1.2" fill="#B3AFA0">hecho a mano en SVG · sin imágenes generadas</text>
 </svg>`;
 }
 
@@ -837,6 +1182,78 @@ function insignias(oscuro, n) {
 </svg>`;
 }
 
+/** Tira de insignias en el estilo de la portada (crema, lima y tinta). */
+function insigniasAnime(n) {
+  const A = ANIME;
+  const items = [
+    { t: `${n.pruebas}/${n.pruebasTotal} pruebas`, c: A.lima, i: "check", latido: true },
+    { t: `${n.comandos} comandos`, c: "#69C7DE", i: "rayo" },
+    { t: `${n.nombres} nombres`, c: "#7FD3EE", i: "etiqueta" },
+    { t: `${n.categorias} categorías`, c: A.rosa, i: "rejilla" },
+    { t: `Node ≥ ${n.node}`, c: "#8FCB4E", i: "nodo" },
+    { t: `Baileys ${n.baileys}`, c: "#25D366", i: "globo" },
+    { t: n.licencia, c: A.tinta, i: "balanza" },
+  ];
+  const alto = 40;
+  const hueco = 12;
+  const anchos = items.map((it) => Math.round(anchoTexto(it.t, 13.5, true) + 54));
+  const total = anchos.reduce((a, b) => a + b, 0) + hueco * (items.length - 1);
+  const W = total + 12;
+  const H = alto + 12;
+
+  let x = 6;
+  let salida = "";
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const w = anchos[i];
+    salida +=
+      `<g>` +
+      `<rect x="${x}" y="6" width="${w}" height="${alto}" rx="${alto / 2}" fill="${A.blanco}" stroke="${A.borde}" stroke-width="1.4"/>` +
+      `<circle cx="${x + 23}" cy="${6 + alto / 2}" r="9.5" fill="${it.c}" fill-opacity="0.22"/>` +
+      icono(it.i, x + 23, 6 + alto / 2, it.c) +
+      (it.latido
+        ? `<circle cx="${x + 23}" cy="${6 + alto / 2}" r="11" fill="none" stroke="${it.c}" stroke-opacity="0.45">` +
+          `<animate attributeName="r" values="9;14;9" dur="3.2s" repeatCount="indefinite"/>` +
+          `<animate attributeName="stroke-opacity" values="0.45;0;0.45" dur="3.2s" repeatCount="indefinite"/></circle>`
+        : "") +
+      `<text x="${x + 42}" y="${6 + alto / 2 + 4.8}" font-family="${SANS}" font-size="13.5" font-weight="600" fill="${A.tinta}">${xml(it.t)}</text>` +
+      `</g>`;
+    x += w + hueco;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Insignias de Shin-MD">
+  <title>Shin-MD — estado</title>
+  ${salida}
+</svg>`;
+}
+
+/**
+ * La mascota sola, en cuadrado: sirve de avatar del bot, de imagen para el
+ * social preview del repositorio o de icono en cualquier sitio. Mismo
+ * personaje, mismo lienzo, sin depender de ninguna fuente del sistema.
+ */
+function mascotaShin() {
+  const S = 512;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${S} ${S}" width="${S}" height="${S}" role="img" aria-label="Mascota de Shin-MD">
+  <title>Mascota de Shin-MD</title>
+  <defs>
+    <linearGradient id="fondoMascota" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FBF9F2"/><stop offset="1" stop-color="#EFEBDF"/>
+    </linearGradient>
+    <pattern id="puntosMascota" width="22" height="22" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.1" fill="#141414" fill-opacity="0.05"/>
+    </pattern>
+  </defs>
+  <rect width="${S}" height="${S}" rx="96" fill="url(#fondoMascota)"/>
+  <rect width="${S}" height="${S}" rx="96" fill="url(#puntosMascota)"/>
+  <rect x="10" y="10" width="${S - 20}" height="${S - 20}" rx="88" fill="none" stroke="${ANIME.lima}" stroke-width="3" opacity="0.65"/>
+  <ellipse cx="256" cy="452" rx="132" ry="22" fill="${ANIME.cremaOsc}"/>
+  ${personaje(256, 452, 0.98)}
+  ${kanji(216, 500, 20, ANIME.tinta)}
+  <text x="246" y="506" font-family="${MONO}" font-size="15" letter-spacing="3" fill="${ANIME.tintaSuave}">SHIN-MD</text>
+  <text x="246" y="524" font-family="${SANS}" font-size="10.5" letter-spacing="1.6" fill="${ANIME.tintaSuave}" opacity="0.85">BOT DE WHATSAPP · AGPL-3.0</text>
+</svg>`;
+}
+
 /* ─── Datos reales del repositorio ───────────────────────────────── */
 
 async function leerDatos() {
@@ -894,6 +1311,7 @@ async function principal() {
   if (!fs.existsSync(ASSETS)) fs.mkdirSync(ASSETS, { recursive: true });
 
   const archivos = [
+    ["portada-anime.svg", portadaAnime(n)],
     ["hero-oscuro.svg", hero(true, n)],
     ["hero-claro.svg", hero(false, n)],
     ["divisor-oscuro.svg", divisor(true)],
@@ -902,6 +1320,8 @@ async function principal() {
     ["chat-demo.svg", chatDemo()],
     ["flujo-mensaje.svg", flujoMensaje()],
     ["medidor-riesgo.svg", medidorRiesgo()],
+    ["mascota-shin.svg", mascotaShin()],
+    ["insignias-anime.svg", insigniasAnime(n)],
     ["insignias-oscuro.svg", insignias(true, n)],
     ["insignias-claro.svg", insignias(false, n)],
   ];
@@ -915,6 +1335,28 @@ async function principal() {
     const kb = (Buffer.byteLength(svg) / 1024).toFixed(1);
     console.log(`✓  docs/assets/${nombre} · ${kb} KB`);
   }
+
+  fs.writeFileSync(
+    path.join(ASSETS, "datos.json"),
+    JSON.stringify(
+      {
+        generado: new Date().toISOString().slice(0, 10),
+        comandos: n.comandos,
+        nombres: n.nombres,
+        alias: n.nombres - n.comandos,
+        categorias: n.categorias,
+        pruebas: n.pruebas,
+        pruebasTotal: n.pruebasTotal,
+        version: n.version,
+        node: n.node,
+        baileys: n.baileys,
+        licencia: n.licencia,
+      },
+      null,
+      2
+    ) + "\n"
+  );
+  console.log("✓  docs/assets/datos.json · los números que anuncian los SVG");
 
   // Los SVG ya salen con los números de hoy, pero el TEXTO del README se
   // escribe a mano: si se quedó viejo, mejor saberlo ahora que en un issue.

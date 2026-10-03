@@ -1,18 +1,15 @@
 <div align="center">
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-oscuro.svg">
-  <img src="docs/assets/hero-claro.svg" alt="Shin-MD — bot de WhatsApp que no se cae, no se banea y no borra tu sesión" width="100%">
-</picture>
+<!-- Portada dibujada a mano en SVG (nada generado con IA): la mascota de
+     Shin, con gorro de gato, parpadea, flota y mueve su barra de anti-ban.
+     Se redibuja con los números reales del repo: npm run docs:assets -->
+<img src="docs/assets/portada-anime.svg" alt="Shin-MD — mascota anime con gorro de gato, tarjetas con 210 comandos, 744 nombres, 15 categorías y 140/140 pruebas, y panel de anti-ban" width="100%">
 
 <br>
 
-<!-- Insignias dibujadas en casa (docs/assets): se animan solas y los números
-     salen del propio repo con `npm run docs:assets`. No se escriben a mano. -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/insignias-oscuro.svg">
-  <img src="docs/assets/insignias-claro.svg" alt="140/140 pruebas · 210 comandos · 744 nombres · 15 categorías · Node ≥ 22.5 · Baileys 6.7.24 · AGPL-3.0-only" width="100%">
-</picture>
+<!-- Insignias dibujadas en casa (docs/assets). Los números salen del propio
+     repo con `npm run docs:assets`. No se escriben a mano. -->
+<img src="docs/assets/insignias-anime.svg" alt="140/140 pruebas · 210 comandos · 744 nombres · 15 categorías · Node ≥ 22.5 · Baileys 6.7.24 · AGPL-3.0-only">
 
 <br><br>
 
@@ -32,6 +29,15 @@
 [🧯 Problemas típicos](#-problemas-típicos) ·
 [📜 Licencia](#-licencia-y-marca) ·
 [🧪 Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab)
+
+<details>
+<summary><b>Versión oscura de la portada</b></summary>
+<br>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-oscuro.svg">
+  <img src="docs/assets/hero-claro.svg" alt="Shin-MD — bot de WhatsApp que no se cae, no se banea y no borra tu sesión" width="100%">
+</picture>
+</details>
 
 </div>
 
@@ -425,6 +431,8 @@ Ginko"). Los plugins comerciales viven fuera del núcleo.
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/divisor-oscuro.svg">
   <img src="docs/assets/divisor-claro.svg" alt="" width="64%">
 </picture>
+<br>
+<img src="docs/assets/mascota-shin.svg" alt="Mascota de Shin-MD" width="132">
 <br>
 <b>反魂 Shin-MD</b> · hecho para quedarse encendido
 <br><br>

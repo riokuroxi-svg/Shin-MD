@@ -1,0 +1,85 @@
+# Shin-MD — agente de documentación: redibuja los SVG del README.
+#
+# Los assets de docs/assets son SVG escritos a mano por un script
+# (scripts/actualizar-assets-readme.mjs), no imágenes generadas: los
+# números que muestran —comandos, alias, categorías, pruebas, versión—
+# salen del propio bot. Este agente los redibuja cuando algo cambia.
+#
+#   · en un pull request  → comprueba que los SVG estén al día (no escribe)
+#   · al llegar a main    → los regenera y hace commit si quedaron distintos
+#
+# El script es determinista: si nada cambió, no hay commit ni ruido.
+name: Assets del README
+
+on:
+  push:
+    branches: [main]
+    paths: &rutas
+      - "cmds/**"
+      - "src/**"
+      - "boot/**"
+      - "test/resumen-suite.json"
+      - "package.json"
+      - "scripts/actualizar-assets-readme.mjs"
+      - "docs/assets/logo.svg"
+  pull_request:
+    paths: *rutas
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: assets-readme-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  al-dia:
+    name: Los SVG reflejan el repositorio
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependencias (incluye el parche de Baileys)
+        run: npm ci --no-audit --no-fund
+      - name: Redibujar los assets
+        run: npm run docs:assets
+      - name: Exigir que el commit ya los traiga actualizados
+        run: |
+          if [ -n "$(git status --porcelain docs/assets)" ]; then
+            echo "::error::Los SVG del README quedaron viejos. Ejecuta 'npm run docs:assets' y sube el cambio."
+            git --no-pager diff --stat docs/assets
+            exit 1
+          fi
+          echo "✓ Los SVG del README ya reflejan el estado del repositorio."
+
+  redibujar:
+    name: Redibujar y commitear
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependencias (incluye el parche de Baileys)
+        run: npm ci --no-audit --no-fund
+      - name: Redibujar los assets del README
+        run: npm run docs:assets
+      - name: Commit si el dibujo cambió
+        run: |
+          if [ -z "$(git status --porcelain docs/assets)" ]; then
+            echo "✓ Nada que redibujar: los SVG ya reflejan el estado del repo."
+            exit 0
+          fi
+          git config user.name "shin-md[bot]"
+          git config user.email "shin-md[bot]@users.noreply.github.com"
+          git add docs/assets
+          git commit -m "docs: redibuja los assets del README con los números reales [skip ci]"
+          git push
+          echo "✓ Assets del README actualizados por el agente de Shin."
