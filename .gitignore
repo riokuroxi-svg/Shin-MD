@@ -42,3 +42,4 @@ config.private.js
 cookies.txt
 *.cookies.txt
 audit/
+.vista-readme-*.html   # copia temporal para revisar el README

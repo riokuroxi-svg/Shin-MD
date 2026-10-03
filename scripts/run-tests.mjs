@@ -90,4 +90,43 @@ console.log("─".repeat(52));
 console.log(`${fail ? "✕" : "✓"}  ${pass}/${total} pruebas · ${archivos.length} archivos`);
 if (rotos.length) console.log(`   Archivos con fallos: ${rotos.join(", ")}`);
 
+// Resumen de la última corrida: lo usa `npm run docs:web` para que la página
+// del proyecto y el README anuncien los números REALES de la suite en vez de
+// unos escritos a mano que envejecen. Es solo informativo: si no se puede
+// escribir, la suite no falla por eso.
+if (!filtro.length) {
+  try {
+    fs.writeFileSync(
+      path.join(TEST_DIR, "resumen-suite.json"),
+      JSON.stringify(
+        {
+          pasan: pass,
+          total,
+          archivos: archivos.length,
+          fallos: fail,
+          fecha: new Date().toISOString().slice(0, 10),
+        },
+        null,
+        1,
+      ) + "\n",
+    );
+  } catch {
+    /* sin permiso de escritura: no es motivo para fallar la suite */
+  }
+}
+
+// Recordatorio amable: la página del proyecto anuncia estos números.
+if (!filtro.length && !fail) {
+  try {
+    const pagina = fs.readFileSync(path.resolve("docs/web/index.html"), "utf8");
+    const suyo = (pagina.match(/(\d+)\/(\d+) pruebas/) || [])[0];
+    const real = `${pass}/${total} pruebas`;
+    if (suyo && suyo !== real) {
+      console.log(`   ⚠  docs/web/index.html dice "${suyo}" y la suite dice "${real}" → npm run docs:web`);
+    }
+  } catch {
+    /* sin página generada: nada que avisar */
+  }
+}
+
 process.exit(fail ? 1 : 0);

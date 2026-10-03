@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="es" data-tema="oscuro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shin-MD · El bot de WhatsApp que no se cae</title>
+<meta name="description" content="Shin-MD es un bot de WhatsApp multi-dispositivo con anti-ban nativo, __COMANDOS__ comandos en 15 categorías y 136 pruebas automatizadas. Node ≥ 22.5, licencia AGPL-3.0.">
+<meta name="theme-color" content="#05080C">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="../assets/logo.svg" type="image/svg+xml">
+<style>
+/* ============================================================
+   Shin-MD · hoja de estilo de la página (sin dependencias)
+   Todo vive aquí: cero peticiones externas, cero fuentes web,
+   cero librerías. Abre sin internet y se ve igual.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --fuente: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --verde: #4ADE80;
+  --verde-profundo: #16A34A;
+  --azul: #38BDF8;
+  --violeta: #A78BFA;
+  --ambar: #F0B429;
+  --rojo: #E05468;
+  --r: 16px;
+  --r-chico: 10px;
+  --ancho: 1140px;
+  --transicion: .28s cubic-bezier(.22,.61,.36,1);
+}
+
+html[data-tema="oscuro"] {
+  --fondo: #05080C;
+  --fondo-2: #080E15;
+  --panel: rgba(255,255,255,.028);
+  --panel-solido: #0B131B;
+  --borde: rgba(255,255,255,.085);
+  --borde-vivo: rgba(255,255,255,.17);
+  --tinta: #E9F2F9;
+  --tinta-2: #A5B9C7;
+  --tinta-3: #718796;
+  --acento: var(--verde);
+  --tinta-acento: #05230F;
+  --brillo-acento: rgba(74,222,128,.14);
+  --sombra: 0 22px 48px -30px rgba(0,0,0,.95);
+  --reja: rgba(255,255,255,.032);
+  --consola: #05090D;
+}
+
+html[data-tema="claro"] {
+  --fondo: #F6FAF7;
+  --fondo-2: #EFF6F1;
+  --panel: rgba(255,255,255,.75);
+  --panel-solido: #FFFFFF;
+  --borde: rgba(9,40,26,.10);
+  --borde-vivo: rgba(9,40,26,.20);
+  --tinta: #0A1720;
+  --tinta-2: #46596A;
+  --tinta-3: #64798A;
+  --acento: #12A15A;
+  --tinta-acento: #FFFFFF;
+  --brillo-acento: rgba(18,161,90,.14);
+  --sombra: 0 22px 44px -30px rgba(6,40,25,.35);
+  --reja: rgba(9,40,26,.045);
+  --consola: #0B131B;
+}
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--tinta);
+  font-family: var(--fuente);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Fondo: rejilla tenue + dos auras de color. Puro CSS, sin imágenes. */
+.fondo { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.fondo::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: linear-gradient(var(--reja) 1px, transparent 1px), linear-gradient(90deg, var(--reja) 1px, transparent 1px);
+  background-size: 30px 30px;
+  mask-image: radial-gradient(ellipse 100% 55% at 50% 0%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 100% 55% at 50% 0%, #000 20%, transparent 78%);
+}
+.aura { position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55; }
+.aura-1 { width: 620px; height: 620px; top: -260px; left: -140px; background: radial-gradient(circle, rgba(74,222,128,.30), transparent 66%); }
+.aura-2 { width: 700px; height: 700px; top: -180px; right: -220px; background: radial-gradient(circle, rgba(56,189,248,.20), transparent 66%); }
+html[data-tema="claro"] .aura { opacity: .75; }
+
+a { color: inherit; }
+img, svg { max-width: 100%; }
+
+.envoltura { width: 100%; max-width: var(--ancho); margin: 0 auto; padding: 0 24px; }
+
+/* ── Accesos rápidos / accesibilidad ───────────────────────── */
+.saltar {
+  position: absolute; left: -9999px; top: 0; z-index: 100;
+  background: var(--acento); color: var(--tinta-acento); padding: 12px 18px;
+  border-radius: 0 0 12px 0; font-weight: 700; text-decoration: none;
+}
+.saltar:focus { left: 0; }
+:focus-visible { outline: 2px solid var(--acento); outline-offset: 3px; border-radius: 6px; }
+
+/* ── Barra superior ────────────────────────────────────────── */
+.barra {
+  position: sticky; top: 0; z-index: 40;
+  border-bottom: 1px solid transparent;
+  transition: background var(--transicion), border-color var(--transicion), backdrop-filter var(--transicion);
+}
+.barra.pegada {
+  background: color-mix(in srgb, var(--fondo) 78%, transparent);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom-color: var(--borde);
+}
+.barra .envoltura { display: flex; align-items: center; gap: 18px; height: 68px; }
+.marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: -.02em; text-decoration: none; font-size: 17px; }
+.marca .sello-mini {
+  width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(150deg, #E4576B, #C6303F);
+  display: grid; place-items: center; box-shadow: 0 6px 18px -8px rgba(198,48,63,.9);
+}
+.marca .sello-mini svg { width: 20px; height: 20px; }
+.marca small { font-weight: 600; font-size: 11px; letter-spacing: .16em; color: var(--tinta-3); text-transform: uppercase; display: block; margin-top: -3px; }
+.nav { display: flex; gap: 4px; margin-left: auto; }
+.nav a {
+  padding: 9px 13px; border-radius: 10px; text-decoration: none;
+  color: var(--tinta-2); font-size: 14.5px; font-weight: 550; transition: color var(--transicion), background var(--transicion);
+}
+.nav a:hover { color: var(--tinta); background: var(--panel); }
+.barra .acciones { display: flex; gap: 8px; align-items: center; }
+
+.boton {
+  display: inline-flex; align-items: center; gap: 9px; justify-content: center;
+  padding: 11px 19px; border-radius: 12px; border: 1px solid var(--borde-vivo);
+  background: var(--panel); color: var(--tinta); font: inherit; font-size: 14.5px; font-weight: 650;
+  text-decoration: none; cursor: pointer; transition: transform var(--transicion), border-color var(--transicion), background var(--transicion);
+}
+.boton:hover { transform: translateY(-1px); border-color: var(--acento); }
+.boton.principal {
+  background: linear-gradient(180deg, var(--verde), var(--verde-profundo));
+  color: var(--tinta-acento); border-color: transparent;
+  box-shadow: 0 14px 30px -14px var(--brillo-acento), 0 0 0 1px rgba(255,255,255,.06) inset;
+}
+html[data-tema="claro"] .boton.principal { color: #fff; background: linear-gradient(180deg, #16B364, #0E8B4E); }
+.boton.principal:hover { box-shadow: 0 18px 36px -14px rgba(74,222,128,.45); }
+.boton.icono { padding: 10px; width: 40px; height: 40px; }
+.boton svg { width: 17px; height: 17px; }
+
+/* ── Portada ───────────────────────────────────────────────── */
+.portada { position: relative; padding: 78px 0 84px; }
+.portada .envoltura { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); gap: 56px; align-items: center; }
+.etiqueta-suave {
+  display: inline-flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 700;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--acento); margin: 0 0 20px;
+}
+.etiqueta-suave::before { content: ""; width: 26px; height: 1.5px; background: currentColor; opacity: .5; }
+
+h1 {
+  margin: 0 0 18px; font-size: clamp(2.4rem, 5.6vw, 4.1rem); line-height: 1.02;
+  letter-spacing: -.035em; font-weight: 830;
+}
+h1 .gradiente {
+  background: linear-gradient(100deg, var(--acento), var(--azul));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.entrada { font-size: clamp(1.02rem, 1.7vw, 1.2rem); color: var(--tinta-2); max-width: 34em; margin: 0 0 30px; }
+.entrada strong { color: var(--tinta); font-weight: 650; }
+.acciones-portada { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 30px; }
+
+.insignias { display: flex; flex-wrap: wrap; gap: 9px; margin: 0; padding: 0; list-style: none; }
+.insignias li {
+  display: inline-flex; align-items: center; gap: 9px; padding: 7px 14px 7px 11px;
+  border: 1px solid var(--borde); border-radius: 999px; background: var(--panel);
+  font-size: 13.2px; font-weight: 600; color: var(--tinta-2); white-space: nowrap;
+}
+.insignias svg { width: 15px; height: 15px; flex: none; }
+.insignias .v { color: var(--tinta); font-weight: 700; }
+
+/* Arte de la portada: anillos + sello */
+.arte { position: relative; display: grid; place-items: center; min-height: 340px; }
+.anillos, .anillos::before, .anillos::after {
+  position: absolute; border-radius: 50%; border: 1px solid var(--borde);
+}
+.anillos { width: 300px; height: 300px; }
+.anillos::before { content: ""; inset: -46px; border-color: color-mix(in srgb, var(--acento) 22%, transparent); }
+.anillos::after { content: ""; inset: -94px; border-color: color-mix(in srgb, var(--acento) 12%, transparent); }
+.orbita { position: absolute; inset: -94px; animation: girar 26s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .orbita { animation: none; } }
+.orbita i { position: absolute; top: 50%; left: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--acento); box-shadow: 0 0 16px 3px var(--brillo-acento); }
+.orbita i:last-child { top: 8%; left: 78%; width: 6px; height: 6px; background: var(--azul); box-shadow: 0 0 14px 3px rgba(56,189,248,.35); }
+@keyframes girar { to { transform: rotate(360deg); } }
+.sello-grande {
+  position: relative; width: 150px; height: 150px; border-radius: 26px;
+  background: linear-gradient(152deg, #E85C71, #C1303F);
+  display: grid; place-items: center;
+  box-shadow: 0 30px 60px -26px rgba(198,48,63,.85), 0 0 0 1px rgba(255,255,255,.10) inset;
+  transform: rotate(-6deg);
+}
+.sello-grande svg { width: 88px; height: 88px; }
+.arte .nota { position: absolute; bottom: 4px; font-family: var(--mono); font-size: 12px; color: var(--tinta-3); }
+
+/* ── Secciones ─────────────────────────────────────────────── */
+section { padding: 76px 0; }
+.cabecera-seccion { max-width: 40em; margin-bottom: 42px; }
+.cabecera-seccion h2 { margin: 0 0 12px; font-size: clamp(1.6rem, 3.2vw, 2.35rem); letter-spacing: -.028em; line-height: 1.12; font-weight: 780; }
+.cabecera-seccion p { margin: 0; color: var(--tinta-2); font-size: 1.03rem; }
+
+.divisor { display: flex; align-items: center; gap: 16px; color: var(--acento); opacity: .5; }
+.divisor::before, .divisor::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, transparent, currentColor, transparent); }
+.divisor span { width: 8px; height: 8px; transform: rotate(45deg); background: currentColor; border-radius: 2px; flex: none; }
+
+/* Rejillas y tarjetas */
+.rejilla { display: grid; gap: 18px; }
+.rejilla-3 { grid-template-columns: repeat(auto-fit, minmax(276px, 1fr)); }
+.tarjeta {
+  position: relative; padding: 26px; border: 1px solid var(--borde); border-radius: var(--r);
+  background: var(--panel); overflow: hidden; transition: transform var(--transicion), border-color var(--transicion), box-shadow var(--transicion);
+}
+.tarjeta::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(340px circle at var(--mx, 50%) var(--my, 0%), var(--brillo-acento), transparent 62%);
+  opacity: 0; transition: opacity var(--transicion);
+}
+.tarjeta:hover { transform: translateY(-3px); border-color: var(--borde-vivo); box-shadow: var(--sombra); }
+.tarjeta:hover::after { opacity: 1; }
+.tarjeta h3 { margin: 15px 0 9px; font-size: 1.13rem; letter-spacing: -.015em; font-weight: 720; }
+.tarjeta p { margin: 0; color: var(--tinta-2); font-size: .96rem; }
+.tarjeta .detalle { margin-top: 14px; padding-top: 13px; border-top: 1px dashed var(--borde); font-family: var(--mono); font-size: 12.4px; color: var(--tinta-3); }
+.tile {
+  width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+  background: var(--brillo-acento); border: 1px solid color-mix(in srgb, var(--acento) 30%, transparent);
+  color: var(--acento);
+}
+.tile svg { width: 21px; height: 21px; }
+.tile.azul { color: var(--azul); background: rgba(56,189,248,.13); border-color: rgba(56,189,248,.3); }
+.tile.violeta { color: var(--violeta); background: rgba(167,139,250,.13); border-color: rgba(167,139,250,.3); }
+.tile.ambar { color: var(--ambar); background: rgba(240,180,41,.13); border-color: rgba(240,180,41,.3); }
+.tile.rojo { color: var(--rojo); background: rgba(224,84,104,.13); border-color: rgba(224,84,104,.3); }
+
+/* ── Por dentro: arquitectura + consola ────────────────────── */
+.dentro { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.capas { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+.capas li { display: grid; grid-template-columns: 118px 1fr; gap: 16px; padding: 15px 18px; border: 1px solid var(--borde); border-radius: var(--r-chico); background: var(--panel); transition: border-color var(--transicion); }
+.capas li:hover { border-color: var(--borde-vivo); }
+.capas b { font-family: var(--mono); font-size: 12.6px; color: var(--acento); letter-spacing: .02em; }
+.capas span { color: var(--tinta-2); font-size: .94rem; }
+
+.consola { border: 1px solid var(--borde); border-radius: var(--r); background: var(--consola); overflow: hidden; box-shadow: var(--sombra); }
+.consola-barra { display: flex; align-items: center; gap: 8px; padding: 12px 15px; border-bottom: 1px solid rgba(255,255,255,.07); background: rgba(255,255,255,.02); }
+.consola-barra i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+.consola-barra i:nth-child(1) { background: #FF5F57; } .consola-barra i:nth-child(2) { background: #FEBC2E; } .consola-barra i:nth-child(3) { background: #28C840; }
+.consola-barra span { margin-left: 8px; font-family: var(--mono); font-size: 12px; color: #7D90A0; }
+.consola pre { margin: 0; padding: 18px; font-family: var(--mono); font-size: 12.9px; line-height: 1.85; color: #C6D6E2; overflow-x: auto; }
+.consola .ok { color: #4ADE80; } .consola .av { color: #F0B429; } .consola .az { color: #38BDF8; } .consola .gy { color: #7D90A0; }
+.consola .cursor { display: inline-block; width: 8px; height: 15px; background: #4ADE80; vertical-align: -3px; animation: parpadeo 1.1s steps(2) infinite; }
+@keyframes parpadeo { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .consola .cursor { animation: none; } }
+
+/* ── Comandos ──────────────────────────────────────────────── */
+.herramientas { position: sticky; top: 68px; z-index: 20; padding: 16px 0; margin-bottom: 8px; background: color-mix(in srgb, var(--fondo) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--borde); }
+.buscador { position: relative; max-width: 460px; }
+.buscador svg { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); width: 17px; height: 17px; color: var(--tinta-3); pointer-events: none; }
+.buscador input {
+  width: 100%; padding: 13px 90px 13px 44px; border-radius: 12px; border: 1px solid var(--borde);
+  background: var(--panel-solido); color: var(--tinta); font: inherit; font-size: 15px; transition: border-color var(--transicion), box-shadow var(--transicion);
+}
+.buscador input::placeholder { color: var(--tinta-3); }
+.buscador input:focus { outline: none; border-color: var(--acento); box-shadow: 0 0 0 4px var(--brillo-acento); }
+.buscador kbd {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 11.5px;
+  color: var(--tinta-3); border: 1px solid var(--borde); border-bottom-width: 2px; border-radius: 6px; padding: 3px 7px; background: var(--panel);
+}
+.buscador input:focus ~ kbd { opacity: 0; }
+.filtros { display: flex; gap: 8px; overflow-x: auto; padding: 14px 0 2px; scrollbar-width: none; }
+.filtros::-webkit-scrollbar { display: none; }
+.filtros button {
+  display: inline-flex; align-items: center; gap: 8px; flex: none;
+  padding: 8px 14px; border-radius: 999px; border: 1px solid var(--borde); background: var(--panel);
+  color: var(--tinta-2); font: inherit; font-size: 13.4px; font-weight: 600; cursor: pointer; transition: all var(--transicion);
+}
+.filtros button:hover { color: var(--tinta); border-color: var(--borde-vivo); }
+.filtros button[aria-pressed="true"] { background: var(--acento); border-color: transparent; color: var(--tinta-acento); }
+.filtros button svg { width: 15px; height: 15px; }
+.filtros .cuenta { font-family: var(--mono); font-size: 11.5px; opacity: .75; }
+
+.resumen { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 16px; color: var(--tinta-3); font-size: 14px; }
+.resumen b { color: var(--tinta); font-size: 17px; }
+
+.lista-comandos { display: grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 10px; }
+.cmd {
+  display: flex; gap: 13px; align-items: flex-start; padding: 13px 15px;
+  border: 1px solid var(--borde); border-radius: 12px; background: var(--panel);
+  transition: border-color var(--transicion), background var(--transicion), transform var(--transicion);
+}
+.cmd:hover { border-color: color-mix(in srgb, var(--acento) 45%, transparent); background: var(--panel-solido); transform: translateY(-2px); }
+.cmd .punto { flex: none; margin-top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--acento); box-shadow: 0 0 10px 1px var(--brillo-acento); }
+.cmd code { font-family: var(--mono); font-size: 14.2px; font-weight: 650; color: var(--tinta); }
+.cmd code .prefijo { color: var(--acento); }
+.cmd p { margin: 3px 0 0; font-size: 12.9px; color: var(--tinta-3); line-height: 1.5; }
+.cmd .alias { font-family: var(--mono); font-size: 11.4px; color: var(--tinta-3); margin-top: 6px; }
+.cmd .alias b { color: var(--tinta-2); font-weight: 600; }
+.vacio { padding: 46px 24px; text-align: center; border: 1px dashed var(--borde); border-radius: var(--r); color: var(--tinta-2); }
+.vacio code { font-family: var(--mono); color: var(--acento); }
+.mas-comandos { margin-top: 22px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+/* ── Instalación ───────────────────────────────────────────── */
+.pestanas { display: flex; gap: 6px; margin-bottom: 20px; padding: 4px; border: 1px solid var(--borde); border-radius: 13px; background: var(--panel); width: fit-content; }
+.pestanas button {
+  padding: 9px 18px; border: 0; border-radius: 9px; background: transparent; color: var(--tinta-2);
+  font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: all var(--transicion);
+}
+.pestanas button[aria-selected="true"] { background: var(--acento); color: var(--tinta-acento); }
+.pasos { display: grid; gap: 13px; }
+.paso { display: grid; grid-template-columns: 34px 1fr; gap: 15px; align-items: start; }
+.paso .num {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  border: 1px solid color-mix(in srgb, var(--acento) 40%, transparent); background: var(--brillo-acento);
+  color: var(--acento); font-family: var(--mono); font-size: 13.5px; font-weight: 700;
+}
+.paso h4 { margin: 5px 0 9px; font-size: 1rem; font-weight: 680; }
+.bloque { position: relative; border: 1px solid var(--borde); border-radius: 12px; background: var(--consola); overflow: hidden; }
+.bloque pre { margin: 0; padding: 15px 58px 15px 17px; font-family: var(--mono); font-size: 13px; line-height: 1.75; color: #CBD9E4; overflow-x: auto; }
+.bloque .c { color: #7D90A0; } .bloque .v { color: #4ADE80; } .bloque .a { color: #F0B429; }
+.copiar {
+  position: absolute; top: 9px; right: 9px; width: 34px; height: 34px; display: grid; place-items: center;
+  border: 1px solid rgba(255,255,255,.12); border-radius: 9px; background: rgba(255,255,255,.05); color: #C6D6E2;
+  cursor: pointer; transition: all var(--transicion);
+}
+.copiar:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.25); }
+.copiar.hecho { color: #4ADE80; border-color: rgba(74,222,128,.5); background: rgba(74,222,128,.12); }
+.copiar svg { width: 16px; height: 16px; }
+.nota-instalar { margin-top: 16px; padding: 15px 18px; border-left: 3px solid var(--acento); border-radius: 0 12px 12px 0; background: var(--panel); color: var(--tinta-2); font-size: .94rem; }
+.nota-instalar b { color: var(--tinta); }
+.aviso {
+  display: flex; gap: 15px; padding: 20px 22px; border: 1px solid color-mix(in srgb, var(--rojo) 35%, transparent);
+  border-radius: var(--r); background: color-mix(in srgb, var(--rojo) 8%, transparent); margin-bottom: 26px;
+}
+.aviso svg { width: 22px; height: 22px; color: var(--rojo); flex: none; margin-top: 2px; }
+.aviso h3 { margin: 0 0 6px; font-size: 1.02rem; color: var(--tinta); }
+.aviso p { margin: 0; color: var(--tinta-2); font-size: .94rem; }
+
+/* ── Panel local ───────────────────────────────────────────── */
+.rutas { display: grid; gap: 10px; }
+.ruta { display: grid; grid-template-columns: 74px 1fr auto; gap: 14px; align-items: center; padding: 14px 17px; border: 1px solid var(--borde); border-radius: 12px; background: var(--panel); }
+.metodo { font-family: var(--mono); font-size: 11.5px; font-weight: 700; text-align: center; padding: 4px 0; border-radius: 6px; letter-spacing: .08em; }
+.metodo.get { color: var(--acento); background: var(--brillo-acento); }
+.ruta code { font-family: var(--mono); font-size: 13.6px; color: var(--tinta); }
+.ruta span { color: var(--tinta-3); font-size: .9rem; text-align: right; }
+.dos-columnas { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 22px; align-items: start; }
+
+/* ── Licencia ──────────────────────────────────────────────── */
+.tabla { width: 100%; border-collapse: collapse; font-size: .95rem; }
+.tabla th, .tabla td { padding: 14px 16px; text-align: left; border-bottom: 1px solid var(--borde); vertical-align: top; }
+.tabla th { font-size: 12.4px; text-transform: uppercase; letter-spacing: .13em; color: var(--tinta-3); font-weight: 700; }
+.tabla td:first-child { color: var(--tinta); font-weight: 650; white-space: nowrap; }
+.tabla td { color: var(--tinta-2); }
+.tabla tr:last-child td { border-bottom: 0; }
+.reglas { margin: 26px 0 0; padding: 0; list-style: none; display: grid; gap: 12px; counter-reset: regla; }
+.reglas li { position: relative; padding-left: 44px; color: var(--tinta-2); font-size: .95rem; }
+.reglas li::before {
+  counter-increment: regla; content: counter(regla);
+  position: absolute; left: 0; top: 1px; width: 28px; height: 28px; border-radius: 9px;
+  display: grid; place-items: center; font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--acento); background: var(--brillo-acento); border: 1px solid color-mix(in srgb, var(--acento) 32%, transparent);
+}
+.reglas li b { color: var(--tinta); }
+.huella { margin-top: 26px; padding: 20px 22px; border: 1px dashed var(--borde); border-radius: var(--r); background: var(--panel); }
+.huella h3 { margin: 0 0 12px; font-size: 1rem; }
+.huella code { font-family: var(--mono); font-size: 12.8px; color: var(--tinta-2); }
+.huella code b { color: var(--acento); font-weight: 600; }
+
+/* ── Pie ───────────────────────────────────────────────────── */
+.pie { padding: 54px 0 40px; border-top: 1px solid var(--borde); margin-top: 30px; }
+.pie .envoltura { display: flex; flex-wrap: wrap; gap: 26px; align-items: center; justify-content: space-between; }
+.pie p { margin: 0; color: var(--tinta-3); font-size: .9rem; }
+.pie .enlaces { display: flex; flex-wrap: wrap; gap: 8px; }
+.pie a.enlace { padding: 8px 14px; border: 1px solid var(--borde); border-radius: 999px; text-decoration: none; color: var(--tinta-2); font-size: 13.4px; font-weight: 600; transition: all var(--transicion); }
+.pie a.enlace:hover { color: var(--tinta); border-color: var(--acento); }
+
+/* Aparición al hacer scroll (solo si hay JS y no molesta) */
+html.con-js .aparece { opacity: 0; transform: translateY(16px); transition: opacity .7s ease, transform .7s cubic-bezier(.22,.61,.36,1); }
+html.con-js .aparece.visible { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  html.con-js .aparece { opacity: 1; transform: none; transition: none; }
+}
+
+/* ── Adaptación a móvil ────────────────────────────────────── */
+@media (max-width: 980px) {
+  .portada .envoltura { grid-template-columns: 1fr; gap: 40px; }
+  .arte { min-height: 260px; order: -1; }
+  .sello-grande { width: 116px; height: 116px; } .sello-grande svg { width: 66px; height: 66px; }
+  .anillos { width: 220px; height: 220px; }
+  .dentro, .dos-columnas { grid-template-columns: 1fr; }
+  .nav { display: none; }
+}
+@media (max-width: 620px) {
+  .envoltura { padding: 0 18px; }
+  section { padding: 58px 0; }
+  .portada { padding: 46px 0 56px; }
+  .barra .acciones .texto-largo { display: none; }
+  .capas li { grid-template-columns: 1fr; gap: 4px; }
+  .ruta { grid-template-columns: 62px 1fr; } .ruta span { grid-column: 1 / -1; text-align: left; }
+  .pie .envoltura { flex-direction: column; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+<div class="fondo" aria-hidden="true">
+  <div class="aura aura-1"></div>
+  <div class="aura aura-2"></div>
+</div>
+
+<a class="saltar" href="#contenido">Saltar al contenido</a>
+
+<header class="barra" id="barra">
+  <div class="envoltura">
+    <a class="marca" href="#arriba" aria-label="Shin-MD, inicio">
+      <span class="sello-mini" aria-hidden="true">
+        <svg viewBox="0 0 100 100" fill="#fff"><path d="M15 20h28v60H15z" opacity=".95"/><path d="M57 20h28v60H57z" opacity=".95"/></svg>
+      </span>
+      <span>Shin-MD<small>反魂 · multi-device</small></span>
+    </a>
+    <nav class="nav" aria-label="Secciones">
+      <a href="#diferencias">Diferencias</a>
+      <a href="#dentro">Por dentro</a>
+      <a href="#comandos">Comandos</a>
+      <a href="#instalar">Instalar</a>
+      <a href="#licencia">Licencia</a>
+    </nav>
+    <div class="acciones">
+      <button class="boton icono" id="tema" type="button" aria-label="Cambiar entre tema claro y oscuro" title="Cambiar tema">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+      </button>
+      <a class="boton principal" href="https://github.com/riokuroxi-svg/Shin-MD" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.1-1.47-1.1-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.88 1.52 2.34 1.08 2.9.82.1-.65.35-1.08.63-1.33-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.11-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 015 0c1.9-1.29 2.74-1.02 2.74-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0012 2z"/></svg>
+        <span class="texto-largo">GitHub</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="contenido">
+  <div id="arriba"></div>
+
+  <!-- ── Portada ─────────────────────────────────────────────── -->
+  <section class="portada" aria-labelledby="titulo-portada">
+    <div class="envoltura">
+      <div>
+        <p class="etiqueta-suave">El renacer de un bot</p>
+        <h1 id="titulo-portada">El bot de WhatsApp que <span class="gradiente">no se cae</span>.</h1>
+        <p class="entrada">
+          Shin-MD es un bot multi-dispositivo escrito en JavaScript moderno, con
+          <strong>anti-ban nativo</strong>, sesión que no se borra por cortes de red y
+          <strong>__COMANDOS__ comandos</strong> en 15 categorías. Sin servicios de terceros en medio.
+        </p>
+        <div class="acciones-portada">
+          <a class="boton principal" href="#instalar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 20h16"/></svg>
+            Instalar en 5 minutos
+          </a>
+          <a class="boton" href="#comandos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+            Ver los __COMANDOS__ comandos
+          </a>
+        </div>
+        <ul class="insignias">
+          <li><svg viewBox="0 0 20 20" fill="none" stroke="#4ADE80" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="8" stroke-opacity=".25"/><path d="M6.4 10.2l2.5 2.5 4.7-5"/></svg><span class="v">__PRUEBAS__/__PRUEBAS_TOTAL__</span> pruebas</li>
+          <li><svg viewBox="0 0 20 20" fill="none" stroke="#4ADE80" stroke-width="1.8" stroke-linejoin="round"><path d="M11.4 2.6L5 11.4h3.6l-1.5 6L14.5 8.6H11z"/></svg><span class="v">__COMANDOS__</span> comandos</li>
+          <li><svg viewBox="0 0 20 20" fill="none" stroke="#38BDF8" stroke-width="1.8" stroke-linejoin="round"><path d="M10 2.6l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L2.2 8.3l5.4-.8z"/></svg><span class="v">15</span> categorías</li>
+          <li><svg viewBox="0 0 20 20" fill="none" stroke="#A78BFA" stroke-width="1.8" stroke-linejoin="round"><path d="M10 2.4l6 2.2v5c0 3.5-2.5 6.4-6 7.4-3.5-1-6-3.9-6-7.4v-5z"/><path d="M7.6 9.8l1.8 1.8 3-3.2" stroke-linecap="round"/></svg>anti-ban <span class="v">nativo</span></li>
+          <li><svg viewBox="0 0 20 20" fill="none" stroke="#5FA04E" stroke-width="1.8" stroke-linecap="round"><path d="M10 2v16M6 6l4-4 4 4" /><path d="M4 18h12"/></svg>Node <span class="v">≥ __NODE__</span></li>
+          <li><svg viewBox="0 0 20 20" fill="none" stroke="#F0B429" stroke-width="1.7" stroke-linecap="round"><path d="M10 2.6v14.8M5.4 18h9.2M3.6 5.4h12.8"/><path d="M1.4 10.4a2.6 2.6 0 005.2 0M13.4 10.4a2.6 2.6 0 005.2 0"/></svg><span class="v">AGPL-3.0</span></li>
+        </ul>
+      </div>
+
+      <div class="arte" aria-hidden="true">
+        <div class="anillos"></div>
+        <div class="orbita"><i></i><i></i></div>
+        <div class="sello-grande">
+          <svg viewBox="0 0 100 100" fill="#fff"><path d="M12 18h34v64H12z"/><path d="M58 18h34v64H58z"/></svg>
+        </div>
+        <p class="nota">反魂 · shin · renacer</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="envoltura"><div class="divisor" role="presentation"><span></span></div></div>
+
+  <!-- ── Diferencias ─────────────────────────────────────────── -->
+  <section id="diferencias" aria-labelledby="t-diferencias">
+    <div class="envoltura">
+      <div class="cabecera-seccion aparece">
+        <h2 id="t-diferencias">No es un «delay aleatorio». Es infraestructura.</h2>
+        <p>Lo que marca la diferencia frente a un bot de un solo archivo: decisiones tomadas pensando en que el bot lleve meses encendido sin que nadie lo mire.</p>
+      </div>
+
+      <div class="rejilla rejilla-3">
+        <article class="tarjeta aparece">
+          <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M12 3l7.5 2.7v6.1c0 4.4-3.1 8-7.5 9.2-4.4-1.2-7.5-4.8-7.5-9.2V5.7z"/><path d="M9 12l2.2 2.2 4.2-4.4" stroke-linecap="round"/></svg></div>
+          <h3>Anti-ban de verdad</h3>
+          <p>Jitter gaussiano (no un <code>random</code> de juguete), calentamiento diario por número y un monitor de riesgo de 0 a 100 que pausa los envíos solo, sin apagar el bot.</p>
+          <p class="detalle">σ 0.25 · 1200 ms base · warm-up 20→500/día</p>
+        </article>
+
+        <article class="tarjeta aparece">
+          <div class="tile azul"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3v10c0 1.7-3.6 3-8 3s-8-1.3-8-3z"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></div>
+          <h3>Tu sesión no se borra sola</h3>
+          <p>Un micro-corte de red (408, 428, 503) no es una sesión muerta: el bot reintenta en modo paciente. Solo se limpia cuando WhatsApp dice que la sesión ya no existe.</p>
+          <p class="detalle">SQLite con WAL · chmod 600 · checkpoint al arrancar</p>
+        </article>
+
+        <article class="tarjeta aparece">
+          <div class="tile violeta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="8" cy="7" r="2"/><circle cx="14" cy="12" r="2"/><circle cx="11" cy="17" r="2"/></svg></div>
+          <h3>Cola de envío con prioridad</h3>
+          <p>Nada sale «a lo loco»: los mensajes van en fila, con reintento. Los comandos críticos (menú, ping, dueño) se cuelan al frente y responden al instante.</p>
+          <p class="detalle">serial + reintento + ventana de prioridad</p>
+        </article>
+
+        <article class="tarjeta aparece">
+          <div class="tile ambar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M7 9h7M7 13h10M7 17h5"/></svg></div>
+          <h3>Menú nativo, no texto plano</h3>
+          <p>Tarjeta con botones y lista desplegable por categorías, y si el WhatsApp del usuario no sabe mostrarla, el bot cae solo a un menú clásico legible.</p>
+          <p class="detalle">MENU_STYLE=auto · text</p>
+        </article>
+
+        <article class="tarjeta aparece">
+          <div class="tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3M8.5 9.5h7M8.5 13h4"/></svg></div>
+          <h3>Panel local con contraseña</h3>
+          <p>Estado, riesgo, cola, grupos y memoria en tu propio navegador. Solo escucha en tu máquina salvo que lo abras a la red, y entonces exige contraseña y bloquea la fuerza bruta.</p>
+          <p class="detalle">127.0.0.1:3000 · /health · /metrics</p>
+        </article>
+
+        <article class="tarjeta aparece">
+          <div class="tile azul"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12.5l2.2 2.2L15.8 10"/><path d="M12 3l7.5 2.7v6.1c0 4.4-3.1 8-7.5 9.2-4.4-1.2-7.5-4.8-7.5-9.2V5.7z"/></svg></div>
+          <h3>__PRUEBAS__ pruebas y CI en cada push</h3>
+          <p>No son pruebas de adorno: una de ellas <strong>arranca el bot de verdad</strong> y comprueba que entrega el código de vinculación. Si un commit rompe algo, GitHub lo marca.</p>
+          <p class="detalle">__ARCHIVOS__ archivos · runner propio, cero dependencias</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Por dentro ──────────────────────────────────────────── -->
+  <section id="dentro" aria-labelledby="t-dentro">
+    <div class="envoltura">
+      <div class="cabecera-seccion aparece">
+        <h2 id="t-dentro">Por dentro: separado, probado, mirado de cerca.</h2>
+        <p>Cada cosa en su capa. Eso es lo que permite arreglar algo sin miedo a romper otra cosa — y lo que hace que el bot arranque en segundos.</p>
+      </div>
+
+      <div class="dentro">
+        <ul class="capas aparece">
+          <li><b>core/</b><span>Ciclo de vida, conexión con WhatsApp, autenticación y el motor anti-ban.</span></li>
+          <li><b>network/</b><span>Cola de envío con prioridad y monitor de riesgo.</span></li>
+          <li><b>commands/</b><span>Cargador dinámico, router, comandos interactivos y permisos.</span></li>
+          <li><b>services/</b><span>Logger con rotación, descargador multifuente y watchdog.</span></li>
+          <li><b>storage/</b><span>Base de datos con migraciones y caché con vencimiento.</span></li>
+          <li><b>web/</b><span>El panel local (estado, salud, métricas).</span></li>
+          <li><b>cmds/</b><span>Los 210 comandos, cargados solos desde 18 carpetas.</span></li>
+        </ul>
+
+        <div class="consola aparece" aria-label="Ejemplo de arranque del bot">
+          <div class="consola-barra" aria-hidden="true"><i></i><i></i><i></i><span>shin-md — arranque real</span></div>
+          <pre><span class="gy">$</span> npm start
+
+  <span class="ok">✓</span> __PRUEBAS__/__PRUEBAS_TOTAL__ pruebas · __ARCHIVOS__ archivos
+  <span class="ok">✓</span> 210 comandos únicos · 744 entradas con aliases
+  <span class="ok">✓</span> router listo — prefijos [. / #]
+  <span class="az">◐</span> código de emparejamiento: 7QK4-2ZP9
+  <span class="av">◑</span> calentamiento: 20 mensajes/día (día 1 de 7)
+  <span class="ok">✓</span> conectado · cola en 0 · riesgo 4/100
+
+<span class="gy">escribe</span> .menu <span class="gy">en WhatsApp para empezar</span> <span class="cursor"></span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="envoltura"><div class="divisor" role="presentation"><span></span></div></div>
+
+  <!-- ── Comandos ────────────────────────────────────────────── -->
+  <section id="comandos" aria-labelledby="t-comandos">
+    <div class="envoltura">
+      <div class="cabecera-seccion aparece">
+        <h2 id="t-comandos">__COMANDOS__ comandos, todos aquí.</h2>
+        <p>Escribe el nombre, filtra por categoría o busca por lo que hace. La misma lista que verás dentro de WhatsApp con <code>.menu</code>.</p>
+      </div>
+    </div>
+
+    <div class="herramientas">
+      <div class="envoltura">
+        <div class="buscador">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+          <input id="buscar" type="search" placeholder="Buscar: descargar, música, grupo, apuestas…" aria-label="Buscar comandos" autocomplete="off">
+          <kbd>/</kbd>
+        </div>
+        <div class="filtros" id="filtros" role="group" aria-label="Filtrar por categoría"></div>
+      </div>
+    </div>
+
+    <div class="envoltura">
+      <p class="resumen" aria-live="polite"><b id="cuenta">__COMANDOS__</b> <span id="cuenta-texto">comandos en total · 744 nombres con alias</span></p>
+      <div class="lista-comandos" id="lista"></div>
+      <div class="vacio" id="vacio" hidden>
+        <p>Nada por aquí con <code id="termino"></code>.</p>
+        <button class="boton" id="limpiar" type="button">Ver todos otra vez</button>
+      </div>
+      <div class="mas-comandos">
+        <span id="resto" class="resumen" style="margin:0"></span>
+        <button class="boton" id="vermas" type="button">Mostrar más</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Instalación ─────────────────────────────────────────── -->
+  <section id="instalar" aria-labelledby="t-instalar">
+    <div class="envoltura">
+      <div class="cabecera-seccion aparece">
+        <h2 id="t-instalar">Instalarlo es copiar, pegar y escanear un código.</h2>
+        <p>Funciona en un teléfono con Termux y en cualquier servidor con Node 22.5 o superior. No hace falta saber programar.</p>
+      </div>
+
+      <div class="aviso aparece">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17H2.5z"/><path d="M12 9.5v5M12 17.5h.01"/></svg>
+        <div>
+          <h3>Usa un número secundario</h3>
+          <p>WhatsApp puede sancionar cuentas que automatizan mensajes. Shin-MD trae el anti-ban más cuidado que existe en su categoría, pero ningún bot es inmune: no arriesgues tu número personal.</p>
+        </div>
+      </div>
+
+      <div class="pestanas" role="tablist" aria-label="Método de instalación">
+        <button role="tab" id="tab-termux" aria-selected="true" aria-controls="panel-termux" type="button">Termux (Android)</button>
+        <button role="tab" id="tab-vps" aria-selected="false" aria-controls="panel-vps" type="button">Servidor / VPS</button>
+      </div>
+
+      <div id="panel-termux" role="tabpanel" aria-labelledby="tab-termux" class="pasos">
+        <div class="paso aparece">
+          <span class="num">1</span>
+          <div>
+            <h4>Prepara Termux</h4>
+            <div class="bloque"><button class="copiar" type="button" aria-label="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2 2 0 0013 3.5H6a2 2 0 00-2 2v7a2 2 0 002 2"/></svg></button><pre><span class="c"># instala lo necesario</span>
+pkg update &amp;&amp; pkg upgrade -y
+pkg install -y git nodejs python ffmpeg</pre></div>
+          </div>
+        </div>
+        <div class="paso aparece">
+          <span class="num">2</span>
+          <div>
+            <h4>Descarga el bot e instala sus dependencias</h4>
+            <div class="bloque"><button class="copiar" type="button" aria-label="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2 2 0 0013 3.5H6a2 2 0 00-2 2v7a2 2 0 002 2"/></svg></button><pre>git clone https://github.com/riokuroxi-svg/Shin-MD
+cd Shin-MD
+npm install</pre></div>
+          </div>
+        </div>
+        <div class="paso aparece">
+          <span class="num">3</span>
+          <div>
+            <h4>Configura tu número</h4>
+            <div class="bloque"><button class="copiar" type="button" aria-label="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2 2 0 0013 3.5H6a2 2 0 00-2 2v7a2 2 0 002 2"/></svg></button><pre>cp .env.example .env
+nano .env</pre></div>
+            <p class="nota-instalar">Rellena <b>PAIRING_NUMBER</b> con tu número (solo dígitos, con lada: <code>521...</code>) y deja <b>PAIRING_METHOD=code</b>.</p>
+          </div>
+        </div>
+        <div class="paso aparece">
+          <span class="num">4</span>
+          <div>
+            <h4>Enciende el bot y vincula</h4>
+            <div class="bloque"><button class="copiar" type="button" aria-label="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2 2 0 0013 3.5H6a2 2 0 00-2 2v7a2 2 0 002 2"/></svg></button><pre>npm start -- --code</pre></div>
+            <p class="nota-instalar">Te mostrará un código de 8 caracteres (por ejemplo <b>7QK4-2ZP9</b>). En WhatsApp: <b>Dispositivos vinculados → Vincular con número de teléfono</b> y lo escribes. ¿Prefieres QR? Usa <code>npm start -- --qr</code>.</p>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-vps" role="tabpanel" aria-labelledby="tab-vps" class="pasos" hidden>
+        <div class="paso aparece">
+          <span class="num">1</span>
+          <div>
+            <h4>Instala Node 22 en el servidor</h4>
+            <div class="bloque"><button class="copiar" type="button" aria-label="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2 2 0 0013 3.5H6a2 2 0 00-2 2v7a2 2 0 002 2"/></svg></button><pre><span class="c"># Debian / Ubuntu</span>
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs ffmpeg git</pre></div>
+          </div>
+        </div>
+        <div class="paso aparece">
+          <span class="num">2</span>
+          <div>
+            <h4>Descarga, configura y arranca</h4>
+            <div class="bloque"><button class="copiar" type="button" aria-label="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2 2 0 0013 3.5H6a2 2 0 00-2 2v7a2 2 0 002 2"/></svg></button><pre>git clone https://github.com/riokuroxi-svg/Shin-MD
+cd Shin-MD &amp;&amp; npm install
+cp .env.example .env &amp;&amp; nano .env
+npm start</pre></div>
+          </div>
+        </div>
+        <div class="paso aparece">
+          <span class="num">3</span>
+          <div>
+            <h4>Que siga vivo al cerrar la terminal</h4>
+            <div class="bloque"><button class="copiar" type="button" aria-label="Copiar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 5.5A2 2 0 0013 3.5H6a2 2 0 00-2 2v7a2 2 0 002 2"/></svg></button><pre><span class="c"># con pm2</span>
+npm install -g pm2
+pm2 start index.js --name shin-md -- --code
+pm2 save &amp;&amp; pm2 startup</pre></div>
+            <p class="nota-instalar">Sin terminal interactiva el bot toma el número del <code>.env</code> solo: nunca se queda esperando el teclado.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Panel local ─────────────────────────────────────────── -->
+  <section id="panel" aria-labelledby="t-panel">
+    <div class="envoltura">
+      <div class="dos-columnas">
+        <div class="aparece">
+          <div class="cabecera-seccion" style="margin-bottom:22px">
+            <h2 id="t-panel">Míralo por dentro desde el navegador.</h2>
+            <p>Con el bot encendido, abre el panel: estado, riesgo de sanción, cola, grupos conectados y memoria del proceso.</p>
+          </div>
+          <div class="rutas">
+            <div class="ruta"><span class="metodo get">GET</span><code>/</code><span>estado general</span></div>
+            <div class="ruta"><span class="metodo get">GET</span><code>/health</code><span>riesgo, cola, grupos, memoria</span></div>
+            <div class="ruta"><span class="metodo get">GET</span><code>/metrics</code><span>métricas del proceso</span></div>
+          </div>
+        </div>
+        <div class="tarjeta aparece">
+          <h3 style="margin-top:0">Seguridad del panel</h3>
+          <p>Por defecto solo escucha en <code>127.0.0.1</code>: nadie de tu red lo ve. Si lo expones (<code>LOOPBACK=0</code>) exige contraseña, valida el usuario <code>admin</code> y bloquea a quien insista: 10 intentos fallidos y esa IP espera 5 minutos.</p>
+          <ul class="reglas" style="margin-top:20px">
+            <li><b>Contraseña obligatoria</b> para salir de tu máquina; sin ella, vuelve solo a localhost.</li>
+            <li><b>Nada de ficheros sensibles</b>: rutas tipo <code>../.env</code> o logs responden 404 sin filtrar información.</li>
+            <li><b>Sin secretos en el código</b>: tokens y claves viven en tu <code>.env</code>, fuera del repositorio.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="envoltura"><div class="divisor" role="presentation"><span></span></div></div>
+
+  <!-- ── Licencia ────────────────────────────────────────────── -->
+  <section id="licencia" aria-labelledby="t-licencia">
+    <div class="envoltura">
+      <div class="cabecera-seccion aparece">
+        <h2 id="t-licencia">Libre para usar, con reglas claras.</h2>
+        <p>Sin ambigüedades: qué puedes hacer gratis, qué es comercial y qué no se hereda nunca.</p>
+      </div>
+
+      <div class="tarjeta aparece" style="padding:8px 6px">
+        <table class="tabla">
+          <thead><tr><th>Capa</th><th>Licencia</th><th>Qué significa</th></tr></thead>
+          <tbody>
+            <tr><td>Núcleo (Shin-MD)</td><td>AGPL-3.0-only</td><td>Libre para usar, modificar y redistribuir. Todo derivado debe seguir siendo AGPL y publicar su código.</td></tr>
+            <tr><td>Extensiones y plugins</td><td>Comercial propia</td><td>Se pueden vender y comprar; su código no es AGPL mientras solo hablen con la API de plugins.</td></tr>
+            <tr><td>Soporte y servicios</td><td>Contrato aparte</td><td>Instalación, hosting, mantenimiento y desarrollo a medida.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ol class="reglas aparece">
+        <li><b>El núcleo es y será libre.</b> Nadie puede vender el bot ni un fork como software cerrado: la AGPL obliga a entregar el código fuente.</li>
+        <li><b>La marca no se hereda.</b> Los derivados, aunque sean AGPL legítimos, no pueden llamarse <i>Shin-MD</i> ni usar 反魂.</li>
+        <li><b>Atribución obligatoria.</b> Los forks conservan <code>LICENSE</code>, <code>NOTICE</code> y los headers de cada archivo, y muestran el crédito en <code>.menu</code> y <code>.owner</code>.</li>
+        <li><b>El bot lo comprueba.</b> Si alguien borra <code>LICENSE</code> o <code>NOTICE</code>, no arranca. No es un virus: es la licencia defendiéndose.</li>
+      </ol>
+
+      <div class="huella aparece">
+        <h3>Huella de Shin-MD</h3>
+        <p style="margin:0 0 12px;color:var(--tinta-2);font-size:.94rem">El motor anti-ban tiene una combinación de parámetros propia. Si la ves exacta en otro bot, es un derivado de Shin-MD y debe cumplir la atribución:</p>
+        <code><b>shinJitter</b> gaussiano σ 0.25 · base <b>1200 ms</b> (400–5000, +25 ms por carácter) · perfil nuevo <b>1500 ms</b> / veterano <b>700 ms</b> · penalización <b>×1.5</b> a contactos nuevos · warm-up <b>20→500</b> mensajes/día en <b>7 días</b></code>
+      </div>
+    </div>
+  </section>
+
+  <footer class="pie">
+    <div class="envoltura">
+      <div>
+        <p><b style="color:var(--tinta)">Shin-MD</b> · hecho por <a href="https://github.com/riokuroxi-svg" style="color:var(--acento)">riokuroxi-svg</a> 🇲🇽 · AGPL-3.0-only</p>
+        <p style="margin-top:6px">Los experimentos viven aparte, en <a href="https://github.com/riokuroxi-svg/Shin-Lab" style="color:var(--acento)">Shin-Lab</a>. Nada llega aquí sin estar probado.</p>
+      </div>
+      <div class="enlaces">
+        <a class="enlace" href="https://github.com/riokuroxi-svg/Shin-MD">Repositorio</a>
+        <a class="enlace" href="#comandos">Comandos</a>
+        <a class="enlace" href="#instalar">Instalar</a>
+        <a class="enlace" href="#licencia">Licencia</a>
+      </div>
+    </div>
+  </footer>
+</main>
+
+<!-- Los 210 comandos, embebidos: la página no pide datos a ningún servidor. -->
+<script id="datos-comandos" type="application/json">__DATOS__</script>
+
+<script>
+/* ============================================================
+   Shin-MD · interacción de la página
+   Sin librerías. Todo funciona con teclado y sin animaciones
+   si el sistema pide reducir el movimiento.
+   ============================================================ */
+(function () {
+  "use strict";
+  document.documentElement.classList.add("con-js");
+
+  var reducir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ── Tema claro / oscuro ─────────────────────────────────── */
+  var guardado = null;
+  try { guardado = localStorage.getItem("shin-tema"); } catch (e) { /* modo privado */ }
+  var sistemaOscuro = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  var tema = guardado || (sistemaOscuro ? "oscuro" : "claro");
+  aplicarTema(tema);
+
+  function aplicarTema(t) {
+    document.documentElement.setAttribute("data-tema", t);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", t === "oscuro" ? "#05080C" : "#F6FAF7");
+    var boton = document.getElementById("tema");
+    if (boton) boton.setAttribute("aria-label", t === "oscuro" ? "Cambiar a tema claro" : "Cambiar a tema oscuro");
+  }
+
+  var botonTema = document.getElementById("tema");
+  if (botonTema) {
+    botonTema.addEventListener("click", function () {
+      tema = tema === "oscuro" ? "claro" : "oscuro";
+      aplicarTema(tema);
+      try { localStorage.setItem("shin-tema", tema); } catch (e) { /* nada */ }
+    });
+  }
+
+  /* ── Barra superior pegada ───────────────────────────────── */
+  var barra = document.getElementById("barra");
+  function revisarBarra() {
+    if (!barra) return;
+    barra.classList.toggle("pegada", window.scrollY > 12);
+  }
+  revisarBarra();
+  window.addEventListener("scroll", revisarBarra, { passive: true });
+
+  /* ── Aparición al hacer scroll ───────────────────────────── */
+  var aparecen = [].slice.call(document.querySelectorAll(".aparece"));
+  if (reducir || !("IntersectionObserver" in window)) {
+    aparecen.forEach(function (n) { n.classList.add("visible"); });
+  } else {
+    var observador = new IntersectionObserver(function (entradas) {
+      entradas.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var i = aparecen.indexOf(e.target);
+        setTimeout(function () { e.target.classList.add("visible"); }, Math.min(i, 6) * 60);
+        observador.unobserve(e.target);
+      });
+    }, { rootMargin: "0px 0px -12% 0px", threshold: 0.08 });
+    aparecen.forEach(function (n) { observador.observe(n); });
+  }
+
+  /* ── Brillo que sigue al cursor en las tarjetas ──────────── */
+  document.querySelectorAll(".tarjeta").forEach(function (t) {
+    t.addEventListener("pointermove", function (ev) {
+      var caja = t.getBoundingClientRect();
+      t.style.setProperty("--mx", (ev.clientX - caja.left) + "px");
+      t.style.setProperty("--my", (ev.clientY - caja.top) + "px");
+    });
+  });
+
+  /* ── Pestañas de instalación ─────────────────────────────── */
+  var pestanas = [].slice.call(document.querySelectorAll('[role="tab"]'));
+  pestanas.forEach(function (p) {
+    p.addEventListener("click", function () { activarPestana(p); });
+    p.addEventListener("keydown", function (ev) {
+      var i = pestanas.indexOf(p);
+      if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+      ev.preventDefault();
+      var siguiente = pestanas[(i + (ev.key === "ArrowRight" ? 1 : pestanas.length - 1)) % pestanas.length];
+      activarPestana(siguiente);
+      siguiente.focus();
+    });
+  });
+  function activarPestana(elegida) {
+    pestanas.forEach(function (p) {
+      var activa = p === elegida;
+      p.setAttribute("aria-selected", activa ? "true" : "false");
+      var panel = document.getElementById(p.getAttribute("aria-controls"));
+      if (panel) panel.hidden = !activa;
+    });
+  }
+
+  /* ── Botones de copiar ───────────────────────────────────── */
+  document.querySelectorAll(".copiar").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var bloque = b.parentElement.querySelector("pre");
+      if (!bloque) return;
+      var texto = bloque.innerText;
+      var listo = function () {
+        b.classList.add("hecho");
+        setTimeout(function () { b.classList.remove("hecho"); }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(texto).then(listo, function () { respaldo(texto, listo); });
+      } else {
+        respaldo(texto, listo);
+      }
+    });
+  });
+  function respaldo(texto, listo) {
+    var area = document.createElement("textarea");
+    area.value = texto;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.opacity = "0";
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand("copy"); listo(); } catch (e) { /* sin permiso */ }
+    document.body.removeChild(area);
+  }
+
+  /* ── Comandos: datos embebidos ───────────────────────────── */
+  var datos = [];
+  try {
+    datos = JSON.parse(document.getElementById("datos-comandos").textContent);
+  } catch (e) { datos = []; }
+
+  var CATEGORIAS = {
+    downloads: ["Descargas", "descargas"],
+    economy: ["Economía", "economia"],
+    gacha: ["Gacha", "gacha"],
+    group: ["Grupos", "grupos"],
+    grupo: ["Grupos", "grupos"],
+    stickers: ["Stickers", "stickers"],
+    utils: ["Utilidades", "utilidades"],
+    utility: ["Utilidades", "utilidades"],
+    profile: ["Perfil", "perfil"],
+    socket: ["Bot y sesión", "bot"],
+    info: ["Menú e info", "info"],
+    main: ["Bot y sesión", "bot"],
+    owner: ["Dueño", "dueno"],
+    games: ["Juegos", "juegos"],
+    anime: ["Anime", "anime"],
+    fun: ["Diversión", "diversion"],
+    media: ["Audio", "audio"],
+    nsfw: ["NSFW", "nsfw"]
+  };
+
+  var ICONOS = {
+    descargas: "M8 2.5v8m0 0l-3-3m3 3l3-3M3.5 14h9",
+    economia: "M8 4.2v7.6M6.4 6h3.1M6.4 10h3.1",
+    gacha: "M8 2.6l1.7 3.6 3.9.5-2.8 2.7.7 3.9L8 11.3l-3.5 2 .7-3.9-2.8-2.7 3.9-.5z",
+    grupos: "M6 7.4a2.1 2.1 0 100-4.2 2.1 2.1 0 000 4.2zM2.4 13.6c0-2 1.6-3.3 3.6-3.3s3.6 1.3 3.6 3.3M11.2 6.9a1.9 1.9 0 100-3.8 1.9 1.9 0 000 3.8zM10.6 10.2c1.8.2 3.2 1.5 3.2 3.4",
+    stickers: "M4.2 3h4.6L13 7.2v5.6a1.2 1.2 0 01-1.2 1.2H4.2A1.2 1.2 0 013 12.8V4.2A1.2 1.2 0 014.2 3zM8.8 3v4.2H13",
+    utilidades: "M3 5.4h10M3 10.6h10M6 5.4a1.4 1.4 0 100-.1M10.4 10.6a1.4 1.4 0 100-.1",
+    perfil: "M8 8.2a2.6 2.6 0 100-5.2 2.6 2.6 0 000 5.2zM3.2 14c0-2.6 2.2-4.2 4.8-4.2s4.8 1.6 4.8 4.2",
+    bot: "M4 6h8v6.4H4zM8 6V3.6M6 9.2h.01M10 9.2h.01M2.6 12.4h10.8",
+    info: "M8 7.2v4.4M8 4.9h.01",
+    dueno: "M3.4 11.4l1-5.4 2.8 2.8 1.8-3.6 1.8 3.6 2.8-2.8 1 5.4z",
+    juegos: "M5.6 4.6h4.8a3.6 3.6 0 013.6 3.6v1.6a2.6 2.6 0 01-4.6 1.6l-.4-.5H7l-.4.5A2.6 2.6 0 012 11.8V8.2a3.6 3.6 0 013.6-3.6zM6 7.2v1.6M5.2 8h1.6",
+    anime: "M8 2.6c2.4 2 3.4 3.9 3.4 5.8a3.4 3.4 0 01-6.8 0c0-1.9 1-3.8 3.4-5.8z",
+    diversion: "M8 13.8a5.8 5.8 0 100-11.6 5.8 5.8 0 000 11.6zM5.7 6.6h.01M10.3 6.6h.01M5.6 9.4c.9 1.4 3.9 1.4 4.8 0",
+    audio: "M2.6 8h2l2-4 2 8 1.8-5.6 1.2 1.6h1.8",
+    nsfw: "M4.6 7.4h6.8v5.2H4.6zM6.4 7.4V5.8a1.6 1.6 0 013.2 0v1.6"
+  };
+  var COLORES = {
+    descargas: "#38BDF8", economia: "#F0B429", gacha: "#F472B6", grupos: "#4ADE80",
+    stickers: "#A78BFA", utilidades: "#22D3EE", perfil: "#4ADE80", bot: "#22D3EE",
+    info: "#94A3B8", dueno: "#F0B429", juegos: "#A78BFA", anime: "#F472B6",
+    diversion: "#FBBF24", audio: "#38BDF8", nsfw: "#E05468"
+  };
+
+  // Se normalizan las categorías repetidas (group + grupo, utils + utility).
+  var POR_CATEGORIA = new Map();
+  datos.forEach(function (c) {
+    var cat = CATEGORIAS[c.cat] || [c.cat, "otros"];
+    c._etiqueta = cat[0];
+    c._clave = cat[1];
+    if (!POR_CATEGORIA.has(cat[0])) POR_CATEGORIA.set(cat[0], { etiqueta: cat[0], clave: cat[1], n: 0, comandos: [] });
+    var g = POR_CATEGORIA.get(cat[0]);
+    g.n++;
+    g.comandos.push(c);
+  });
+
+  var totalAlias = datos.reduce(function (n, c) { return n + 1 + (c.a ? c.a.length : 0); }, 0);
+  // Ojo: un Map devuelve un iterador; hay que convertirlo con Array.from
+  // (con slice.call salía vacío y solo aparecía el botón "Todas").
+  var grupos = Array.from(POR_CATEGORIA.values()).sort(function (a, b) {
+    return b.n - a.n || a.etiqueta.localeCompare(b.etiqueta);
+  });
+
+  /* Filtros */
+  var cajaFiltros = document.getElementById("filtros");
+  var filtroActivo = "todas";
+  if (cajaFiltros) {
+    var botones = [{ etiqueta: "Todas", clave: "todas", n: datos.length, icono: null }].concat(grupos);
+    botones.forEach(function (g) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("aria-pressed", g.clave === "todas" ? "true" : "false");
+      b.dataset.clave = g.clave;
+      var svg = "";
+      if (g.icono !== null && ICONOS[g.clave]) {
+        svg = '<svg viewBox="0 0 16 16" fill="none" stroke="' + (COLORES[g.clave] || "#4ADE80") +
+              '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + ICONOS[g.clave] + '"/></svg>';
+      }
+      b.innerHTML = svg + "<span>" + g.etiqueta + "</span><span class='cuenta'>" + g.n + "</span>";
+      b.addEventListener("click", function () {
+        filtroActivo = g.clave;
+        [].slice.call(cajaFiltros.children).forEach(function (o) {
+          o.setAttribute("aria-pressed", o.dataset.clave === filtroActivo ? "true" : "false");
+        });
+        pintar();
+      });
+      cajaFiltros.appendChild(b);
+    });
+  }
+
+  /* Lista */
+  var lista = document.getElementById("lista");
+  var campo = document.getElementById("buscar");
+  var cuenta = document.getElementById("cuenta");
+  var cuentaTexto = document.getElementById("cuenta-texto");
+  var resto = document.getElementById("resto");
+  var botonMas = document.getElementById("vermas");
+  var vacio = document.getElementById("vacio");
+  var termino = document.getElementById("termino");
+  var limpiar = document.getElementById("limpiar");
+  var VISIBLES = 48;
+  var mostrando = VISIBLES;
+
+  // Quita acentos para que "musica" encuentre "música" y "corazon" → "corazón".
+  function sinAcentos(t) {
+    return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  }
+
+  // Índice de búsqueda: se calcula una vez por comando, no en cada tecla.
+  datos.forEach(function (c) {
+    c._buscar = sinAcentos(c.n + " " + (c.a || []).join(" ") + " " + c.d + " " + c._etiqueta);
+    c._etiquetaNorm = sinAcentos(c._etiqueta);
+  });
+
+  function coincide(c, q) {
+    if (!q) return true;
+    return q.split(/\s+/).every(function (p) { return c._buscar.indexOf(p) !== -1; });
+  }
+
+  function pintar() {
+    var q = sinAcentos((campo && campo.value || "").trim());
+    var resultado = datos.filter(function (c) {
+      var okCat = filtroActivo === "todas" || c._clave === filtroActivo;
+      return okCat && coincide(c, q);
+    });
+    resultado.sort(function (a, b) {
+      var porCat = a._etiqueta.localeCompare(b._etiqueta);
+      return porCat || a.n.localeCompare(b.n);
+    });
+
+    if (lista) {
+      var trozo = resultado.slice(0, mostrando);
+      lista.innerHTML = trozo.map(function (c) {
+        var alias = c.a && c.a.length
+          ? '<p class="alias"><b>alias:</b> .' + c.a.slice(0, 3).join(" · .") + (c.a.length > 3 ? " +" + (c.a.length - 3) : "") + "</p>"
+          : "";
+        return '<article class="cmd"><span class="punto"></span><div>' +
+               '<code><span class="prefijo">.</span>' + c.n + "</code>" +
+               "<p>" + (c.d || "Sin descripción") + "</p>" + alias +
+               "</div></article>";
+      }).join("");
+    }
+    if (cuenta) cuenta.textContent = resultado.length;
+    if (cuentaTexto) {
+      cuentaTexto.textContent = q || filtroActivo !== "todas"
+        ? "de " + datos.length + " comandos · " + totalAlias + " nombres con alias"
+        : "comandos en total · " + totalAlias + " nombres con alias";
+    }
+    if (vacio) vacio.hidden = resultado.length !== 0;
+    if (termino) termino.textContent = q ? "«" + q + "»" : "";
+    if (resto) {
+      var faltan = resultado.length - mostrando;
+      resto.textContent = faltan > 0 ? "Mostrando " + mostrando + " de " + resultado.length : "";
+    }
+    if (botonMas) botonMas.hidden = resultado.length <= mostrando;
+  }
+
+  if (campo) {
+    var espera = null;
+    campo.addEventListener("input", function () {
+      clearTimeout(espera);
+      espera = setTimeout(function () { mostrando = VISIBLES; pintar(); }, 90);
+    });
+  }
+  if (botonMas) botonMas.addEventListener("click", function () { mostrando += 90; pintar(); });
+  if (limpiar) limpiar.addEventListener("click", function () {
+    if (campo) campo.value = "";
+    filtroActivo = "todas";
+    if (cajaFiltros) [].slice.call(cajaFiltros.children).forEach(function (o) {
+      o.setAttribute("aria-pressed", o.dataset.clave === "todas" ? "true" : "false");
+    });
+    mostrando = VISIBLES;
+    pintar();
+    if (campo) campo.focus();
+  });
+
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "/" && document.activeElement !== campo) {
+      var escribiendo = /^(input|textarea|select)$/i.test(document.activeElement.tagName);
+      if (escribiendo) return;
+      ev.preventDefault();
+      if (campo) campo.focus();
+    }
+    if (ev.key === "Escape" && document.activeElement === campo) { campo.blur(); }
+  });
+
+  pintar();
+})();
+</script>
+</body>
+</html>
