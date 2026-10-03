@@ -20,6 +20,7 @@
 //  Basado en la implementación de referencia de Baileys
 //  (lib/Utils/use-sqlite-auth-state.js), adaptada a node:sqlite.
 // ════════════════════════════════════════════════════════════
+import log from "#logger";
 import path from 'path'
 import fs from 'fs'
 import { DatabaseSync } from '../storage/sqlite-compat.js'
@@ -67,7 +68,7 @@ export function useSQLiteAuthState(sessionDir) {
       const legacy = leerArchivoLegacy(sessionDir, 'creds.json')
       if (legacy) {
         stmts.credsUpsert.run('__creds__', JSON.stringify(legacy, BufferJSON.replacer))
-        console.log('[sqliteAuth] ✅ creds.json migrado a auth.db (el archivo queda como respaldo)')
+        log.info('[sqliteAuth] ✅ creds.json migrado a auth.db (el archivo queda como respaldo)')
       }
     }
   } catch { /* nunca bloquear el arranque por la migración */ }

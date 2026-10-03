@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 /**
  * .carbon  (citando un mensaje con código o con texto) → imagen bonita de código (estilo carbon.now.sh).
  * Usa carbonara.solopov.dev, API gratuita sin key.
@@ -35,7 +36,7 @@ export default {
       return msg.reply(
         `《✧》 Responde a un mensaje con código, o escribe el código a convertir.\n`
         + `> Colores disponibles: ${Object.keys(TEMAS).join(', ')}\n`
-        + `> Ejemplo: ${usedPrefix}carbon verde console.log("hola")`
+        + `> Ejemplo: ${usedPrefix}carbon verde log.info("hola")`
       );
     }
     await msg.react('🎨');

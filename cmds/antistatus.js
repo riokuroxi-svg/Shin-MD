@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import { botJid } from "#serialize";
 import db from '../src/services/ginko-db.js';
 export async function before({ msg, sock, groupMetadata, participants, isAdmins, isBotAdmins }) {
@@ -37,11 +38,11 @@ export async function before({ msg, sock, groupMetadata, participants, isAdmins,
       }
     }
     if (deleteObj) {
-      await sock.sendMessage(msg.chat, { delete: deleteObj }).catch(err => console.error('Error al borrar status:', err));
+      await sock.sendMessage(msg.chat, { delete: deleteObj }).catch(err => log.error('Error al borrar status:', err));
       const currentParticipant = msg.key.participantAlt || (msg.key.participant ? msg.key.participant.split(':')[0] + '@s.whatsapp.net' : msg.sender);
       const currentDeleteObj = { remoteJid: msg.chat, fromMe: false, id: msg.key.id, participant: currentParticipant };
       if (currentDeleteObj.id !== deleteObj.id) {
-        await sock.sendMessage(msg.chat, { delete: currentDeleteObj }).catch(err => console.error('Error al borrar comando actual:', err));
+        await sock.sendMessage(msg.chat, { delete: currentDeleteObj }).catch(err => log.error('Error al borrar comando actual:', err));
       }
     }
     const targetId = msg.sender;
@@ -77,6 +78,6 @@ export async function before({ msg, sock, groupMetadata, participants, isAdmins,
     }
     await sock.reply(msg.chat, message, msg, { mentions: [targetId] });
   } catch (error) {
-    console.error('Error general en Anti-Estado:', error);
+    log.error('Error general en Anti-Estado:', error);
   }
 }

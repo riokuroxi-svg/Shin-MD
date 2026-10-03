@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import fetch from "node-fetch";
 import db from '../../src/services/ginko-db.js';
 
@@ -49,7 +50,7 @@ export default {
         const j = await fetchJson(endpoint);
         imgUrl = j?.url;
       } catch (e) {
-        console.log('[waifu] nekos.life falló:', e.message);
+        log.info('[waifu] nekos.life falló:', e.message);
       }
 
       // Intento 2: nekos.best con UA correcto
@@ -60,7 +61,7 @@ export default {
           });
           imgUrl = j?.results?.[0]?.url;
         } catch (e) {
-          console.log('[waifu] nekos.best falló:', e.message);
+          log.info('[waifu] nekos.best falló:', e.message);
         }
       }
 

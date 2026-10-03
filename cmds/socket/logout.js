@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import { botJid } from "#serialize";
 import fs from 'fs';
 import path from 'path';
@@ -32,7 +33,7 @@ export default {
       setTimeout(() => {
         if (fs.existsSync(sessionPath)) {
           fs.rmSync(sessionPath, { recursive: true, force: true });
-          console.log(`《✧》 Sesión de ${cleanId} eliminada de ${sessionPath}`);
+          log.info(`《✧》 Sesión de ${cleanId} eliminada de ${sessionPath}`);
         }
       }, 2000);
       // El await va dentro de un setTimeout: la flecha tiene que ser

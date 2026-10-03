@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { economyGate } from "#lib/economy-guard";
 import { botJid } from "#serialize";
 import { randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
@@ -61,10 +62,8 @@ export default {
   },
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     const chatId = msg.chat;
-    const chat = db.getChat(chatId);
-    if (chat.adminonly || !chat.economy) {
-      return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
-    }
+    const { blocked, message: avisoEconomia, chat } = economyGate(chatId, usedPrefix);
+    if (blocked) return msg.reply(avisoEconomia);
     if (global.math[chatId]?.juegoActivo) {
       return sock.reply(chatId, 'ꕥ Ya hay un juego activo. Espera a que termine.', msg);
     }

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import crypto from 'crypto'
 import { fileTypeFromBuffer } from 'file-type'
 import { promises as fsp } from 'fs'
@@ -41,7 +42,7 @@ export default {
       }
       await sock.sendMessage(msg.chat, { image: result.buffer, caption: '' }, { quoted: msg })
     } catch (e) {
-      console.error(e)
+      log.error(e)
       await msg.reply(`> Ocurrió un error inesperado ejecutando *${usedPrefix + command}*.\n> [Error: *${e?.message || String(e)}*]`)
     }
     })

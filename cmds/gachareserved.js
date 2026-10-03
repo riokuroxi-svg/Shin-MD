@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import chalk from 'chalk';
 import db from '../src/services/ginko-db.js';
 
@@ -29,7 +30,7 @@ const limpiarRolls = async () => {
       }
     }
   } catch (e) {
-    console.log(chalk.gray('Error limpiando rolls'));
+    log.info(chalk.gray('Error limpiando rolls'));
   }
 };
 

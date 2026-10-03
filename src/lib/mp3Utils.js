@@ -191,6 +191,7 @@ async function getOptimizedCover() {
  * (descargas locales con yt-dlp). Devuelve null si no valida → el
  * llamador cae a la recodificación completa (seguridad AUD-xxxx intacta).
  */
+import log from "#logger";
 import { pickRandom } from "#lib/random";
 async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secondsHint = 0) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ginko-remux-'));
@@ -227,7 +228,7 @@ async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secon
     const seconds = secondsHint > 0 ? secondsHint : await getMp3Duration(outPath);
     return { buffer: finalBuf, seconds };
   } catch (e) {
-    console.log('[mp3Utils] remux rápido falló:', e.message?.slice(0, 120));
+    log.info('[mp3Utils] remux rápido falló:', e.message?.slice(0, 120));
     return null;
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
@@ -256,7 +257,7 @@ export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = DEFAU
   if (origen === 'local' || origen === 'cdn' || origen === 'turbo-cdn' || isMp3Valid(inputBuffer)) {
     const rapido = await remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secondsHint);
     if (rapido) return rapido;
-    console.log('[mp3Utils] remux no válido → recodificación completa de respaldo');
+    log.info('[mp3Utils] remux no válido → recodificación completa de respaldo');
   }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ginko-mp3-'));
@@ -324,7 +325,7 @@ export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = DEFAU
 
     // Verificar que el resultado sea un MP3 válido
     if (!isMp3Valid(finalBuf)) {
-      console.log('[mp3Utils] Advertencia: MP3 procesado no superó validación, devolviendo original');
+      log.info('[mp3Utils] Advertencia: MP3 procesado no superó validación, devolviendo original');
       return { buffer: inputBuffer, seconds: 0 };
     }
 
@@ -333,7 +334,7 @@ export async function processMp3ForWhatsApp(inputBuffer, titulo, artista = DEFAU
 
     return { buffer: finalBuf, seconds };
   } catch (e) {
-    console.log('[mp3Utils] Error procesando MP3:', e.message?.slice(0, 200));
+    log.info('[mp3Utils] Error procesando MP3:', e.message?.slice(0, 200));
     return { buffer: inputBuffer, seconds: 0 };
   } finally {
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
@@ -396,7 +397,7 @@ export async function downloadAudioYtdlp(url, modo = 'fast', ytdlpPath = 'yt-dlp
       return buf;
     } catch (e) {
       if (intento === 0 && esErrorPYI(e)) {
-        console.warn(`[yt-dlp] falló con error PyInstaller; auto-reparando y reintentando... ${String(e?.stderr || '').slice(0, 160)}`);
+        log.warn(`[yt-dlp] falló con error PyInstaller; auto-reparando y reintentando... ${String(e?.stderr || '').slice(0, 160)}`);
         const nuevo = await forceReinstallYtdlp();
         if (nuevo) { bin = nuevo; continue; }
       }
@@ -474,7 +475,7 @@ export async function downloadAudioSourceYtdlp(url, ytdlpPath = 'yt-dlp', client
       // Auto-reparación del binario (PYI-*, /tmp roto) una sola vez durante esta descarga.
       if (!reparado && esErrorPYI(e)) {
         reparado = true;
-        console.warn(`[yt-dlp] error PyInstaller; auto-reparando y reintentando... ${String(e?.stderr || '').slice(0, 160)}`);
+        log.warn(`[yt-dlp] error PyInstaller; auto-reparando y reintentando... ${String(e?.stderr || '').slice(0, 160)}`);
         const nuevo = await forceReinstallYtdlp();
         if (nuevo) { bin = nuevo; continue; } // reintenta el MISMO cliente con el binario nuevo
       }

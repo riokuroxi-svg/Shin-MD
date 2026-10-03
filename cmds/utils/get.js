@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import fetch from 'node-fetch';
 import { format } from 'util';
 import { state } from '#lib/theme';
@@ -47,7 +48,7 @@ export default {
         return sock.sendFile(msg.chat, buffer, 'file', text, msg);
       }
     } catch (e) {
-      console.error(e);
+      log.error(e);
       return msg.reply(state('error', { detail: e.message }));
     }
   }

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { economyGate } from "#lib/economy-guard";
 import { botJid } from "#serialize";
 import { pickRandom } from "#lib/random";
 import { delay } from 'baileys';
@@ -14,10 +15,8 @@ export default {
   category: 'economy',
   description: 'Apostar coins en el casino.',
   run: async ({ msg, sock, args, usedPrefix, command, text }) => {
-    const chat = db.getChat(msg.chat);
-    if (chat.adminonly || !chat.economy) {
-      return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
-    }
+    const { blocked, message: avisoEconomia, chat } = economyGate(msg.chat, usedPrefix);
+    if (blocked) return msg.reply(avisoEconomia);
     const botId = botJid(sock);
     const bot = db.getSettings(botId);
     const currency = bot.currency;    

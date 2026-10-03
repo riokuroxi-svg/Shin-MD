@@ -63,6 +63,16 @@ const log = {
     if (err?.stack) console.log(chalk.red(err.stack));
   },
   gray: (msg) => { writeLog("GRAY", msg); console.log(chalk.gray(msg)); },
+
+  // ── log.ui(): para las salidas que SON diseño ───────────────────
+  // El banner de arranque y los avisos de sub-bots ya vienen con su
+  // propio color y su propia caja: pasarlos por info/success les
+  // cambiaría los iconos y destrozaría el estilo. `ui` imprime el texto
+  // TAL CUAL (idéntico a console.log) pero además lo escribe en
+  // logs/shin-YYYY-MM-DD.log, que es de donde se reconstruye qué pasó
+  // antes de una desconexión. Antes, esas líneas solo existían en la
+  // pantalla y se perdían.
+  ui: (msg) => { writeLog("UI", msg); console.log(msg); },
 };
 
 export default log;

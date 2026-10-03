@@ -26,6 +26,7 @@
 //      donde no hay shell).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import log from "#logger";
 import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
@@ -150,7 +151,7 @@ export async function downloadYtdlpStatic() {
   if (!info) return null;
   const { asset } = info;
   const url = `https://github.com/yt-dlp/yt-dlp/releases/latest/download/${asset}`;
-  console.log(`[yt-dlp] descargando binario estático → ${asset} (${process.platform}/${process.arch})`);
+  log.info(`[yt-dlp] descargando binario estático → ${asset} (${process.platform}/${process.arch})`);
   const res = await fetch(url, {
     redirect: 'follow',
     headers: {
@@ -175,7 +176,7 @@ export async function downloadYtdlpStatic() {
     try { fs.rmSync(BIN_PATH, { force: true }); } catch {}
     throw new Error('el binario no superó el smoke-test (--version)');
   }
-  console.log(`[yt-dlp] ✅ binario listo y verificado (${buf.length} bytes) → ${BIN_PATH}`);
+  log.info(`[yt-dlp] ✅ binario listo y verificado (${buf.length} bytes) → ${BIN_PATH}`);
   return BIN_PATH;
 }
 
@@ -185,7 +186,7 @@ export async function ensureYtdlp({ force = false } = {}) {
 
   let bin = !force ? await searchYtdlp() : null;
   if (bin) {
-    console.log(`[yt-dlp] detectado en el sistema → ${bin}`);
+    log.info(`[yt-dlp] detectado en el sistema → ${bin}`);
     _cachedBin = bin;
     return bin;
   }
@@ -204,7 +205,7 @@ export async function ensureYtdlp({ force = false } = {}) {
       bin = await downloadYtdlpStatic();
       if (bin) { _cachedBin = bin; return bin; }
     } catch (e) {
-      console.warn(`[yt-dlp] falló la descarga/smoke-test (intento ${i + 1}/2): ${e?.message || e}`);
+      log.warn(`[yt-dlp] falló la descarga/smoke-test (intento ${i + 1}/2): ${e?.message || e}`);
     }
   }
 

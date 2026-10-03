@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import log from "#logger";
 import FormData from 'form-data';
 import fetch from 'node-fetch';
 import db from '../../src/services/ginko-db.js';
@@ -68,7 +69,7 @@ async function uploadConReintentos(buffer, mime) {
         return { url, tiempo: t };
       } catch (e) {
         ultimoErr = e;
-        console.log(`[tourl] ⚠️ litterbox (${t}) intento ${i} falló: ${e.message}`);
+        log.info(`[tourl] ⚠️ litterbox (${t}) intento ${i} falló: ${e.message}`);
         await sleep(1000 * i);
       }
     }
@@ -126,7 +127,7 @@ export default {
       });
       await msg.react('✔️');
     } catch (e) {
-      console.error('[tourl] error:', e);
+      log.error('[tourl] error:', e);
       await msg.react('✖️');
       await sock.reply(msg.chat, `> Error al subir el archivo: ${e?.message || 'error desconocido'}\n> Intenta de nuevo en unos segundos.`, msg);
     }
