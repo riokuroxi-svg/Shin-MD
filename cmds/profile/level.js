@@ -8,16 +8,8 @@ import db from '../../src/services/ginko-db.js';
 import { generateProfileCard } from '../../src/lib/cardGenerator.js';
 import { sendInteractive } from "#interactive";
 import { atajo } from "#lib/ui-kit";
+import { xpRange } from "#lib/xp";
 
-const growth = Math.pow(Math.PI / Math.E, 1.618) * Math.E * 0.75;
-
-function xpRange(level, multiplier = global.multiplier || 2) {
-  if (level < 0) throw new TypeError('level cannot be negative value');
-  level = Math.floor(level);
-  const min = level === 0 ? 0 : Math.round(Math.pow(level, growth) * multiplier) + 1;
-  const max = Math.round(Math.pow(level + 1, growth) * multiplier);
-  return { min, max, xp: max - min };
-}
 
 export default {
   command: ['level', 'lvl', 'nivel', 'xp'],
