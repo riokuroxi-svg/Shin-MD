@@ -5,6 +5,13 @@
 //
 //   node scripts/add-spdx-headers.cjs          (todo el repo)
 //   node scripts/add-spdx-headers.cjs --check  (solo verifica; exit 1 si falta)
+//
+// RED DE SEGURIDAD (2026-10-03): este script fue el que dejó 12 comandos
+// con el `import { state }` DENTRO del comentario de licencia (el import
+// quedaba comentado y el comando reventaba con "state is not defined" en
+// su ruta de error). Ahora no escribe nada que no sobreviva una
+// verificación: primero prueba el resultado en un archivo temporal con
+// `node --check` y con un detector de código dentro de comentarios.
 
 'use strict';
 const fs = require('node:fs');
@@ -35,6 +42,46 @@ function walk(dir) {
   }
 }
 
+// Detecta código ejecutable que quedó atrapado dentro de un comentario
+// de bloque: es exactamente el daño que este script causó una vez.
+function codigoAtrapadoEnComentario(content) {
+  const lineas = content.split('\n');
+  let enBloque = false;
+  for (const linea of lineas) {
+    const limpia = linea.trim();
+    if (!enBloque && limpia.startsWith('/*')) {
+      enBloque = !limpia.includes('*/');
+      continue;
+    }
+    if (enBloque) {
+      if (limpia.includes('*/')) { enBloque = false; continue; }
+      if (/^(import|export|const|let|var|function)\b/.test(limpia) && !limpia.startsWith('*')) {
+        return limpia.slice(0, 70);
+      }
+    }
+  }
+  return null;
+}
+
+// Escribe sólo si el resultado es válido. Devuelve true si se aplicó.
+function escribirSiEsValido(file, nuevoContenido) {
+  const atrapado = codigoAtrapadoEnComentario(nuevoContenido);
+  if (atrapado) {
+    console.log('  ✗ ABORTADO ' + path.relative(ROOT, file) + ' — dejaría código dentro de un comentario: ' + atrapado);
+    return false;
+  }
+  const tmp = file + '.spdx-tmp';
+  fs.writeFileSync(tmp, nuevoContenido, 'utf8');
+  const check = require('node:child_process').spawnSync(process.execPath, ['--check', tmp], { stdio: 'pipe' });
+  fs.unlinkSync(tmp);
+  if (check.status !== 0) {
+    console.log('  ✗ ABORTADO ' + path.relative(ROOT, file) + ' — el resultado no compila; el archivo se deja intacto.');
+    return false;
+  }
+  fs.writeFileSync(file, nuevoContenido, 'utf8');
+  return true;
+}
+
 function handleFile(file) {
   const content = fs.readFileSync(file, 'utf8');
   if (content.includes('SPDX-License-Identifier')) { skipped++; return; }
@@ -49,7 +96,7 @@ function handleFile(file) {
     const nl = rest.indexOf('\n');
     if (nl !== -1) { prefix = rest.slice(0, nl + 1); rest = rest.slice(nl + 1); }
   }
-  fs.writeFileSync(file, prefix + HEADER + rest, 'utf8');
+  if (!escribirSiEsValido(file, prefix + HEADER + rest)) return;
   added++;
   console.log('  + ' + path.relative(ROOT, file));
 }

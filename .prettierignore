@@ -1,0 +1,8 @@
+node_modules
+session
+logs
+media
+assets
+data
+package-lock.json
+*.md

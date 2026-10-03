@@ -12,8 +12,9 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import log from "#logger";
-import { loadCommands, reloadCommand, downloadMediaFromObject } from "#commands";
-import { serializeMessage, isAdmin, userPart, getCachedMeta } from "#serialize";
+import { loadCommands, reloadCommand } from "#commands";
+import { serializeMessage } from "#serialize";
+import { buildCommandContext } from "./context.js";
 import createCooldown from "#cooldown";
 import checkPermissions from "#permissions";
 import { parseButtonResponse } from "#interactive";
@@ -84,76 +85,15 @@ export function createRouter(engine, opts) {
   /**
    * Ejecuta hooks before() registrados (antilink, antistatus, afk...)
    */
-  async function runBefores(sock, ctx, rawMsg) {
+  async function runBefores(sock, ctx) {
     if (!commands?.befores?.length) return;
-    const full = rawMsg;
-    let isAdmins = false, isBotAdmins = false, isOwner = false, groupMetadata = null;
-    if (ctx.isGroup) {
-      isAdmins = await isAdmin(sock, ctx.chatId, ctx.senderId);
-      const botJid = sock?.user?.id;
-      if (botJid) isBotAdmins = await isAdmin(sock, ctx.chatId, botJid);
-      const ownerJid = engine?.getOwnerJid?.();
-      if (ownerJid) isOwner = userPart(ctx.senderId) === userPart(ownerJid);
-      groupMetadata = getCachedMeta(ctx.chatId)
-        || (await sock?.groupMetadata?.(ctx.chatId).catch(() => null))
-        || null;
-    }
-
-    if (!sock.reply) {
-      sock.reply = (jid, text, quoted, o) => {
-        const content = typeof text === "string" ? { text } : (text || {});
-        const quote = quoted?.key ? quoted : (quoted?.full || quoted);
-        return sock.sendMessage(jid, { ...content, ...(o || {}) }, { quoted: quote });
-      };
-    }
-
-    const msg = {
-      chat: ctx.chatId,
-      sender: ctx.senderId,
-      isGroup: ctx.isGroup,
-      text: ctx.text,
-      pushName: ctx.pushName || full.pushName || "",
-      key: full.key || {},
-      id: full.key?.id,
-      fromMe: full.key?.fromMe,
-      message: full.message || {},
-      msg: full.message || {},
-      mentionedJid: full.message?.extendedTextMessage?.contextInfo?.mentionedJid || [],
-      quoted: null,
-      download: () => downloadMediaFromObject(full.message),
-      reply: async (content) => {
-        if (typeof content === "string")
-          return sock.sendMessage(ctx.chatId, { text: content }, { quoted: full });
-        return sock.sendMessage(ctx.chatId, content, { quoted: full });
-      },
-    };
-
-    if (full.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
-      const ci = full.message.extendedTextMessage.contextInfo;
-      const qMsg = ci.quotedMessage;
-      msg.quoted = {
-        id: ci.stanzaId,
-        sender: ci.participant || "",
-        text: qMsg?.conversation || qMsg?.extendedTextMessage?.text || "",
-        key: {
-          remoteJid: ctx.chatId,
-          fromMe: ci.participant ? ci.participant === sock?.user?.id : false,
-          id: ci.stanzaId || "",
-          participant: ci.participant || "",
-        },
-        message: qMsg,
-        download: () => downloadMediaFromObject(qMsg),
-      };
-    }
+    // Un solo constructor de contexto para hooks y comandos (context.js).
+    const { msg, groupMetadata, participants, isAdmins, isBotAdmins, isOwner } =
+      await buildCommandContext(sock, ctx, engine, { commandName: ctx.commandName });
 
     for (const hook of commands.befores) {
       try {
-        await hook.fn({
-          msg, sock,
-          groupMetadata,
-          participants: groupMetadata?.participants || [],
-          isAdmins, isBotAdmins, isOwner,
-        });
+        await hook.fn({ msg, sock, groupMetadata, participants, isAdmins, isBotAdmins, isOwner });
       } catch (err) {
         log.error(`Hook before (${hook.name}): ` + (err.message || err));
       }
@@ -191,13 +131,19 @@ export function createRouter(engine, opts) {
 
       ctx.usedPrefix = usedPrefix;
 
+      // Nombre tecleado por el usuario (normalizado). Se calcula aquí
+      // porque los hooks `before` reciben `msg.command`: antilink lo usa
+      // para no expulsar a quien invoca el comando de invitación.
+      const typed = ctx.text.slice(usedPrefix.length).trim().split(/\s+/)[0] || "";
+      ctx.commandName = typed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
       // Log visual en terminal para todo mensaje recibido (estilo Ginko-MD)
       if (typeof opts.onMessage === "function") {
         try { opts.onMessage(ctx, usedPrefix); } catch {}
       }
 
       // ── Ejecutar middlewares 'before' (anti-link, anti-status, afk...) ──
-      await runBefores(sock, ctx, msg);
+      await runBefores(sock, ctx);
 
       // Si está en self mode (solo dueño), rechazar a cualquiera que no sea el owner
       const ownerJid = engine?.getOwnerJid?.();
@@ -213,9 +159,7 @@ export function createRouter(engine, opts) {
       const raw = ctx.text.slice(usedPrefix.length).trim();
       if (!raw) return;
 
-      const [nameRaw] = raw.split(/\s+/);
-      const name = nameRaw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const cmd = getCommand(name);
+      const cmd = getCommand(ctx.commandName);
       if (!cmd) return;
 
       // Cooldown / antispam

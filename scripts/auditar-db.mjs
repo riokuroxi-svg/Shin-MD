@@ -40,7 +40,7 @@ for (const m of dbSrc.matchAll(/ALTER TABLE (\w+) ADD COLUMN (\w+)/g)) {
   (tablas[m[1]] ||= []).push(m[2]);
 }
 // y las del bloque EXTRAS, que es una tabla de JS, no SQL a pelo
-const bloque = dbSrc.match(/const EXTRAS = \{([\s\S]*?)\n  \};/);
+const bloque = dbSrc.match(/const EXTRAS = \{([\s\S]*?)\n {2}\};/);
 if (bloque) {
   let tablaActual = null;
   for (const linea of bloque[1].split("\n")) {

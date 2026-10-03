@@ -32,7 +32,7 @@ export default {
     const allUsers = db.getUser();
     const userCount = allUsers?.length || '0';
     const totalCommands = allUsers?.reduce((acc, user) => acc + (user.usedcommands || 0), 0) || 0;
-    const estadoBot = `「❀」 Estado de *${botname}* (●\´ϖ\`●)
+    const estadoBot = `「❀」 Estado de *${botname}* (●´ϖ\`●)
 ◇ *Usuarios registrados ›* ${userCount.toLocaleString()}
 ◇ *Grupos registrados ›* ${registeredGroups.toLocaleString()}
 ◇ *Comandos ejecutados ›* ${toNum(totalCommands)}`;

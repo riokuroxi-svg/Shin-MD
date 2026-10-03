@@ -23,6 +23,9 @@ try {
 
 if (!_DatabaseSync) {
   try {
+    // Dependencia OPCIONAL: sólo se carga si node:sqlite (nativo, el
+    // camino normal en Node 22) no está disponible.
+    // @ts-expect-error -- módulo opcional, no instalado por defecto
     const bmod = await import("better-sqlite3");
     const BSqlite = bmod.default || bmod;
     _DatabaseSync = class DatabaseSync extends BSqlite {

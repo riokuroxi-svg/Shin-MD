@@ -4,14 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import fs from 'node:fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters } from "#lib/gacha-shared";
 const charactersFilePath = './core/characters.json';
 
 async function loadCharacters() {
-  const data = await fs.readFile(charactersFilePath, 'utf-8');
-  return JSON.parse(data);
+  // Si el catálogo no existe o está corrupto no se tumba el comando: el
+  // código de abajo ya sabe trabajar con nombres '???' y valor 100.
+  try {
+    const data = await fs.readFile(charactersFilePath, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return {};
+  }
 }
 
 
