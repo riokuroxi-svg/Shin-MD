@@ -36,7 +36,7 @@ def _parada(p):
 class Fuente:
     """Una fuente lista para sacar anchos y trazados."""
 
-    def __init__(self, ruta, peso=None, indice=None, familia_cjk=None):
+    def __init__(self, ruta, peso=None, indice=None, familia_cjk=None, respaldo=None):
         if ruta.endswith(".ttc"):
             self.f = self._de_coleccion(ruta, familia_cjk, indice)
         else:
@@ -48,6 +48,11 @@ class Fuente:
         self.cmap = self.f.getBestCmap()
         self.hmtx = self.f["hmtx"]
         self.nombre = self.f["name"].getDebugName(1)
+        # respaldo: fuente que se usa SOLO para los glifos que esta no tiene
+        # (por ejemplo σ, ✓ o → en Baloo/Nunito/Quicksand). Se carga una vez.
+        self.respaldo = None
+        if respaldo:
+            self.respaldo = Fuente(respaldo, peso=500) if isinstance(respaldo, str) else respaldo
 
     @staticmethod
     def _de_coleccion(ruta, familia_cjk, indice):
@@ -61,17 +66,28 @@ class Fuente:
         raise ValueError("No encontré la subfuente %r en %s" % (familia_cjk, ruta))
 
     # ------------------------------------------------------------------ medidas
+    def _glifo(self, ch):
+        """Devuelve (fuente, glifo). Si esta fuente no tiene el carácter, usa el respaldo."""
+        g = self.cmap.get(ord(ch))
+        if g is not None:
+            return self, g
+        if self.respaldo is not None:
+            g = self.respaldo.cmap.get(ord(ch))
+            if g is not None:
+                return self.respaldo, g
+        return None, None
+
     def ancho(self, texto, tam, tracking=0.0):
         """Ancho real del texto, contando el interletrado entre caracteres."""
         total = 0.0
         primero = True
         for ch in texto:
-            glifo = self.cmap.get(ord(ch))
+            fuente, glifo = self._glifo(ch)
             if glifo is None:
                 continue
             if not primero:
                 total += tracking
-            total += self.hmtx[glifo][0] / self.upem * tam
+            total += fuente.hmtx[glifo][0] / fuente.upem * tam
             primero = False
         return total
 
@@ -83,6 +99,21 @@ class Fuente:
             return f["hhea"].ascent / self.upem * tam
         return tam
 
+    def envolver(self, texto, tam, ancho_max, tracking=0.0):
+        """Corta el texto en lineas que quepan en ancho_max. Devuelve una lista."""
+        palabras = texto.split()
+        lineas, actual = [], ""
+        for palabra in palabras:
+            prueba = (actual + " " + palabra).strip()
+            if self.ancho(prueba, tam, tracking) <= ancho_max or not actual:
+                actual = prueba
+            else:
+                lineas.append(actual)
+                actual = palabra
+        if actual:
+            lineas.append(actual)
+        return lineas
+
     # ----------------------------------------------------------------- trazados
     def trazado(self, texto, tam, x, base, tracking=0.0):
         """Devuelve el atributo `d` de un <path> con el texto convertido a curvas."""
@@ -90,18 +121,18 @@ class Fuente:
         cx = x
         primero = True
         for ch in texto:
-            glifo = self.cmap.get(ord(ch))
+            fuente, glifo = self._glifo(ch)
             if glifo is None:
                 continue
             if not primero:
                 cx += tracking
-            pluma = SVGPathPen(self.gs, ntos=lambda v: formato(v))
-            transform = Transform(tam / self.upem, 0, 0, -tam / self.upem, cx, base)
-            self.gs[glifo].draw(TransformPen(pluma, transform))
+            pluma = SVGPathPen(fuente.gs, ntos=lambda v: formato(v))
+            transform = Transform(tam / fuente.upem, 0, 0, -tam / fuente.upem, cx, base)
+            fuente.gs[glifo].draw(TransformPen(pluma, transform))
             d = pluma.getCommands()
             if d:
                 trozos.append(d)
-            cx += self.hmtx[glifo][0] / self.upem * tam
+            cx += fuente.hmtx[glifo][0] / fuente.upem * tam
             primero = False
         return " ".join(trozos)
 
