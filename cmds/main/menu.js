@@ -263,6 +263,7 @@ export default {
 
     const menuButtons = [
       singleSelect("📂 Explorar Categorías", menuSections),
+      quickReply("🗂️ Categorías (.menucat)", "menucat"),
       quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
       quickReply("🏓 Ping", "ping"),
       ctaUrl("📢 Canal Oficial", channelUrl),
