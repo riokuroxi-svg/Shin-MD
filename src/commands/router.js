@@ -162,6 +162,13 @@ export function createRouter(engine, opts) {
       const cmd = getCommand(ctx.commandName);
       if (!cmd) return;
 
+      // Doble palomita azul: el usuario ve que el bot leyó su comando.
+      // Solo en comandos reales (no en cada mensaje del grupo) para no
+      // mandar tráfico de más. Nunca frena ni rompe el comando.
+      if (!ctx.fromMe && process.env.READ_RECEIPTS !== "0" && typeof sock.readMessages === "function") {
+        try { sock.readMessages([msg.key]).catch(() => {}); } catch {}
+      }
+
       // Cooldown / antispam
       if (cooldown.check({ senderId: ctx.senderId, cmd, text: ctx.text })) return;
 
@@ -171,13 +178,6 @@ export function createRouter(engine, opts) {
         await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
         return;
       }
-
-      // Simular estado de escritura en tiempo real ("composing")
-      try {
-        if (typeof sock.sendPresenceUpdate === "function") {
-          sock.sendPresenceUpdate("composing", ctx.chatId).catch(() => {});
-        }
-      } catch {}
 
       // Ejecutar
       const start = Date.now();
@@ -199,11 +199,6 @@ export function createRouter(engine, opts) {
         }
       } finally {
         if (usePriority) sendQueue.exitPriority();
-        try {
-          if (typeof sock.sendPresenceUpdate === "function") {
-            sock.sendPresenceUpdate("paused", ctx.chatId).catch(() => {});
-          }
-        } catch {}
       }
     } catch (err) {
       log.error("Router: " + (err.message || err), err);

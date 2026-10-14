@@ -199,6 +199,7 @@ async function getOptimizedCover() {
  */
 import log from "#logger";
 import { pickRandom } from "#lib/random";
+import { argsClienteYtdlp } from "#lib/ytdlp-cliente";
 async function remuxConPortada(inputBuffer, safeTitle, artista, coverPath, secondsHint = 0) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ginko-remux-'));
   const inPath = path.join(tmpDir, 'input.mp3');
@@ -373,7 +374,7 @@ export async function downloadAudioYtdlp(url, modo = 'fast', ytdlpPath = 'yt-dlp
       '--audio-quality', audioQuality,
       '--no-playlist',
       '--no-warnings',
-      '--extractor-args', 'youtube:player_client=android,web,web_embedded',
+      ...argsClienteYtdlp(),       // cliente por defecto de yt-dlp (ver #lib/ytdlp-cliente)
       '--no-embed-metadata',       // NO embeber metadatos de YouTube (ffmpeg los pondrá limpios)
       '--no-embed-chapters',
       '--no-part',                 // escribe directo, menos I/O de .part
@@ -428,7 +429,8 @@ export async function downloadAudioYtdlp(url, modo = 'fast', ytdlpPath = 'yt-dlp
 // (android,web,web_embedded) ya funciona, así que no cambia el comportamiento:
 // solo añadimos opciones por si el primero no responde.
 const DEFAULT_YTDLP_CLIENTS = [
-  'android,web,web_embedded', // el actual (ya pulido para Termux)
+  'default',                  // el de yt-dlp: el que pasa el PO-token desde datacenter (probado 2026-10-02)
+  'android,web,web_embedded', // el de antes (ya pulido para Termux)
   'tv_embedded',              // suele esquivar el bloqueo de datacenters
   'web_safari',
   'ios',
@@ -444,7 +446,7 @@ async function _descargarFuenteUnCliente(url, bin, playerClient) {
     '--no-warnings',
     '--no-embed-metadata',
     '--no-embed-chapters',
-    '--extractor-args', `youtube:player_client=${playerClient}`,
+    ...argsClienteYtdlp(playerClient),
     '--no-part',                 // escribe directo, menos I/O de .part
     '-N', '8',
     '-o', outTemplate,

@@ -24,6 +24,7 @@ import { fileURLToPath } from "url";
 import log from "#logger";
 import { downloadAudioYtdlp, processMp3ForWhatsApp, getMp3Duration, isMp3Valid } from "#lib/mp3Utils";
 import { resolveYtdlpBinary } from "#lib/fastFetch";
+import { argsClienteYtdlp } from "#lib/ytdlp-cliente";
 
 // `exec` se exporta porque el comando lanza yt-dlp directamente en dos casos.
 export const exec = promisify(execFile);
@@ -109,7 +110,8 @@ export function limpiarCache() {
   } catch { /* la caché nunca debe tumbar el comando */ }
 }
 
-export const ARGS_VELOCIDAD = ['-N', '8', '--no-playlist', '--extractor-args', 'youtube:player_client=android,web,web_embedded']
+// Cliente de YouTube: el de yt-dlp por defecto (ver #lib/ytdlp-cliente).
+export const ARGS_VELOCIDAD = ['-N', '8', '--no-playlist', ...argsClienteYtdlp()]
 
 // ════════════════════════════════════════════════════════════
 //  AUTO-UPDATE (cero mantenimiento)

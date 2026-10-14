@@ -18,6 +18,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { searchYouTube, getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
+import { argsClienteYtdlp } from "#lib/ytdlp-cliente";
 
 const exec = promisify(execFile);
 const FETCH_TIMEOUT = 7000;
@@ -241,7 +242,7 @@ async function resolveYtdlpLocal(videoUrl) {
     "-f", "bestaudio[ext=m4a]/bestaudio",
     "-g",
     "--no-playlist",
-    "--extractor-args", "youtube:player_client=android,web,web_embedded",
+    ...argsClienteYtdlp(),
     videoUrl,
   ];
   const { stdout } = await exec(bin, args, { timeout: 15000 });
