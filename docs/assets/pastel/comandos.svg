@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1160 330" width="1160" height="330" role="img" aria-label="210 comandos en 15 categorías">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1160 330" width="1160" height="330" role="img" aria-label="211 comandos en 15 categorías">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFDCEB"/><stop offset="0.45" stop-color="#FFF1F7"/><stop offset="1" stop-color="#DDF6EB"/></linearGradient><filter id="sh" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#C97BA0" flood-opacity="0.28"/></filter></defs>
 <rect x="0" y="0" width="1160" height="330" rx="28" ry="28" fill="url(#g)"/>
 <rect x="40" y="40" width="1080" height="250" rx="20" ry="20" fill="#FFFAFC" opacity="0.72"/>

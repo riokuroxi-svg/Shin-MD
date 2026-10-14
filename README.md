@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 210 comandos, 744 nombres y 140 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 211 comandos, 747 nombres y 161 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="140/140 pruebas" height="52">
-<img src="docs/assets/pastel/insignia-comandos.svg" alt="210 comandos" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="161/161 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-comandos.svg" alt="211 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 6.7.24" height="52">
 <img src="docs/assets/pastel/insignia-licencia.svg" alt="Licencia AGPL-3.0-only" height="52">
@@ -19,11 +19,11 @@
 
 **El bot de WhatsApp que no se cae, no se banea y no borra tu sesión.**
 
-210 comandos · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
+211 comandos · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
 
 [🌐 Página del proyecto](docs/web/index.html) ·
 [⚡ Instalar](#instalación-en-5-minutos) ·
-[🧩 Comandos](#los-210-comandos) ·
+[🧩 Comandos](#los-211-comandos) ·
 [🛡️ Anti-ban](#el-anti-ban-por-dentro) ·
 [📜 Licencia](#licencia-y-marca) ·
 [🧪 Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab)
@@ -63,18 +63,18 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 
 </details>
 
-<h2 id="los-210-comandos">Los 210 comandos</h2>
+<h2 id="los-211-comandos">Los 211 comandos</h2>
 
-<img src="docs/assets/pastel/banner-03.svg" alt="03 · Los 210 comandos" width="100%">
+<img src="docs/assets/pastel/banner-03.svg" alt="03 · Los 211 comandos" width="100%">
 
 Escribe `.menu` dentro de WhatsApp y verás la tarjeta con botones y la lista
 desplegable por categorías.
 
-<img src="docs/assets/pastel/comandos.svg" alt="Los 210 comandos repartidos en 15 categorías" width="100%">
+<img src="docs/assets/pastel/comandos.svg" alt="Los 211 comandos repartidos en 15 categorías" width="100%">
 
 <img src="docs/assets/pastel/categorias.svg" alt="Las 15 categorías con sus comandos" width="100%">
 
-**210 comandos únicos · 744 nombres en total (534 alias) · 15 categorías.** Nombres de
+**211 comandos únicos · 747 nombres en total (536 alias) · 15 categorías.** Nombres de
 ejemplo: `.play` (y sus alias `yt`, `mp3`, `musica`), `.sticker` (`s`),
 `.daily` (`diario`, `recompensa`), `.w` (`work`, `trabajar`), `.x` para Twitter,
 `.ig` para Instagram y `.menu` (`ayuda`, `h`).
@@ -85,7 +85,7 @@ Twitter funciona sin clave, pero es más estable con ella.*
 <details>
 <summary><b>Ver la lista completa de comandos (se genera del propio bot)</b></summary>
 
-La página **[docs/web/index.html](docs/web/index.html)** lleva los 210 con su
+La página **[docs/web/index.html](docs/web/index.html)** lleva los 211 con su
 buscador, filtros por categoría y descripción. Para regenerarla cuando añadas
 comandos:
 
