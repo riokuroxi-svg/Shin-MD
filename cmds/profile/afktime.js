@@ -20,11 +20,11 @@ const formatTiempo = (ms) => {
 };
 
 export async function before({ msg, sock }) {
-  const botJid = botJid(sock);
+  const jidBot = botJid(sock);
   const chatData = db.getChat(msg.chat);
   const primaryBot = chatData.primaryBot;
-  if (primaryBot && botJid !== primaryBot) return;
-  const settings = db.getSettings(botJid);
+  if (primaryBot && jidBot !== primaryBot) return;
+  const settings = db.getSettings(jidBot);
   const currency = settings?.currency || 'coins';
   let user = db.getChatUser(msg.chat, msg.sender);
   if (typeof user.afk === 'number' && user.afk > -1) {
