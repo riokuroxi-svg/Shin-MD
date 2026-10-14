@@ -40,9 +40,6 @@ export function normalizeJid(jid) {
 }
 
 /**
- * Parte de usuario de un JID: sin servidor (@...) ni sufijo de dispositivo (:0, :1...)
- */
-/**
  * JID del propio bot a partir del socket, sin el sufijo de dispositivo.
  *
  * Reemplaza el `sock.user.id.split(":")[0] + "@s.whatsapp.net"` que
@@ -58,9 +55,29 @@ export function botJid(sock) {
   return normalizeJid(sock?.user?.id || "");
 }
 
+/**
+ * México: WhatsApp conserva en muchos JID el formato móvil viejo
+ * 52 + 1 + 10 dígitos (13 dígitos), mientras la numeración vigente es
+ * 52 + 10 (12 dígitos). Para COMPARAR se reduce todo a 12 dígitos, así
+ * "5215574370309" y "525574370309" cuentan como la misma persona.
+ *
+ * Solo se usa para comparar (dueño, admins, menciones). Los JID con los
+ * que se envían mensajes NO se tocan: WhatsApp espera la forma original.
+ * @param {string|number} digits
+ * @returns {string}
+ */
+export function mxCanon(digits) {
+  const d = String(digits || "").replace(/\D/g, "");
+  return d.length === 13 && d.startsWith("521") ? "52" + d.slice(3) : d;
+}
+
+/**
+ * Parte de usuario de un JID: sin servidor (@...) ni sufijo de dispositivo
+ * (:0, :1...), con la forma mexicana 521… unificada a 52… (ver mxCanon).
+ */
 export function userPart(jid) {
   if (!jid) return "";
-  return String(jid).split("@")[0].split(":")[0].replace(/\D/g, "");
+  return mxCanon(String(jid).split("@")[0].split(":")[0]);
 }
 
 /**
@@ -286,6 +303,7 @@ export default {
   isJidGroup,
   normalizeJid,
   userPart,
+  mxCanon,
   serializeMessage,
   smsg,
   patchGroupMetadata,
