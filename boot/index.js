@@ -27,6 +27,15 @@ import { createRouter } from "#router";
 import log from "#logger";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { installLogFilter } from "../src/services/log-filter.js";
+import { installAntiCrash } from "../src/services/anti-crash.js";
+import { createTempCleaner } from "../src/services/temp-cleaner.js";
+import { createMemoryMonitor } from "../src/services/memory-monitor.js";
+
+// Consola limpia (sin el ruido de cifrado de libsignal) y que un corte de
+// red suelto no tumbe al bot. Van antes de conectar con WhatsApp.
+installLogFilter();
+installAntiCrash();
 
 // ─── Check legal AGPL (Sección 7) ───────────────────────────────
 // LICENSE y NOTICE son parte de la licencia. Si esta copia no los
@@ -286,6 +295,10 @@ async function main() {
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
   createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
+
+  // Mantenimiento 24/7: temporales viejos fuera y aviso si la RAM se dispara.
+  createTempCleaner().start();
+  createMemoryMonitor().start();
 
   // (Antes: si OWNER_NUMBER no existía, `undefined + "@s.whatsapp.net"`
   //  dejaba owner_jid = "undefined@s.whatsapp.net" — owner fantasma.)
