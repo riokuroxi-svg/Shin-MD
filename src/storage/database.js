@@ -9,7 +9,7 @@
 //  Usa node:sqlite (Node >= 22.5.0). Singleton con export por defecto.
 // ═══════════════════════════════════════════════════════════════════
 
-import { DatabaseSync } from "./sqlite-compat.js";
+import { DatabaseSync, importJsonFallback } from "./sqlite-compat.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "node:url";
@@ -73,6 +73,15 @@ export function createDatabase(dbPath) {
   }
 
   migrate();
+
+  // Si antes se usó el respaldo JSON (shin.db.json) y ahora hay SQLite real,
+  // se copian esos datos una sola vez (solo a tablas vacías).
+  try {
+    const n = importJsonFallback(db, resolved + ".json");
+    if (n > 0) log.info("Datos recuperados del respaldo JSON: " + n + " filas");
+  } catch (err) {
+    log.warn("No se pudo leer el respaldo JSON de la base: " + (err.message || err));
+  }
 
   // Helpers de settings
   const settings = {

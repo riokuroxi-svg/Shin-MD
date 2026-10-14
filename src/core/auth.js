@@ -10,7 +10,7 @@
 //  durante el pairing (como Ginko-MD)
 // ═══════════════════════════════════════════════════════════════════
 
-import { DatabaseSync } from "../storage/sqlite-compat.js";
+import { DatabaseSync, importJsonFallback } from "../storage/sqlite-compat.js";
 import { initAuthCreds, BufferJSON } from "baileys";
 import fs from "fs";
 import path from "path";
@@ -55,6 +55,15 @@ export async function useSQLiteAuthState(sessionDir) {
     );
     CREATE INDEX IF NOT EXISTS idx_signal_cat ON signal_keys(category);
   `);
+
+  // Si la sesión vivía en el respaldo JSON (auth.db.json) y ahora hay
+  // SQLite real, se copia una sola vez para no tener que vincular de nuevo.
+  try {
+    const n = importJsonFallback(db, dbPath + ".json");
+    if (n > 0) log.info("Sesión recuperada del respaldo JSON: " + n + " filas");
+  } catch (err) {
+    log.warn("No se pudo leer el respaldo JSON de la sesión: " + (err.message || err));
+  }
 
   const credsRow = db.prepare("SELECT data FROM creds WHERE id = 1").get();
   const creds = credsRow ? JSON.parse(credsRow.data, BufferJSON.reviver) : initAuthCreds();
