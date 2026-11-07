@@ -1496,3 +1496,65 @@ test("en Termux deja instalar en su home, que vive dentro de /data/data", () => 
   const fuera = evalRuta(`${home}/Shin-MD`, "/usr");
   assert.equal(fuera.bloquea, true, "en Linux normal /data/data no se toca");
 });
+
+test("una instalación a medias de otra versión se pone en la pedida, no se reutiliza", () => {
+  // Caso real: alguien tenía un Shin-MD viejo (3.0.3) a medio instalar en
+  // ~/Shin-MD. El instalador decía "continúo donde se quedó", seguía con el
+  // código viejo y al final fallaba la comprobación de parches, sin decir por
+  // qué. Ahora se cambia a la versión pedida antes de seguir.
+  const origen = crearOrigen();
+
+  // Dos versiones en el origen: v9.0.0 (vieja) y v9.9.9 (la que se pedirá).
+  escribir(path.join(origen, "package.json"), JSON.stringify({
+    name: "shin-md", version: "9.0.0", private: true, type: "module",
+    scripts: { postinstall: "node scripts/preparar.cjs" },
+  }, null, 2) + "\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "-q", "-m", "version vieja");
+  git(origen, "tag", "v9.0.0");
+
+  escribir(path.join(origen, "package.json"), JSON.stringify({
+    name: "shin-md", version: "9.9.9", private: true, type: "module",
+    scripts: { postinstall: "node scripts/preparar.cjs" },
+  }, null, 2) + "\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "-q", "-m", "version nueva");
+  git(origen, "tag", "v9.9.9");
+
+  // Se simula la instalación a medias: clon de la versión VIEJA, sin la marca
+  // de instalación completa.
+  const raiz = temporal("shin-a-medias");
+  const destino = path.join(raiz, "Shin-MD");
+  const clon = spawnSync("git", ["clone", "--quiet", "--branch", "v9.0.0", origen, destino],
+    { encoding: "utf8" });
+  assert.equal(clon.status, 0, clon.stderr);
+  assert.ok(!fs.existsSync(path.join(destino, ".shin-install")), "no debe estar marcada como completa");
+
+  const r = correr(INSTALADOR, ["--version", "v9.9.9", "--yes"],
+    { raiz, env: { SHIN_REPO_URL: origen } });
+
+  assert.equal(r.status, 0, `debía instalar bien:\n${r.salida}`);
+  assert.match(r.salida, /instalación incompleta encontrada/);
+  assert.match(r.salida, /continuando en v9\.9\.9/);
+
+  const pkg = JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8"));
+  assert.equal(pkg.version, "9.9.9", "tiene que quedar en la versión pedida, no en la vieja");
+});
+
+test("una instalación a medias con cambios propios no se pisa", () => {
+  const origen = crearOrigen();
+  git(origen, "tag", "v9.9.9");
+  const raiz = temporal("shin-a-medias-sucio");
+  const destino = path.join(raiz, "Shin-MD");
+  spawnSync("git", ["clone", "--quiet", "--branch", "v9.9.9", origen, destino], { encoding: "utf8" });
+
+  escribir(path.join(destino, "index.js"), "// lo que fuera que hizo el usuario\n");
+
+  const r = correr(INSTALADOR, ["--version", "v9.9.9", "--yes"],
+    { raiz, env: { SHIN_REPO_URL: origen } });
+
+  assert.notEqual(r.status, 0, `debía negarse:\n${r.salida}`);
+  assert.match(r.salida, /cambios propios/i);
+  assert.equal(fs.readFileSync(path.join(destino, "index.js"), "utf8"),
+    "// lo que fuera que hizo el usuario\n", "no puede tocar el archivo del usuario");
+});

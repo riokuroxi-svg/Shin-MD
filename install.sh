@@ -608,9 +608,35 @@ clonar() {
         morir "Ya existe una instalación en $DESTINO. Usa: bash install.sh --update"
       fi
       # Quedó a medias (corte, Ctrl+C, npm que falló): se reutiliza el clon
-      # en vez de pedir al usuario que borre algo. Los archivos del proyecto
-      # son del repositorio, así que volver a descargarlos no aporta nada.
-      dato "instalación incompleta encontrada; continúo donde se quedó"
+      # en vez de pedir al usuario que borre algo.
+      #
+      # Pero hay que ponerla EN LA VERSIÓN QUE SE PIDIÓ. Antes se continuaba
+      # con el código que hubiera, aunque fuera de otra versión: el usuario
+      # creía estar instalando la nueva y se quedaba con la vieja, con sus
+      # parches viejos, y la comprobación final fallaba sin explicar por qué.
+      dato "instalación incompleta encontrada en $DESTINO"
+      local referencia="${VERSION_PEDIDA:-$RAMA}"
+      if [ -n "$(git -C "$DESTINO" status --porcelain --untracked-files=no 2>/dev/null || true)" ]; then
+        morir "La instalación a medias de $DESTINO tiene cambios propios.
+  No los piso. Revísalos con: git -C $DESTINO status
+  Si no te importan: git -C $DESTINO checkout -- .
+  Si no sabes qué es: mueve la carpeta a otro sitio y vuelve a ejecutar."
+      fi
+      if ! git -C "$DESTINO" fetch --quiet --tags origin 2>/dev/null; then
+        morir "No pude consultar el repositorio desde $DESTINO (¿sin conexión?)."
+      fi
+      if [ -n "$VERSION_PEDIDA" ]; then
+        if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
+          morir "No existe la versión $VERSION_PEDIDA.
+  Lista las disponibles: git ls-remote --tags $REPO_URL"
+        fi
+        git -C "$DESTINO" checkout --quiet --detach "$VERSION_PEDIDA" \
+          || morir "No pude poner la instalación a medias en $VERSION_PEDIDA."
+      else
+        git -C "$DESTINO" checkout --quiet -B "$RAMA" "origin/$RAMA" \
+          || morir "No pude poner la instalación a medias en la rama $RAMA."
+      fi
+      bien "continuando en $referencia (el código de antes no se reutiliza)"
       return 0
     fi
     morir "La carpeta $DESTINO no está vacía y no es una instalación de $NOMBRE.
