@@ -24,7 +24,8 @@
 #
 #  Opciones:
 #    --dir RUTA     instalar en otra carpeta (por defecto ~/Shin-MD)
-#    --version TAG  instalar una versión concreta (por ejemplo v3.2.1)
+#    --version TAG  instalar (o pasar a) una versión concreta
+#    --branch RAMA  seguir esa rama en vez de main
 #    --yes          no preguntar
 #    --shallow      clon rápido sin historial (no permite volver atrás)
 #    --no-boost     no intentar el wakelock en Termux
@@ -32,7 +33,7 @@
 set -Eeuo pipefail
 
 readonly REPO_URL="${SHIN_REPO_URL:-https://github.com/riokuroxi-svg/Shin-MD.git}"
-readonly RAMA="${SHIN_BRANCH:-main}"
+RAMA="${SHIN_BRANCH:-main}"
 readonly NODE_MINIMO="22.5.0"
 readonly NPM_MINIMO="10.0.0"
 readonly NOMBRE="Shin-MD"
@@ -46,6 +47,7 @@ fi
 
 ORIGEN_DEDUCIDO=0
 VERSION_PEDIDA=""
+RAMA_EXPLICITA=0
 ACCION=""
 ACTUALIZANDO=0
 PEDIR_CONFIRMACION=1
@@ -137,12 +139,39 @@ ruta_intocable() {
   return 1
 }
 
+# Un enlace en CUALQUIER tramo del camino permite que /a/b/c acabe siendo
+# /otra/cosa. En una ruta que se va a borrar, eso no se tolera.
+sin_enlaces_en_el_camino() {
+  local ruta="$1" actual="" parte
+  local IFS=/
+  for parte in $ruta; do
+    [ -n "$parte" ] || continue
+    actual="$actual/$parte"
+    if [ -L "$actual" ]; then
+      echo "$actual"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # La única forma de borrar un árbol. Sin excepciones.
 borrar_arbol() {
   local objetivo="${1:-}" motivo="${2:-}" real razon
   [ -n "$objetivo" ] || morir "borrar_arbol sin objetivo"
   if [ -L "$objetivo" ]; then
     morir "$objetivo es un enlace simbólico; no borro a través de enlaces."
+  fi
+  # Los enlaces se buscan en la ruta TAL COMO se dio, no en la resuelta:
+  # resolver primero esconde justo el enlace que hay que detectar.
+  local como_se_dio="$objetivo"
+  case "$como_se_dio" in
+    /*) : ;;
+    *) como_se_dio="$(pwd -P)/$como_se_dio" ;;
+  esac
+  local tramo
+  if tramo="$(sin_enlaces_en_el_camino "$como_se_dio")"; then
+    morir "no borro $como_se_dio: el camino pasa por el enlace $tramo."
   fi
   real="$(resolver_real "$objetivo")" || morir "no pude resolver la ruta de $objetivo"
   if razon="$(ruta_intocable "$real")"; then
@@ -318,10 +347,17 @@ preparar_termux() {
     fi
     if ! hay yt-dlp; then
       dato "instalando yt-dlp (descargas)…"
-      pkg install -y yt-dlp >/dev/null 2>&1 || aviso "yt-dlp no se instaló; las descargas usarán solo los proveedores web."
+      # Termux lo empaqueta como `yt-dlp` en unas ramas y como `python-yt-dlp`
+      # (que provee el comando) en otras.
+      if ! pkg install -y yt-dlp >/dev/null 2>&1; then
+        pkg install -y python-yt-dlp >/dev/null 2>&1 \
+          || aviso "yt-dlp no se instaló; las descargas usarán solo los proveedores web."
+      fi
     fi
+    # termux-wake-lock vive en termux-tools, que viene de serie. Solo se
+    # instala si alguien lo quitó; termux-api es otra cosa y aquí no se usa.
     if ! hay termux-wake-lock; then
-      pkg install -y termux-api >/dev/null 2>&1 || true
+      pkg install -y termux-tools >/dev/null 2>&1 || true
     fi
   else
     aviso "Estás en Termux pero no encuentro 'pkg'. Instala git y nodejs-lts a mano."
@@ -334,8 +370,53 @@ wakelock() {
   if hay termux-wake-lock; then
     termux-wake-lock >/dev/null 2>&1 && bien "wakelock activo (Android no dormirá el bot)"
   else
-    aviso "sin wakelock: instala termux-api y actívalo desde la notificación de Termux."
+    aviso "sin wakelock: ejecuta pkg install termux-tools y actívalo desde la notificación de Termux."
   fi
+}
+
+# ─────────────────────── esquema de la base ───────────────────────
+# El bot migra su SQLite al arrancar (`src/storage/migrations.js`). Las
+# migraciones de hoy son aditivas (CREATE IF NOT EXISTS y ALTER TABLE ADD
+# COLUMN), pero la base no se revierte con el código: si una versión nueva
+# migra a v7 y se vuelve a una que solo conoce v5, el esquema queda por
+# delante del código. Esto lo detecta y lo dice, en vez de dejarlo pasar.
+
+version_esquema_db() {
+  local db="$1"
+  [ -f "$db" ] || { echo ""; return 0; }
+  node -e '
+    const { DatabaseSync } = require("node:sqlite");
+    try {
+      const d = new DatabaseSync(process.argv[1], { readOnly: true });
+      const r = d.prepare("SELECT MAX(version) AS v FROM migrations").get();
+      d.close();
+      process.stdout.write(r && r.v != null ? String(r.v) : "");
+    } catch { process.stdout.write(""); }
+  ' "$db" 2>/dev/null || true
+}
+
+version_esquema_codigo() {
+  local f="$1/src/storage/migrations.js"
+  [ -f "$f" ] || { echo ""; return 0; }
+  grep -o 'version:[[:space:]]*[0-9]\+' "$f" 2>/dev/null | grep -o '[0-9]\+' | sort -n | tail -1
+}
+
+comprobar_esquema_tras_revertir() {
+  local db="$1" version_codigo version_db
+  version_codigo="$(version_esquema_codigo "$DESTINO")"
+  version_db="$(version_esquema_db "$db")"
+  [ -n "$version_db" ] || return 0
+  [ -n "$version_codigo" ] || return 0
+  if [ "$version_db" -gt "$version_codigo" ] 2>/dev/null; then
+    error "La base quedó en el esquema v$version_db y el código al que volviste solo conoce v$version_codigo."
+    printf '  El bot puede arrancar pero encontrarse columnas que no espera.\n'
+    if [ -n "${RESPALDO_HECHO:-}" ] && [ -d "$RESPALDO_HECHO/data" ]; then
+      printf '  %sCopia de la base de ANTES de actualizar:%s %s/data\n' "$C_GRIS" "$C_RESET" "$RESPALDO_HECHO"
+      printf '  Para volver a ella: para el bot y copia esos archivos sobre data/ (incluye -wal y -shm).\n'
+    fi
+    return 1
+  fi
+  return 0
 }
 
 # ───────────────────────── respaldo de datos ─────────────────────────
@@ -587,28 +668,72 @@ accion_actualizar() {
   Guárdalos o descártalos tú, y vuelve a intentarlo."
   fi
   respaldar_datos "pre-actualizacion"
-  local previo
+  local previo esquema_antes db_del_bot
   previo="$(git -C "$DESTINO" rev-parse HEAD)"
-  dato "versión actual ${previo:0:7}"
+  db_del_bot="$DESTINO/data/shin.db"
+  esquema_antes="$(version_esquema_db "$db_del_bot")"
+  dato "versión actual ${previo:0:7}${esquema_antes:+   base en esquema v$esquema_antes}"
 
   if ! git -C "$DESTINO" fetch --quiet --tags origin; then
     morir "No se pudo consultar el repositorio (¿sin conexión?)."
   fi
-  if ! git -C "$DESTINO" merge --quiet --ff-only "origin/$RAMA"; then
-    morir "La actualización no es una simple suma de cambios.
+
+  local fijada=""
+  fijada="$(git -C "$DESTINO" describe --tags --exact-match HEAD 2>/dev/null || true)"
+  if [ -n "$fijada" ] || [ "$(git -C "$DESTINO" rev-parse --abbrev-ref HEAD)" = "HEAD" ]; then
+    # Instalación fijada a una versión concreta (clone --branch de una etiqueta
+    # deja la cabeza desprendida). No se mueve sola a la rama: eso rompería la
+    # promesa de "esta instalación es exactamente vX".
+    if [ "$RAMA_EXPLICITA" -eq 1 ] && [ -z "$VERSION_PEDIDA" ]; then
+      dato "instalación fijada en ${fijada:-${previo:0:7}}; volviendo a la rama $RAMA"
+      if ! git -C "$DESTINO" checkout --quiet -B "$RAMA" "origin/$RAMA"; then
+        morir "No se pudo volver a la rama $RAMA; nada se movió."
+      fi
+      bien "siguiendo la rama $RAMA (ya no está fijada a una versión)"
+    elif [ -n "$VERSION_PEDIDA" ]; then
+      dato "instalación fijada en ${fijada:-$previo}; pasando a la versión $VERSION_PEDIDA"
+      if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
+        morir "No existe la versión $VERSION_PEDIDA.
+  Lista las disponibles: git ls-remote --tags $REPO_URL"
+      fi
+      if ! git -C "$DESTINO" checkout --quiet --detach "$VERSION_PEDIDA"; then
+        morir "No se pudo cambiar a la versión $VERSION_PEDIDA; nada se movió."
+      fi
+      bien "fijada en $VERSION_PEDIDA"
+    else
+      morir "Esta instalación está fijada a la versión ${fijada:-${previo:0:7}}, no a la rama $RAMA.
+  No la muevo sola porque pediste esa versión concreta. Elige una de dos:
+    bash install.sh --update --version vNUEVA   cambiar a otra versión
+    bash install.sh --update --branch $RAMA     seguir la rama (deja de estar fijada)"
+    fi
+  else
+    if [ -n "$VERSION_PEDIDA" ]; then
+      if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
+        morir "No existe la versión $VERSION_PEDIDA.
+  Lista las disponibles: git ls-remote --tags $REPO_URL"
+      fi
+      git -C "$DESTINO" checkout --quiet --detach "$VERSION_PEDIDA" \
+        || morir "No se pudo cambiar a la versión $VERSION_PEDIDA; nada se movió."
+      bien "fijada en $VERSION_PEDIDA"
+    else
+      if ! git -C "$DESTINO" merge --quiet --ff-only "origin/$RAMA"; then
+        morir "La actualización no es una simple suma de cambios.
   No fuerzo nada: tus archivos siguen como estaban."
+      fi
+      bien "código actualizado a $(git -C "$DESTINO" rev-parse --short HEAD)"
+    fi
   fi
-  bien "código actualizado a $(git -C "$DESTINO" rev-parse --short HEAD)"
 
   INSTALANDO=1
   ACTUALIZANDO=1
   if ! instalar_dependencias || ! verificar; then
     ACTUALIZANDO=0
     error "La nueva versión no supera las comprobaciones; vuelvo a la anterior."
-    git -C "$DESTINO" checkout --quiet "$previo" || aviso "no se pudo volver al commit ${previo:0:7}"
+    git -C "$DESTINO" checkout --quiet --detach "$previo" || aviso "no se pudo volver al commit ${previo:0:7}"
     ( cd "$DESTINO" && npm ci --include=optional --no-audit --no-fund >/dev/null 2>&1 ) || true
     INSTALANDO=0
     error "Actualización revertida. Sigues en la versión ${previo:0:7} y tus datos están intactos."
+    comprobar_esquema_tras_revertir "$db_del_bot" || true
     if [ -n "${RESPALDO_HECHO:-}" ]; then dato "respaldo: ${RESPALDO_HECHO#"$DESTINO/"}"; fi
     exit 1
   fi
@@ -643,6 +768,16 @@ accion_verificar() {
   exigir_destino_conocido verify
   exigir_proyecto
   comprobar_node || exit 1
+  if [ -d "$DESTINO/.git" ]; then
+    local etiqueta
+    etiqueta="$(git -C "$DESTINO" describe --tags --exact-match HEAD 2>/dev/null || true)"
+    if [ -n "$etiqueta" ]; then
+      dato "fijada a la versión $etiqueta (no sigue la rama)"
+    fi
+    local esquema
+    esquema="$(version_esquema_db "$DESTINO/data/shin.db")"
+    [ -n "$esquema" ] && dato "base de datos en esquema v$esquema"
+  fi
   if [ -f "$DESTINO/.shin-install" ]; then
     dato "marcada como instalada el $(grep -m1 '^fecha=' "$DESTINO/.shin-install" | cut -d= -f2- || echo '?')"
   else
@@ -667,6 +802,10 @@ accion_desinstalar() {
   destino_datos="$BASE_DIR/$NOMBRE-datos-$(date +%Y%m%d-%H%M%S)"
   paso "Desinstalando $NOMBRE"
   printf '  %sSe va a borrar:%s %s\n' "$C_NEG" "$C_RESET" "$real_destino"
+  if [ -d "$DESTINO/.git" ]; then
+    dato "repositorio   $(git -C "$DESTINO" config --get remote.origin.url 2>/dev/null || echo 'sin remoto')"
+    dato "en el commit  $(git -C "$DESTINO" rev-parse --short HEAD 2>/dev/null || echo '?')"
+  fi
   if [ "$PURGAR" -eq 1 ]; then
     printf '  %sY TAMBIÉN tus sesiones, tu base de datos y tu .env.%s\n' "$C_ROJO" "$C_RESET"
     printf '  Eso es volver a vincular WhatsApp desde cero y perder tus datos.\n'
@@ -720,6 +859,9 @@ while [ $# -gt 0 ]; do
     --purge|--purgar)          PURGAR=1 ;;
     --yes|-y)                  PEDIR_CONFIRMACION=0 ;;
     --shallow)                 SUPERFICIAL=1 ;;
+    --branch)
+      [ $# -ge 2 ] || morir "--branch necesita un nombre (por ejemplo main)"
+      RAMA="$2"; RAMA_EXPLICITA=1; shift ;;
     --version|-v)
       [ $# -ge 2 ] || morir "--version necesita una etiqueta (por ejemplo v3.2.1)"
       VERSION_PEDIDA="$2"; shift ;;

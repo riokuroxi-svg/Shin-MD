@@ -6,7 +6,7 @@ nunca ha usado una terminal: cada comando se pega tal cual.
 > **Estado real, sin adornos.** Esto se escribió sin un Android delante. El
 > instalador se probó simulando Termux (`PREFIX`, `TERMUX_VERSION` y un `pkg`
 > que registra las llamadas) con bash, git y npm reales en Linux. Los nombres
-> de los paquetes (`nodejs-lts`, `ffmpeg`, `yt-dlp`, `termux-api`) están
+> de los paquetes (`nodejs-lts`, `ffmpeg`, `yt-dlp`, `termux-tools`) están
 > contrastados con la documentación de Termux, pero **que instalen bien en tu
 > teléfono está pendiente de tu prueba**. La palabra "compatible" todavía no
 > está ganada.
@@ -48,8 +48,9 @@ El instalador hace esto, en orden, y se detiene en el primer problema:
 1. Detecta que está en Termux y qué arquitectura tiene el teléfono.
 2. Instala `git` y `nodejs-lts` si faltan. Si ya tienes un Node 22.5 o más
    reciente, **no lo toca ni lo degrada**.
-3. Instala `ffmpeg` y `yt-dlp` para multimedia y descargas. Si no están en tu
-   repositorio, avisa y sigue: el bot arranca igual.
+3. Instala `ffmpeg` y `yt-dlp` para multimedia y descargas (si tu repositorio
+   llama al segundo `python-yt-dlp`, prueba ese). Si ninguno aparece, avisa y
+   sigue: el bot arranca igual.
 4. Clona el proyecto en `~/Shin-MD`.
 5. Instala las dependencias con `npm ci` (reproducible, desde el lockfile).
 6. Comprueba que los **ocho parches** del conector están puestos, que los
@@ -149,7 +150,7 @@ entrar con `proot-distro login ubuntu` cada vez.
 | Nombres de paquetes `pkg` | sí | documentación de Termux |
 | `pkg install nodejs-lts` real | **no** | pendiente de tu teléfono |
 | `pkg install ffmpeg` / `yt-dlp` real | **no** | pendiente |
-| `termux-wake-lock` real | **no** | pendiente |
+| `termux-wake-lock` real | **no** | pendiente; el comando viene de `termux-tools`, que ya está instalado de serie |
 | `sharp` wasm32 en Android | parcial | simulé `platform=android` en Linux; falta el dispositivo |
 | Persistencia en segundo plano | **no** | depende de Android, no del bot |
 | Vinculación por código | **no** | requiere WhatsApp real |

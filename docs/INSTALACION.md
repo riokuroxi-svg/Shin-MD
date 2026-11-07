@@ -16,6 +16,8 @@ bash install.sh
 |---|---|---|
 | `bash install.sh` | instala; si ya hay una, **actualiza** | proyecto y dependencias |
 | `--update` | trae los commits nuevos y reinstala dependencias | código; tus datos quedan donde están |
+| `--update --version vX` | pasa a esa versión concreta | código |
+| `--update --branch main` | deja de estar fijada y sigue la rama | código |
 | `--repair` | borra `node_modules` y lo reconstruye desde el lockfile | solo dependencias |
 | `--verify` | comprueba archivos, módulos y los ocho parches | nada (solo lee) |
 | `--uninstall` | quita el proyecto y **mueve** tus datos a un lado | proyecto |
@@ -60,10 +62,12 @@ de ella. Antes de tocar el disco:
 2. Rechaza `/`, `/home`, `/usr`, `/etc`, `/bin`, `/var`, `/opt`, `/system`,
    `/data`, `/storage` y compañía.
 3. Rechaza tu carpeta personal entera.
-4. Rechaza borrar un directorio que contenga al propio instalador.
-5. Rechaza cualquier ruta que contenga algo de `SHIN_NO_BORRAR`.
-6. Se niega si el objetivo es un enlace simbólico.
-7. **Te enseña la ruta absoluta antes de borrar.**
+4. Rechaza borrar un directorio que contenga al propio instalador — pero sí
+   puede borrarse a sí mismo desde dentro, que es para lo que existe.
+5. Se niega si **cualquier tramo** del camino es un enlace simbólico, no solo
+   el último.
+6. Rechaza cualquier ruta que contenga algo de `SHIN_NO_BORRAR`.
+7. **Te enseña la ruta absoluta, el remoto y el commit antes de borrar.**
 
 Para llegar a ese punto, una acción destructiva exige saber sobre qué
 instalación actúa (la carpeta desde la que ejecutas o la que indiques con
@@ -72,6 +76,24 @@ carpeta sea un clon con `.git`.
 
 `--purge` no se conforma con `--yes`: hay que escribir **borrar todo**. Es la
 única acción irreversible de todo el instalador.
+
+## Instalaciones fijadas a una versión
+
+`--version vX` clona la etiqueta, y git deja la cabeza desprendida (no estás en
+ninguna rama). Eso es a propósito: esa instalación es **exactamente** esa
+versión.
+
+Por eso `--update` a secas **se niega** en una instalación fijada, en vez de
+arrastrarla en silencio a la punta de `main` y perder la referencia:
+
+```
+✗ Esta instalación está fijada a la versión v3.2.1, no a la rama main.
+  bash install.sh --update --version vNUEVA   cambiar a otra versión
+  bash install.sh --update --branch main     seguir la rama
+```
+
+Las tres rutas están probadas, rollback incluido: si la versión nueva no pasa
+las comprobaciones, vuelve a la etiqueta de la que venías.
 
 ## Integridad: la versión que instalas es la que se publicó
 
@@ -114,7 +136,7 @@ Tres, todas opcionales:
 
 ## Cómo se prueba
 
-`test/instalador.test.js` ejecuta el instalador real treinta y dos veces en carpetas
+`test/instalador.test.js` ejecuta el instalador real cuarenta y tres veces en carpetas
 temporales, con bash, git y npm de verdad. Lo que no se puede tener aquí se
 simula por el mismo camino que usaría el sistema:
 

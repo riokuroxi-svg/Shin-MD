@@ -75,7 +75,7 @@ después.
 ### Lo que no conseguí reproducir
 
 En una de las primeras pasadas de esta auditoría, `node_modules` del
-repositorio apareció vacío. Ejecuté las treinta y dos pruebas, una por una,
+repositorio apareció vacío. Ejecuté todas las pruebas, una por una,
 con un marcador dentro y **ninguna lo tocó**, ni tampoco la prueba del clon
 real que enlaza `node_modules` por enlace simbólico. No tengo causa
 confirmada, así que no voy a inventarla.
@@ -112,7 +112,7 @@ sugiere `git ls-remote --tags`.
 
 ## 4. Qué se probó y cómo
 
-Treinta y dos casos, todos con `bash`, `git` y `npm` reales sobre carpetas
+Cuarenta y tres casos, todos con `bash`, `git` y `npm` reales sobre carpetas
 temporales. Cada uno verifica antes de arrancar que trabaja dentro de
 `os.tmpdir()`, y ejecuta el `install.sh` de la instalación bajo prueba, nunca
 el del repositorio.
@@ -194,7 +194,7 @@ el del repositorio.
 | Archivo | Qué cambió |
 |---|---|
 | `install.sh` | capa de protección de rutas, `borrar_arbol` como único borrado, `--version`, comprobación de espacio, rollback arreglado, frase de confirmación para `--purge` |
-| `test/instalador.test.js` | de 16 a 32 casos; blindaje de la suite con `SHIN_NO_BORRAR` |
+| `test/instalador.test.js` | de 16 a 43 casos; blindaje de la suite con `SHIN_NO_BORRAR` |
 | `scripts/firma-instalador.mjs` | generación y comprobación de `SHA256SUMS` |
 | `package.json` | `npm run firma`, `npm run firma:check`, versión 3.2.1 |
 | `docs/TERMUX.md` | flujo por release, tabla de estado real vs. simulado |
@@ -207,9 +207,122 @@ el del repositorio.
 shellcheck -x -S style install.sh      # limpio
 bash -n install.sh                     # sintaxis
 npm test                               # suite completa
-node test/instalador.test.js           # 32/32
+node test/instalador.test.js           # 43/43
 npm run firma                          # SHA256SUMS
 npm run firma:check                    # comprobación
 sha256sum -c SHA256SUMS                # install.sh: OK
 npx eslint . ; npx tsc                 # limpio
 ```
+
+---
+
+# Revisión final: los cinco puntos
+
+Segunda auditoría, sobre los cinco puntos concretos. Todo lo de esta sección
+se ejecutó; donde algo no se pudo reproducir, se dice.
+
+## 1. Desinstalación propia — sin contradicción
+
+La protección contra borrar "algo que contiene al instalador" tenía un caso
+que la habría bloqueado: borrar la carpeta donde vive el propio script. La
+regla ahora lo distingue con una comparación explícita: se prohíbe borrar un
+**ancestro** del script, no la carpeta donde está.
+
+| Caso | Resultado |
+|---|---|
+| `--uninstall` desde dentro del proyecto | ✅ desinstala y **termina** (no muere al borrarse) |
+| `--uninstall --purge` desde dentro | ✅ borra todo y termina |
+| `--dir <padre que contiene el repo>` y desinstalar | ✅ rechazado: "contiene al propio instalador" |
+| `--dir` apuntando a otra instalación | ✅ funciona |
+
+El detalle que importa: bash lee el script por trozos, así que borrar el
+archivo a mitad de ejecución podía cortarlo. La prueba comprueba que llega al
+mensaje final y que los datos quedan guardados, no solo que el directorio
+desapareció.
+
+## 2. Actualización desde etiquetas — sí había un problema, pero no el descrito
+
+Clonar una etiqueta deja la cabeza desprendida. La hipótesis de que
+`git pull --ff-only` fallaría no se confirmó: `git merge --ff-only` **sí**
+funciona en una cabeza desprendida. El fallo real era peor y más silencioso:
+
+```
+antes:  instalado en v9.0.0  →  --update  →  v9.0.0-1-ga42258f
+        (la instalación deja de ser "exactamente la versión que pediste",
+         sin decirlo, y no hay forma de volver a fijarla)
+```
+
+Corregido. Ahora, en una instalación fijada:
+
+| Comando | Qué hace |
+|---|---|
+| `--update` | **se niega** y explica las dos salidas |
+| `--update --version vX` | salta a esa etiqueta, reinstala y verifica |
+| `--update --branch main` | vuelve a la rama y deja de estar fijada |
+
+Probado también el rollback desde una etiqueta: si `v9.1.0` no pasa las
+comprobaciones, vuelve a `v9.0.0` y los datos quedan byte a byte iguales
+(verificado con SHA256 de `.env`, `auth.db` y `shin.db`).
+
+## 3. Protección de rutas — de lista negra a lista blanca
+
+Antes: lista de rutas prohibidas. Ahora, para llegar a `rm -rf` hay que pasar
+cuatro filtros, y el primero es de lista blanca:
+
+1. **Identificación**: la ruta tiene que ser la de esta instalación (deducida
+   del propio script) o una que el usuario haya escrito con `--dir`. Si no se
+   sabe, se para. No hay valor por defecto.
+2. **Identidad**: `package.json` con `name: shin-md` **y** `.git`.
+3. **Forma**: ningún tramo del camino puede ser un enlace simbólico — se
+   comprueba sobre la ruta **tal como se dio**, no sobre la resuelta. (La
+   versión anterior resolvía primero y por eso el enlace se volvía invisible;
+   lo encontró esta auditoría.)
+4. **Contenido**: no puede ser el sistema, ni `$HOME`, ni contener al
+   instalador, ni contener nada de `SHIN_NO_BORRAR`.
+
+Casos probados: espacios en la ruta, ruta relativa, enlace intermedio, enlace
+final, directorio padre, `/`, `$HOME`, `/usr`, `/etc`, `/bin`, `/tmp/...` fuera
+de la raíz de instalación, y variables de entorno (`SHIN_INSTALL_ROOT`,
+`SHIN_INSTALL_DIR`, `SHIN_NO_BORRAR`).
+
+## 4. Paquetes de Termux — dos correcciones
+
+| Antes | Ahora | Por qué |
+|---|---|---|
+| `pkg install termux-api` para el wakelock | `pkg install termux-tools` | `termux-wake-lock` lo provee **termux-tools** (paquete base, ya presente); `termux-api` es para hablar con la app Termux:API y aquí no se usa |
+| solo `pkg install yt-dlp` | `yt-dlp`, si falla → `python-yt-dlp` | en varias ramas de Termux el comando lo provee `python-yt-dlp` |
+
+La prueba de Termux simula que `pkg install yt-dlp` falla y comprueba que se
+reintenta con `python-yt-dlp`, y que **nunca** aparece `termux-api`.
+
+## 5. Persistencia, rollback y base de datos
+
+Una actualización que falla después de tocar código y dependencias deja:
+
+- código en el commit anterior (verificado con `rev-parse`);
+- dependencias reinstaladas desde el lockfile;
+- `.env`, `Sessions/Owner/auth.db` y `data/shin.db` con la misma huella SHA256
+  que antes;
+- y un aviso si la base quedó por delante del código.
+
+Sobre las migraciones: el bot **sí migra** al arrancar. Revisado
+`src/storage/migrations.js`, todas las operaciones son aditivas
+(`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE ADD COLUMN`); no hay ningún `DROP`
+ni `DELETE`. Es decir: hoy no hay migraciones destructivas que respaldar. La
+salvaguarda está puesta para cuando las haya: copia de `data/` antes de
+actualizar, lectura de la versión de esquema antes y después, y aviso explícito
+con la ruta de la copia si se revierte el código con la base por delante.
+
+## Lo que sigue pendiente
+
+- **Android real**: `pkg install`, `termux-wake-lock`, `sharp` wasm en el
+  dispositivo, persistencia en segundo plano. Nada de esto se ha ejecutado en
+  un teléfono.
+- **WhatsApp real**: vincular y enviar tras instalar por este método.
+- **`node_modules` del repositorio**: desapareció dos veces durante esta
+  auditoría y **no se pudo reproducir**. Recorrí los 31 archivos de prueba con
+  un marcador dentro y ninguno lo borra. Dos guardas quedan puestas: cada
+  llamada al instalador falla si el `node_modules` del repositorio desaparece
+  durante esa llamada, y una prueba final compara una firma del repositorio
+  tomada al empezar. No afirmo una causa que no tengo.
+- **Rollback de una migración**: no existe. Se restaura la copia, a mano.

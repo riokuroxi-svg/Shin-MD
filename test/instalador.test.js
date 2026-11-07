@@ -96,6 +96,8 @@ function correr(script, args, { cwd, raiz, env = {}, entrada } = {}) {
     ...(raiz ? { SHIN_INSTALL_ROOT: raiz } : {}),
     ...env,
   };
+  const MARCA = path.join(RAIZ, "node_modules");
+  const antes = fs.existsSync(MARCA);
   const r = spawnSync("bash", [script, ...args], {
     cwd: cwd || RAIZ,
     env: entorno,
@@ -103,6 +105,9 @@ function correr(script, args, { cwd, raiz, env = {}, entrada } = {}) {
     input: entrada,
     timeout: 300_000,
   });
+  if (antes && !fs.existsSync(MARCA)) {
+    throw new Error(`ESTA LLAMADA BORRÓ node_modules del repositorio:\n  script=${script}\n  args=${args.join(" ")}\n  cwd=${cwd}\n  raiz=${raiz}`);
+  }
   return { status: r.status, salida: `${r.stdout || ""}${r.stderr || ""}` };
 }
 
@@ -119,6 +124,8 @@ function crearOrigen() {
   }, null, 2) + "\n");
   escribir(path.join(dir, "index.js"), "export const arrancado = true;\n");
   escribir(path.join(dir, ".env.example"), "OWNER_NUMBER=\nPAIRING_METHOD=code\n");
+  escribir(path.join(dir, "src", "storage", "migrations.js"),
+    "export const MIGRATIONS = [\n  { version: 1, name: \"core\", up() {} },\n  { version: 2, name: \"economia\", up() {} }\n];\n");
   escribir(path.join(dir, ".gitignore"), "node_modules/\n.env\nbackups/\n");
   escribir(path.join(dir, "package-lock.json"), JSON.stringify({
     name: "shin-md", version: "9.9.9", lockfileVersion: 3, requires: true,
@@ -788,4 +795,255 @@ test("la suite no altera el repositorio desde el que se ejecuta", () => {
     "apareció o desapareció algo en la raíz del repositorio durante las pruebas");
   assert.equal(ahora.pkg, REPO_AL_EMPEZAR.pkg, "el package.json cambió durante las pruebas");
   assert.equal(ahora.tests, REPO_AL_EMPEZAR.tests, "cambió el número de archivos de prueba");
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  Revisión final: desinstalarse a sí mismo, etiquetas, enlaces en el
+//  camino, paquetes reales de Termux y esquema de la base.
+// ═══════════════════════════════════════════════════════════════════
+
+test("puede desinstalarse a sí mismo desde su propia carpeta", () => {
+  const origen = crearOrigen();
+  const { raiz, proyecto, instalador } = instalacionLista(origen);
+  const antes = sembrarDatos(proyecto);
+
+  // El script se borra a mitad de ejecución: tiene que terminar bien igual.
+  const r = correr(instalador, ["--uninstall"], { cwd: proyecto, entrada: "si\n" });
+
+  assert.equal(r.status, 0, r.salida);
+  assert.ok(!fs.existsSync(proyecto), "el proyecto desaparece");
+  assert.match(r.salida, /Para volver/, "y llega al final, no muere al borrarse");
+
+  const copia = fs.readdirSync(raiz).find((n) => n.startsWith("Shin-MD-datos-"));
+  assert.ok(copia, "los datos se guardan");
+  assert.equal(hashDe(path.join(raiz, copia, ".env")), antes.env);
+  assert.equal(hashDe(path.join(raiz, copia, "Sessions", "Owner", "auth.db")), antes.sesion);
+});
+
+test("--purge desde su propia carpeta también termina sin dejar restos", () => {
+  const origen = crearOrigen();
+  const { raiz, proyecto, instalador } = instalacionLista(origen);
+  sembrarDatos(proyecto);
+
+  const r = correr(instalador, ["--uninstall", "--purge", "--yes"], { cwd: proyecto, entrada: "borrar todo\n" });
+
+  assert.equal(r.status, 0, r.salida);
+  assert.deepEqual(fs.readdirSync(raiz), []);
+});
+
+test("no borra un directorio padre que contiene al instalador", () => {
+  const origen = crearOrigen();
+  const raiz = temporal("shin-padre");
+  const hijo = path.join(raiz, "Shin-MD");
+  fs.mkdirSync(hijo, { recursive: true });
+  // El padre también "parece" una instalación: package.json correcto y .git.
+  fs.cpSync(path.join(origen, "package.json"), path.join(raiz, "package.json"));
+  git(raiz, "init", "--quiet", "--initial-branch", "main");
+  git(raiz, "add", "-A");
+  git(raiz, "commit", "--quiet", "-m", "padre");
+  const r = correr(INSTALADOR, ["--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  assert.equal(r.status, 0, r.salida);
+
+  const intento = correr(path.join(hijo, "install.sh"), ["--dir", raiz, "--uninstall", "--purge", "--yes"], {
+    cwd: hijo,
+    entrada: "borrar todo\n",
+  });
+
+  assert.notEqual(intento.status, 0);
+  assert.match(intento.salida, /contiene al propio instalador/);
+  assert.ok(fs.existsSync(path.join(hijo, "package.json")), "el hijo sigue vivo");
+  assert.ok(fs.existsSync(path.join(raiz, "package.json")), "y el padre también");
+});
+
+test("una instalación desde etiqueta no se suelta sola de la versión", () => {
+  const origen = crearOrigen();
+  git(origen, "tag", "-a", "v9.0.0", "-m", "vieja");
+  escribir(path.join(origen, "NOVEDADES.md"), "posterior\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "--quiet", "-m", "posterior");
+
+  const raiz = temporal("shin-etiqueta");
+  const inst = correr(INSTALADOR, ["--version", "v9.0.0", "--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  assert.equal(inst.status, 0, inst.salida);
+  const proyecto = path.join(raiz, "Shin-MD");
+  assert.equal(git(proyecto, "rev-parse", "--abbrev-ref", "HEAD").trim(), "HEAD", "debe quedar desprendida");
+
+  const r = correr(path.join(proyecto, "install.sh"), ["--update"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /fijada a la versión v9\.0\.0/);
+  assert.match(r.salida, /--update --version/);
+  assert.equal(git(proyecto, "describe", "--tags", "--exact-match").trim(), "v9.0.0", "no se movió");
+});
+
+test("--update --version cambia de una etiqueta a otra", () => {
+  const origen = crearOrigen();
+  git(origen, "tag", "-a", "v9.0.0", "-m", "vieja");
+  escribir(path.join(origen, "NOVEDADES.md"), "nuevo\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "--quiet", "-m", "posterior");
+  git(origen, "tag", "-a", "v9.1.0", "-m", "nueva");
+
+  const raiz = temporal("shin-etiqueta2");
+  correr(INSTALADOR, ["--version", "v9.0.0", "--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  const proyecto = path.join(raiz, "Shin-MD");
+
+  const r = correr(path.join(proyecto, "install.sh"), ["--update", "--version", "v9.1.0"], {
+    cwd: proyecto, env: { SHIN_REPO_URL: origen },
+  });
+
+  assert.equal(r.status, 0, r.salida);
+  assert.match(r.salida, /fijada en v9\.1\.0/);
+  assert.equal(git(proyecto, "describe", "--tags", "--exact-match").trim(), "v9.1.0");
+  assert.ok(fs.existsSync(path.join(proyecto, "NOVEDADES.md")), "trae lo de la versión nueva");
+});
+
+test("--update --version con una etiqueta inexistente no mueve nada", () => {
+  const origen = crearOrigen();
+  git(origen, "tag", "-a", "v9.0.0", "-m", "vieja");
+  const raiz = temporal("shin-etiqueta3");
+  correr(INSTALADOR, ["--version", "v9.0.0", "--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  const proyecto = path.join(raiz, "Shin-MD");
+
+  const r = correr(path.join(proyecto, "install.sh"), ["--update", "--version", "v0.0.0"], {
+    cwd: proyecto, env: { SHIN_REPO_URL: origen },
+  });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /No existe la versión v0\.0\.0/);
+  assert.equal(git(proyecto, "describe", "--tags", "--exact-match").trim(), "v9.0.0");
+});
+
+test("--update --branch devuelve la instalación a la rama", () => {
+  const origen = crearOrigen();
+  git(origen, "tag", "-a", "v9.0.0", "-m", "vieja");
+  const raiz = temporal("shin-etiqueta4");
+  correr(INSTALADOR, ["--version", "v9.0.0", "--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  const proyecto = path.join(raiz, "Shin-MD");
+
+  const r = correr(path.join(proyecto, "install.sh"), ["--update", "--branch", "main"], {
+    cwd: proyecto, env: { SHIN_REPO_URL: origen },
+  });
+
+  assert.equal(r.status, 0, r.salida);
+  assert.match(r.salida, /siguiendo la rama main/);
+  assert.equal(git(proyecto, "rev-parse", "--abbrev-ref", "HEAD").trim(), "main");
+});
+
+test("rollback desde una instalación etiquetada vuelve a la etiqueta", () => {
+  const origen = crearOrigen();
+  git(origen, "tag", "-a", "v9.0.0", "-m", "buena");
+  escribir(path.join(origen, "NOVEDADES.md"), "rompe\n");
+  escribir(path.join(origen, "scripts", "preparar.cjs"),
+    fs.readFileSync(path.join(origen, "scripts", "preparar.cjs"), "utf8") + "\nprocess.exit(1);\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "--quiet", "-m", "rompe todo");
+  git(origen, "tag", "-a", "v9.1.0", "-m", "mala");
+
+  const raiz = temporal("shin-etiqueta5");
+  correr(INSTALADOR, ["--version", "v9.0.0", "--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  const proyecto = path.join(raiz, "Shin-MD");
+  const antes = sembrarDatos(proyecto);
+
+  const r = correr(path.join(proyecto, "install.sh"), ["--update", "--version", "v9.1.0"], {
+    cwd: proyecto, env: { SHIN_REPO_URL: origen },
+  });
+
+  assert.notEqual(r.status, 0);
+  assert.equal(git(proyecto, "describe", "--tags", "--exact-match").trim(), "v9.0.0", "vuelve a la buena");
+  assert.equal(hashDe(path.join(proyecto, ".env")), antes.env);
+  assert.equal(hashDe(path.join(proyecto, "Sessions", "Owner", "auth.db")), antes.sesion);
+});
+
+test("funciona con espacios en la ruta y con ruta relativa", () => {
+  const origen = crearOrigen();
+  const raiz = temporal("shin-con espacios");
+  const inst = correr(INSTALADOR, ["--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  assert.equal(inst.status, 0, inst.salida);
+  const proyecto = path.join(raiz, "Shin-MD");
+  sembrarDatos(proyecto);
+
+  const rel = correr("./Shin-MD/install.sh", ["--uninstall"], { cwd: raiz, entrada: "si\n" });
+
+  assert.equal(rel.status, 0, rel.salida);
+  assert.ok(!fs.existsSync(proyecto));
+  assert.ok(fs.readdirSync(raiz).some((n) => n.includes("datos")), "los datos quedan al lado");
+});
+
+test("no borra a través de un enlace en medio del camino", () => {
+  const origen = crearOrigen();
+  const raiz = temporal("shin-enlacemedio");
+  const real = path.join(raiz, "real");
+  const enlace = path.join(raiz, "atajo");
+  fs.mkdirSync(real, { recursive: true });
+  fs.symlinkSync(real, enlace, "dir");
+
+  const inst = correr(INSTALADOR, ["--yes"], { raiz: enlace, env: { SHIN_REPO_URL: origen } });
+  assert.equal(inst.status, 0, inst.salida);
+  const proyecto = path.join(real, "Shin-MD");
+
+  const r = correr(path.join(proyecto, "install.sh"),
+    ["--dir", path.join(enlace, "Shin-MD"), "--uninstall", "--yes"],
+    { cwd: proyecto, entrada: "si\n" });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /el camino pasa por el enlace/);
+  assert.ok(fs.existsSync(path.join(proyecto, "package.json")), "la instalación real sigue ahí");
+});
+
+test("en Termux instala termux-tools, no termux-api, y prueba python-yt-dlp", () => {
+  const origen = crearOrigen();
+  const raiz = temporal("shin-termux2");
+  const falso = temporal("shin-prefix2");
+  const registro = path.join(falso, "llamadas.log");
+  // pkg: falla para yt-dlp (como en las ramas donde se llama python-yt-dlp).
+  escribir(path.join(falso, "bin", "pkg"), `#!/bin/sh
+echo "pkg $*" >> "${registro}"
+case "$*" in
+  *"install -y yt-dlp"*) exit 100 ;;
+esac
+exit 0
+`, 0o755);
+  escribir(path.join(falso, "bin", "termux-wake-lock"), "#!/bin/sh\nexit 0\n", 0o755);
+
+  const r = correr(INSTALADOR, ["--yes"], {
+    raiz,
+    env: { SHIN_REPO_URL: origen, TERMUX_VERSION: "0.118.3", PREFIX: falso },
+  });
+
+  assert.equal(r.status, 0, r.salida);
+  const llamadas = fs.readFileSync(registro, "utf8");
+  assert.match(llamadas, /pkg install -y python-yt-dlp/, "debe reintentar con python-yt-dlp");
+  assert.doesNotMatch(llamadas, /pkg install -y termux-api/, "termux-api no da el wakelock");
+});
+
+test("avisa si al revertir la base quedó por delante del código", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+  sembrarDatos(proyecto);
+
+  // La base dice estar en el esquema 9; el código del proyecto conoce hasta 2.
+  // (sembrarDatos deja un archivo cualquiera; aquí hace falta un SQLite real.)
+  fs.rmSync(path.join(proyecto, "data", "shin.db"), { force: true });
+  const crearDb = spawnSync(process.execPath, ["-e", `
+    const { DatabaseSync } = require("node:sqlite");
+    const d = new DatabaseSync(process.argv[1]);
+    d.exec("CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY, name TEXT, applied_at INTEGER)");
+    d.exec("DELETE FROM migrations");
+    d.prepare("INSERT INTO migrations VALUES (9, 'futuro', 0)").run();
+    d.close();
+  `, path.join(proyecto, "data", "shin.db")], { encoding: "utf8" });
+  assert.equal(crearDb.status, 0, crearDb.stderr);
+
+  escribir(path.join(origen, "NOVEDADES.md"), "rompe\n");
+  escribir(path.join(origen, "scripts", "preparar.cjs"),
+    fs.readFileSync(path.join(origen, "scripts", "preparar.cjs"), "utf8") + "\nprocess.exit(1);\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "--quiet", "-m", "rompe");
+
+  const r = correr(instalador, ["--update"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /esquema v9 y el código al que volviste solo conoce v2/);
+  assert.match(r.salida, /Copia de la base de ANTES de actualizar/);
 });
