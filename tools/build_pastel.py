@@ -152,19 +152,19 @@ def hero():
         texto(c, nunito_suave, nota, 15, x + 34 + ancho_v, cy0 + 74, P["tinta_suave"], 0.2)
         c.agrega(icono(ic, x + cw - 32, cy0 + 32, 13, color, grosor=2.2))
 
-    # mascota
-    alto_m = 384
-    ancho_m = alto_m * 334 / 780
-    c.gradiente_radial("plato", [("0", "#FFFFFF", "0.95"), ("0.7", "#FFF0F6", "0.7"), ("1", "#FFE3EF", "0")])
-    c.circulo(620, 330, 128, "url(#plato)")
-    c.circulo(620, 330, 122, "none", trazo=P["lila_claro"], grosor=2.5, opacidad=0.95)
-    adorno(c, 486, 150, 13, P["ambar"], giro=12)
-    adorno(c, 724, 128, 10, P["lila"], giro=30, opacidad=0.9)
-    c.agrega(corazon(740, 252, 8, P["lila"], opacidad=0.9))
-    c.agrega(corazon(492, 292, 7, P["lila"], opacidad=0.7))
-    c.imagen(MASCOTA, 620 - ancho_m / 2, 46, ancho_m, alto_m)
-    adorno(c, 508, 424, 9, P["verde"], giro=8)
-    adorno(c, 728, 430, 11, P["ambar"], giro=20)
+    # La figura. Es una ilustración pintada, no una pegatina: sin plato ni
+    # aro detrás, solo un resplandor suave para que no flote en el vacío.
+    alto_m = 468
+    ancho_m = alto_m * 329 / 1145
+    c.gradiente_radial("plato", [("0", "#FFFFFF", "0.85"), ("0.6", "#F3ECFB", "0.55"), ("1", "#E7DCF6", "0")])
+    c.circulo(620, 268, 150, "url(#plato)")
+    adorno(c, 470, 150, 13, P["ambar"], giro=12)
+    adorno(c, 752, 132, 10, P["lila"], giro=30, opacidad=0.9)
+    c.agrega(corazon(768, 236, 8, P["lila"], opacidad=0.9))
+    c.agrega(corazon(474, 300, 7, P["lila"], opacidad=0.7))
+    c.imagen(MASCOTA, 620 - ancho_m / 2, 22, ancho_m, alto_m)
+    adorno(c, 486, 452, 9, P["verde"], giro=8)
+    adorno(c, 748, 448, 11, P["ambar"], giro=20)
     guardar(c, "hero.svg")
 
 
