@@ -177,6 +177,28 @@ borrar_arbol() {
   if razon="$(ruta_intocable "$real")"; then
     morir "me niego a borrar $real: $razon."
   fi
+
+  # Entre la comprobación de arriba y el borrado hay subshells de por medio.
+  # Si en ese hueco alguien sustituye un tramo por un enlace, el rm seguiría
+  # la ruta ya resuelta y borraría otra cosa. Se vuelve a mirar justo antes:
+  #   - los enlaces, sobre la ruta TAL COMO se dio (mirar la resuelta no sirve:
+  #     si el enlace ya estaba al resolver, la resuelta ya no lo contiene);
+  #   - que resolver otra vez dé exactamente lo mismo (si cambió, algo cambió).
+  # Queda un hueco entre esta línea y el rm. Cerrarlo del todo pediría borrar
+  # por descriptor de directorio, que sh no ofrece. Es un hueco de microsegundos
+  # y hace falta poder escribir en el padre de la carpeta para aprovecharlo.
+  if tramo="$(sin_enlaces_en_el_camino "$como_se_dio")"; then
+    morir "no borro $como_se_dio: el camino pasa por el enlace $tramo."
+  fi
+  local real_otra
+  real_otra="$(resolver_real "$como_se_dio")" || morir "no pude volver a resolver $como_se_dio"
+  if [ "$real_otra" != "$real" ]; then
+    morir "no borro $real: la ruta cambió mientras la comprobaba (ahora es $real_otra)."
+  fi
+  if razon="$(ruta_intocable "$real")"; then
+    morir "me niego a borrar $real: $razon."
+  fi
+
   dato "borrando $real${motivo:+ ($motivo)}"
   rm -rf -- "$real"
   bien "borrado $real"
@@ -427,22 +449,136 @@ rutas_de_datos() {
   done
 }
 
+# Lo que se lleva --uninstall antes de borrar la carpeta. Incluye backups/:
+# borrar la instalación no puede llevarse por delante respaldos que siguen
+# siendo válidos. No se usa en respaldar_datos() para no copiar respaldos
+# dentro de respaldos.
+rutas_a_conservar() {
+  rutas_de_datos
+  [ -d "$DESTINO/backups" ] && printf 'backups\n'
+  return 0
+}
+
+# Copia CONSISTENTE de una base SQLite.
+#
+# Un `cp` del .db mientras el bot escribe puede dejar la copia a medias: en
+# modo WAL, las últimas transacciones viven en `-wal` y el `.db` por sí solo
+# no las tiene; copiar los tres archivos tampoco basta si el WAL se está
+# escribiendo en ese instante. `VACUUM INTO` sí: escribe una base nueva y
+# completa a partir de una lectura transactionally-consistent, con el bot
+# corriendo o no.
+copia_consistente_sqlite() {
+  local origen="$1" destino="$2" salida
+  COPIAS_ERROR=""
+  # El fragmento JS no lleva comillas simples: el shell ya usa las suyas para
+  # envolverlo, y una comilla suelta dentro rompería el script en silencio.
+  salida="$(node --no-warnings -e '
+    const { DatabaseSync } = require("node:sqlite");
+    const [origen, destino] = process.argv.slice(1);
+    const q = String.fromCharCode(39);
+    const literal = q + destino.split(q).join(q + q) + q;
+    let db = null;
+    try {
+      db = new DatabaseSync(origen, { readOnly: true });
+      db.exec("VACUUM INTO " + literal);
+      db.close();
+      db = null;
+      const copia = new DatabaseSync(destino, { readOnly: true });
+      const fila = copia.prepare("PRAGMA integrity_check").get();
+      copia.close();
+      const r = Object.values(fila || {})[0];
+      process.stdout.write(r === "ok" ? "ok" : "la copia no pasa integrity_check: " + r);
+    } catch (e) {
+      process.stdout.write("VACUUM INTO falló: " + String((e && e.message) || e));
+    } finally {
+      try { if (db) db.close(); } catch (e) {}
+    }
+  ' "$origen" "$destino" 2>&1)" || salida="node no llegó a ejecutarse (${salida:-sin salida})"
+  if [ "$salida" = "ok" ]; then
+    return 0
+  fi
+  COPIAS_ERROR="${salida:-sin explicación}"
+  return 1
+}
+
 respaldar_datos() {
-  local motivo="${1:-manual}" destino marca r
+  local motivo="${1:-manual}" destino parcial marca r archivo base
   local -a presentes=()
   while IFS= read -r r; do [ -n "$r" ] && presentes+=("$r"); done < <(rutas_de_datos)
   if [ "${#presentes[@]}" -eq 0 ]; then
     dato "sin datos que respaldar todavía"
     return 0
   fi
+
   marca="$(date +%Y%m%d-%H%M%S)"
   destino="$DESTINO/backups/$motivo-$marca"
-  mkdir -p "$destino"
+  # Se escribe en una carpeta aparte y solo se renombra al final. Así un
+  # respaldo a medias nunca queda con el nombre bueno: no hay forma de
+  # confundir un montón de archivos sueltos con un respaldo válido.
+  parcial="$DESTINO/backups/.$motivo-$marca.parcial"
+  rm -rf -- "$parcial"
+  mkdir -p "$parcial"
+
+  fallo() {
+    rm -rf -- "$parcial"
+    morir "No he tocado nada, pero tampoco puedo respaldar tus datos:
+
+  $1
+
+  Sin un respaldo completo no sigo: prefiero dejarte donde estabas antes que
+  actualizar o reparar encima de una copia a medias. Los respaldos anteriores,
+  si los hay, siguen en $DESTINO/backups/."
+  }
+
   for r in "${presentes[@]}"; do
-    cp -a "$DESTINO/$r" "$destino/" 2>/dev/null || aviso "no se pudo respaldar $r"
+    if [ "$r" = "data" ] && [ -d "$DESTINO/data" ]; then
+      mkdir -p "$parcial/data"
+      shopt -s nullglob
+      for archivo in "$DESTINO"/data/*.db; do
+        base="$(basename "$archivo")"
+        # Un archivo vacío no contiene nada que perder: se ignora, no es un
+        # fallo. Una base de verdad, o se copia bien o se para todo.
+        [ -s "$archivo" ] || continue
+        if ! copia_consistente_sqlite "$archivo" "$parcial/data/$base"; then
+          shopt -u nullglob
+          fallo "no pude copiar $base de forma consistente.
+  $COPIAS_ERROR
+  (el archivo sigue donde estaba; nada se ha modificado)"
+        fi
+      done
+      # Todo lo demás de data/ (json, configuraciones…) se copia tal cual.
+      # Los .db-wal/.db-shm no: ya están dentro de la copia del .db.
+      for archivo in "$DESTINO"/data/*; do
+        case "$archivo" in
+          *.db|*.db-wal|*.db-shm) continue ;;
+        esac
+        cp -a "$archivo" "$parcial/data/" 2>/dev/null \
+          || { shopt -u nullglob; fallo "no pude copiar $(basename "$archivo") de data/."; }
+      done
+      shopt -u nullglob
+    else
+      cp -a "$DESTINO/$r" "$parcial/" 2>/dev/null \
+        || fallo "no pude copiar $r."
+    fi
   done
+
+  # Mismo sistema de archivos, así que este mv es un rename: o está entero
+  # con su nombre definitivo, o no está.
+  mv -- "$parcial" "$destino" || fallo "no pude cerrar el respaldo en $destino."
   RESPALDO_HECHO="$destino"
   bien "datos respaldados en ${destino#"$DESTINO/"}"
+}
+
+# ¿Está el bot corriendo ahora mismo? Con WAL la copia consistente lo soporta,
+# pero conviene decirlo: actualizar con el bot vivo puede dejarlo a medias.
+bot_corriendo() {
+  if hay pgrep; then
+    pgrep -f "node .*index\.js" >/dev/null 2>&1 && return 0
+    return 1
+  fi
+  # Sin pgrep (Termux mínimo): se mira la lista de procesos a mano.
+  # shellcheck disable=SC2009
+  ps -A 2>/dev/null | grep -q "[n]ode .*index\.js"
 }
 
 # ───────────────────────── instalar ─────────────────────────
@@ -667,6 +803,10 @@ accion_actualizar() {
   Revísalos con: git -C $DESTINO status
   Guárdalos o descártalos tú, y vuelve a intentarlo."
   fi
+  if bot_corriendo; then
+    aviso "parece que el bot está corriendo. Para que no quede a medias, páralo"
+    aviso "con Ctrl+C antes de continuar. La copia de la base sí es consistente."
+  fi
   respaldar_datos "pre-actualizacion"
   local previo esquema_antes db_del_bot
   previo="$(git -C "$DESTINO" rev-parse HEAD)"
@@ -807,7 +947,17 @@ accion_desinstalar() {
     dato "en el commit  $(git -C "$DESTINO" rev-parse --short HEAD 2>/dev/null || echo '?')"
   fi
   if [ "$PURGAR" -eq 1 ]; then
+    local cuantos_respaldos=0
+    if [ -d "$DESTINO/backups" ]; then
+      cuantos_respaldos="$(find "$DESTINO/backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+    fi
     printf '  %sY TAMBIÉN tus sesiones, tu base de datos y tu .env.%s\n' "$C_ROJO" "$C_RESET"
+    if [ "${cuantos_respaldos:-0}" -gt 0 ]; then
+      # Con --uninstall normal los respaldos se conservan; con --purge se van
+      # con todo, y eso hay que decirlo, no que se descubra después.
+      printf '  %sY tus %s respaldo(s) de backups/, que con --uninstall se conservarían.%s\n' \
+        "$C_ROJO" "$cuantos_respaldos" "$C_RESET"
+    fi
     printf '  Eso es volver a vincular WhatsApp desde cero y perder tus datos.\n'
   else
     printf '  Tus datos (Sessions/, data/, .env) se moverán a:\n    %s\n' "$destino_datos"
@@ -834,7 +984,7 @@ accion_desinstalar() {
   if [ "$PURGAR" -eq 0 ]; then
     mkdir -p "$destino_datos"
     local r
-    while IFS= read -r r; do [ -n "$r" ] && cp -a "$DESTINO/$r" "$destino_datos/"; done < <(rutas_de_datos)
+    while IFS= read -r r; do [ -n "$r" ] && cp -a "$DESTINO/$r" "$destino_datos/"; done < <(rutas_a_conservar)
     bien "datos guardados en $destino_datos"
   fi
   borrar_arbol "$DESTINO" "desinstalación"
@@ -879,7 +1029,9 @@ done
 if [ "$DESTINO_EXPLICITO" -eq 0 ]; then
   ORIGEN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   if [ -f "$ORIGEN/package.json" ] && grep -q '"name"[[:space:]]*:[[:space:]]*"shin-md"' "$ORIGEN/package.json"; then
-    DESTINO="$ORIGEN"
+    # Si se llegó hasta aquí por un enlace, se trabaja sobre la ruta real:
+    # así el resto de protecciones no tiene que pelear con el enlace del cwd.
+    DESTINO="$(resolver_real "$ORIGEN")"
     ORIGEN_DEDUCIDO=1
     # Los datos deben quedar JUNTO a la instalación, no en $HOME.
     BASE_DIR="$(dirname "$DESTINO")"

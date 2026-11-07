@@ -81,9 +81,20 @@ function git(cwd, ...args) {
 }
 
 /** Corre el instalador indicado y devuelve { status, salida }. */
+// Cada llamada al instalador recibe su propio $HOME, dentro de tmp. Sin esto,
+// un --uninstall con --dir guarda los datos junto a $HOME de verdad y la suite
+// iba dejando carpetas "Shin-MD-datos-*" en la carpeta del usuario.
+const HOGARES = [];
+function hogarFalso() {
+  const d = temporal("shin-home");
+  HOGARES.push(d);
+  return d;
+}
+
 function correr(script, args, { cwd, raiz, env = {}, entrada } = {}) {
   if (raiz) dentroDeTmp(raiz);
   if (cwd) dentroDeTmp(cwd);
+  const hogar = env.HOME || hogarFalso();
   const entorno = {
     ...process.env,
     NO_COLOR: "1",
@@ -93,6 +104,9 @@ function correr(script, args, { cwd, raiz, env = {}, entrada } = {}) {
     SHIN_NO_BORRAR: `${RAIZ}:${process.env.SHIN_NO_BORRAR || ""}`,
     // El entorno de pruebas es un tmpfs pequeño; el umbral real se prueba aparte.
     SHIN_ESPACIO_MIN_MB: "1",
+    HOME: hogar,
+    // Ojo: no se pone SHIN_INSTALL_ROOT cuando no se pide, porque eso marca
+    // el destino como explícito y desactiva la deducción desde la carpeta.
     ...(raiz ? { SHIN_INSTALL_ROOT: raiz } : {}),
     ...env,
   };
@@ -182,11 +196,28 @@ function instalacionLista(origen) {
   return { raiz, proyecto, instalador: path.join(proyecto, "install.sh") };
 }
 
+/** Crea una base SQLite real (no un archivo con texto dentro: el instalador
+ *  ahora se niega a seguir si no puede copiarla de forma consistente). */
+function baseSqlite(ruta, filas = 3) {
+  fs.mkdirSync(path.dirname(ruta), { recursive: true });
+  fs.rmSync(ruta, { force: true });
+  const r = spawnSync(process.execPath, ["--no-warnings", "-e", `
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(process.argv[1]);
+    db.exec("PRAGMA journal_mode=WAL");
+    db.exec("CREATE TABLE mensajes (id INTEGER PRIMARY KEY, texto TEXT)");
+    const ins = db.prepare("INSERT INTO mensajes (texto) VALUES (?)");
+    for (let i = 0; i < Number(process.argv[2]); i++) ins.run("fila " + i);
+    db.close();
+  `, ruta, String(filas)], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`no pude crear la base de prueba: ${r.stderr}`);
+}
+
 /** Datos de usuario: .env con un secreto, sesión y base de datos. */
 function sembrarDatos(proyecto) {
   escribir(path.join(proyecto, ".env"), "OWNER_NUMBER=5210000000000\nSECRETO=no-se-toca\n");
   escribir(path.join(proyecto, "Sessions", "Owner", "auth.db"), "credenciales-de-verdad");
-  escribir(path.join(proyecto, "data", "shin.db"), "filas-de-verdad");
+  baseSqlite(path.join(proyecto, "data", "shin.db"));
   return {
     env: hashDe(path.join(proyecto, ".env")),
     sesion: hashDe(path.join(proyecto, "Sessions", "Owner", "auth.db")),
@@ -1046,4 +1077,370 @@ test("avisa si al revertir la base quedó por delante del código", () => {
   assert.notEqual(r.status, 0);
   assert.match(r.salida, /esquema v9 y el código al que volviste solo conoce v2/);
   assert.match(r.salida, /Copia de la base de ANTES de actualizar/);
+});
+
+test("la copia de la base es consistente aunque el bot esté escribiendo (WAL)", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+  fs.mkdirSync(path.join(proyecto, "data"), { recursive: true });
+  fs.rmSync(path.join(proyecto, "data", "shin.db"), { force: true });
+  fs.rmSync(path.join(proyecto, "data", "shin.db.json"), { force: true });
+
+  // Un "bot" que deja 2000 filas en el WAL sin checkpoint.
+  const script = path.join(proyecto, "llena.mjs");
+  fs.writeFileSync(script, `
+import { DatabaseSync } from "node:sqlite";
+const db = new DatabaseSync(${JSON.stringify(path.join(proyecto, "data", "shin.db"))});
+db.exec("PRAGMA journal_mode=WAL");
+db.exec("CREATE TABLE users(jid TEXT PRIMARY KEY)");
+for (let i = 0; i < 2000; i++) db.prepare("INSERT OR IGNORE INTO users VALUES (?)").run("u" + i);
+// se queda abierto: así el WAL no se consolida en el .db
+setInterval(() => db.prepare("INSERT OR IGNORE INTO users VALUES (?)").run("t" + Date.now()), 200);
+`);
+  const bot = spawn(process.execPath, [script], { stdio: "ignore" });
+  try {
+    // Espera a que la base exista con sus filas.
+    const limite = Date.now() + 15000;
+    let listo = false;
+    while (Date.now() < limite) {
+      const r = spawnSync(process.execPath, ["-e", `
+        const { DatabaseSync } = require("node:sqlite");
+        const d = new DatabaseSync(${JSON.stringify(path.join(proyecto, "data", "shin.db"))}, { readOnly: true });
+        process.stdout.write(String(d.prepare("SELECT COUNT(*) n FROM users").get().n));
+        d.close();
+      `], { encoding: "utf8" });
+      if (Number(r.stdout) >= 2000) { listo = true; break; }
+      spawnSync("sleep", ["0.2"]);
+    }
+    assert.ok(listo, "la base de prueba no llegó a llenarse");
+    assert.ok(fs.existsSync(path.join(proyecto, "data", "shin.db-wal")), "debe haber -wal con datos");
+
+    const r = correr(instalador, ["--repair"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+    assert.equal(r.status, 0, r.salida);
+    // El mensaje cambió al quitar el respaldo silencioso: ahora el respaldo
+    // se anuncia una vez, ya cerrado, y es la prueba de que existe.
+    assert.match(r.salida, /datos respaldados en backups\/pre-reparacion-/);
+
+    const respaldo = fs.readdirSync(path.join(proyecto, "backups")).find((n) => n.startsWith("pre-reparacion"));
+    assert.ok(respaldo, "tiene que haber respaldo");
+
+    const copia = spawnSync(process.execPath, ["-e", `
+      const { DatabaseSync } = require("node:sqlite");
+      const d = new DatabaseSync(process.argv[1], { readOnly: true });
+      const n = d.prepare("SELECT COUNT(*) n FROM users").get().n;
+      const i = d.prepare("PRAGMA integrity_check").get();
+      d.close();
+      process.stdout.write(JSON.stringify({ n, ok: Object.values(i)[0] }));
+    `, path.join(proyecto, "backups", respaldo, "data", "shin.db")], { encoding: "utf8" });
+
+    const { n, ok } = JSON.parse(copia.stdout);
+    assert.equal(ok, "ok", "la copia tiene que pasar integrity_check");
+    assert.ok(n >= 2000, `la copia perdió filas: ${n} de 2000 (¿se copió el .db sin el WAL?)`);
+  } finally {
+    bot.kill("SIGKILL");
+    fs.rmSync(script, { force: true });
+  }
+});
+
+test("las rutas alternativas al mismo destino no abren un agujero", () => {
+  const origen = crearOrigen();
+
+  // Variantes que apuntan a la MISMA instalación: deben funcionar.
+  for (const forma of ["exacta", "barra-final", "barras-dobles"]) {
+    const raiz = temporal(`shin-forma-${forma}`);
+    const inst = correr(INSTALADOR, ["--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+    assert.equal(inst.status, 0, inst.salida);
+    const proyecto = path.join(raiz, "Shin-MD");
+    sembrarDatos(proyecto);
+
+    const rutas = {
+      exacta: proyecto,
+      "barra-final": `${proyecto}/`,
+      "barras-dobles": `${raiz}//Shin-MD`,
+    };
+    const r = correr(path.join(proyecto, "install.sh"),
+      ["--dir", rutas[forma], "--uninstall"], { cwd: proyecto, entrada: "si\n" });
+    assert.equal(r.status, 0, `${forma}: ${r.salida}`);
+    assert.ok(!fs.existsSync(proyecto), `${forma}: debía desinstalar`);
+  }
+
+  // Variantes que NO son la instalación: deben negarse.
+  const raiz = temporal("shin-formas-malas");
+  correr(INSTALADOR, ["--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  const proyecto = path.join(raiz, "Shin-MD");
+
+  // Ojo: path.join normaliza "..", así que aquí se escriben a mano para que
+  // lleguen al instalador tal cual.
+  const malas = [
+    `${raiz}/otra/../Shin-MD`, // .. por un directorio que no existe
+    raiz,                       // el padre
+    "/",                        // la raíz
+    `${raiz}/..`,               // un nivel más arriba
+  ];
+  for (const ruta of malas) {
+    const r = correr(path.join(proyecto, "install.sh"), ["--dir", ruta, "--uninstall", "--yes"], {
+      cwd: proyecto, entrada: "si\nborrar todo\n",
+    });
+    assert.notEqual(r.status, 0, `debía negarse con ${ruta}`);
+    assert.ok(fs.existsSync(path.join(proyecto, "package.json")), `borró con ${ruta}`);
+  }
+});
+
+test("no se deja engañar por un cwd que pasó por un enlace", () => {
+  const origen = crearOrigen();
+  const raiz = temporal("shin-cwd");
+  const real = path.join(raiz, "real");
+  const atajo = path.join(raiz, "atajo");
+  fs.mkdirSync(real, { recursive: true });
+  fs.symlinkSync(real, atajo, "dir");
+
+  const inst = correr(INSTALADOR, ["--yes"], { raiz: real, env: { SHIN_REPO_URL: origen } });
+  assert.equal(inst.status, 0, inst.salida);
+  const proyecto = path.join(real, "Shin-MD");
+
+  // Se invoca desde el atajo, con ruta relativa: el shell resuelve a real/…,
+  // y eso es la instalación de verdad, así que debe funcionar y terminar.
+  const r = correr(path.join(atajo, "Shin-MD", "install.sh"), ["--uninstall"], {
+    cwd: path.join(atajo, "Shin-MD"), entrada: "si\n",
+  });
+
+  assert.equal(r.status, 0, r.salida);
+  assert.ok(!fs.existsSync(proyecto), "debe desinstalar la instalación real");
+  assert.ok(fs.existsSync(atajo), "sin llevarse el enlace por delante");
+});
+
+test("si la copia de la base falla, --repair no sigue y no toca nada", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+
+  // Una base de verdad y un archivo que, con nombre .db, no es una base:
+  // VACUUM INTO no puede con él. Antes se copiaba tal cual y se seguía.
+  baseSqlite(path.join(proyecto, "data", "shin.db"), 5);
+  escribir(path.join(proyecto, "data", "rota.db"), "esto no es una base de datos");
+
+  // Se ensucia node_modules para poder demostrar que NO se borra.
+  escribir(path.join(proyecto, "node_modules", "marca-de-la-prueba"), "sigue aquí");
+  const antes = fs.readFileSync(path.join(proyecto, "data", "rota.db"), "utf8");
+
+  const r = correr(instalador, ["--repair"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+
+  assert.notEqual(r.status, 0, `debía pararse:\n${r.salida}`);
+  assert.match(r.salida, /puedo respaldar tus datos/i);
+  assert.match(r.salida, /rota\.db/, "tiene que decir qué archivo falló");
+  assert.match(r.salida, /No he tocado nada/i, "y que no se tocó nada");
+
+  // Nada de lo que había se movió: ni dependencias, ni datos, ni respaldos.
+  assert.ok(fs.existsSync(path.join(proyecto, "node_modules", "marca-de-la-prueba")),
+    "no puede borrar node_modules si el respaldo falló");
+  assert.equal(fs.readFileSync(path.join(proyecto, "data", "rota.db"), "utf8"), antes);
+  assert.ok(fs.existsSync(path.join(proyecto, "data", "shin.db")));
+  const respaldos = fs.existsSync(path.join(proyecto, "backups"))
+    ? fs.readdirSync(path.join(proyecto, "backups")) : [];
+  assert.deepEqual(respaldos.filter((n) => !n.startsWith(".")), [],
+    `no puede dejar un respaldo con nombre bueno a medias: ${respaldos.join(", ")}`);
+});
+
+test("si la copia de la base falla, --update no mueve el código", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+  const commit = git(proyecto, "rev-parse", "HEAD").trim();
+
+  baseSqlite(path.join(proyecto, "data", "shin.db"), 4);
+  escribir(path.join(proyecto, "data", "rota.db"), "tampoco esto");
+
+  // Hay una versión nueva disponible en el origen: si el respaldo fallara en
+  // silencio, la actualización seguiría adelante y se vería en el commit.
+  escribir(path.join(origen, "index.js"), "export const arrancado = true;\nexport const nuevo = 2;\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "-m", "nueva version");
+
+  const r = correr(instalador, ["--update"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+
+  assert.notEqual(r.status, 0, `debía pararse:\n${r.salida}`);
+  assert.match(r.salida, /puedo respaldar tus datos/i);
+  assert.equal(git(proyecto, "rev-parse", "HEAD").trim(), commit,
+    "no puede haber cambiado de versión sin respaldo");
+  assert.ok(fs.existsSync(path.join(proyecto, "data", "rota.db")), "no puede borrar el archivo que no pudo copiar");
+});
+
+test("un respaldo fallido no se lleva por delante los respaldos anteriores", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+
+  // Un primer reparar sano deja un respaldo válido.
+  baseSqlite(path.join(proyecto, "data", "shin.db"), 3);
+  const bueno = correr(instalador, ["--repair"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+  assert.equal(bueno.status, 0, bueno.salida);
+
+  const carpeta = path.join(proyecto, "backups");
+  const validos = fs.readdirSync(carpeta).filter((n) => n.startsWith("pre-reparacion-"));
+  assert.equal(validos.length, 1, "el primer respaldo debe existir");
+  const firma = hashDe(path.join(carpeta, validos[0], "data", "shin.db"));
+
+  // Ahora se rompe la base y se vuelve a intentar.
+  escribir(path.join(proyecto, "data", "rota.db"), "no soy una base");
+  const malo = correr(instalador, ["--repair"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+  assert.notEqual(malo.status, 0, "debía pararse");
+
+  assert.deepEqual(fs.readdirSync(carpeta).filter((n) => n.startsWith("pre-reparacion-")), validos,
+    "los respaldos válidos tienen que seguir ahí, ni uno más ni uno menos");
+  assert.equal(hashDe(path.join(carpeta, validos[0], "data", "shin.db")), firma,
+    "y su contenido no puede cambiar");
+  assert.deepEqual(fs.readdirSync(carpeta).filter((n) => n.startsWith(".")), [],
+    "tampoco puede quedar basura parcial");
+});
+
+test("desinstalar se lleva los datos pero nunca los respaldos", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+
+  baseSqlite(path.join(proyecto, "data", "shin.db"), 3);
+  const r = correr(instalador, ["--repair"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+  assert.equal(r.status, 0, r.salida);
+  const respaldo = fs.readdirSync(path.join(proyecto, "backups"))
+    .find((n) => n.startsWith("pre-reparacion-"));
+  assert.ok(respaldo);
+  const firma = hashDe(path.join(proyecto, "backups", respaldo, "data", "shin.db"));
+
+  const fuera = correr(instalador, ["--uninstall"], { cwd: proyecto, entrada: "si\n" });
+  assert.equal(fuera.status, 0, fuera.salida);
+  assert.ok(!fs.existsSync(proyecto), "la instalación se va");
+
+  // Los datos y los respaldos aterrizan en la carpeta de al lado.
+  const guardado = fs.readdirSync(path.dirname(proyecto))
+    .find((n) => n.startsWith("Shin-MD-datos-"));
+  assert.ok(guardado, "tiene que quedar la carpeta de datos");
+  const raiz = path.join(path.dirname(proyecto), guardado);
+  assert.ok(fs.existsSync(path.join(raiz, "backups", respaldo, "data", "shin.db")),
+    "el respaldo tiene que sobrevivir a la desinstalación");
+  assert.equal(hashDe(path.join(raiz, "backups", respaldo, "data", "shin.db")), firma,
+    "y llegar intacto");
+});
+
+test("un tramo de la ruta que se convierte en enlace durante el borrado se rechaza", () => {
+  const origen = crearOrigen();
+  const { raiz, proyecto, instalador } = instalacionLista(origen);
+  sembrarDatos(proyecto);
+
+  // El padre pasa a ser un enlace a una carpeta que NO es la instalación.
+  // Si el borrado siguiera el enlace, se llevaría esa otra carpeta.
+  // El señuelo se hace pasar por una instalación entera (con su .git y su
+  // package.json). Así lo único que puede parar el borrado es la comprobación
+  // del enlace, que es justo lo que se quiere probar.
+  const enOtra = path.join(raiz, "otra-cosa");
+  fs.cpSync(proyecto, enOtra, { recursive: true, dereference: true });
+  escribir(path.join(enOtra, "importante.txt"), "no se puede borrar");
+
+  // Se sustituye el padre real por un enlace justo antes de invocar.
+  const padreReal = path.join(raiz, "Shin-MD");
+  const copia = path.join(raiz, "Shin-MD-copia");
+  fs.renameSync(padreReal, copia);
+  fs.symlinkSync(enOtra, padreReal, "dir");
+
+  const r = correr(path.join(copia, "install.sh"), ["--dir", padreReal, "--uninstall"],
+    { cwd: copia, entrada: "si\n" });
+
+  assert.notEqual(r.status, 0, `debía negarse:\n${r.salida}`);
+  assert.match(r.salida, /enlace/i);
+  assert.ok(fs.existsSync(path.join(enOtra, "importante.txt")),
+    "la carpeta apuntada por el enlace no se puede tocar");
+  assert.ok(fs.existsSync(copia), "ni la instalación de verdad");
+});
+
+// Esta prueba es distinta de las demás: no recorre el instalador entero, sino
+// que coge las funciones de borrado del propio archivo y las ejecuta con un
+// enlace que aparece JUSTO entre la comprobación y el borrado. Es la única
+// forma de reproducir esa ventana sin depender de la suerte del calendario.
+test("el re-chequeo antes de borrar ve un enlace que aparece a mitad del camino", () => {
+  const fuente = fs.readFileSync(INSTALADOR, "utf8");
+  const desde = fuente.indexOf("resolver_real() {");
+  const hasta = fuente.indexOf("destino_instalable() {");
+  assert.ok(desde > 0 && hasta > desde, "no encuentro las funciones de borrado en install.sh");
+  // Se le cambia el nombre a resolver_real para poder envolverla.
+  const trozo = fuente.slice(desde, hasta).replace("resolver_real() {", "resolver_original() {");
+
+  const armar = () => {
+    const dir = temporal("shin-carrera");
+    const raiz = path.join(dir, "base");
+    fs.mkdirSync(path.join(raiz, "padre", "hijo"), { recursive: true });
+    escribir(path.join(raiz, "padre", "hijo", "de-la-instalacion.txt"), "esto sí se va");
+    fs.mkdirSync(path.join(raiz, "victima", "hijo"), { recursive: true });
+    escribir(path.join(raiz, "victima", "hijo", "importante.txt"), "esto NO se puede borrar");
+    return { raiz, victima: path.join(raiz, "victima"), objetivo: path.join(raiz, "padre", "hijo") };
+  };
+
+  const correrFunciones = (cuando) => {
+    const { raiz, victima, objetivo } = armar();
+    const guion = `
+      morir() { printf 'MORIR: %s\n' "$*" >&2; exit 9; }
+      dato() { :; }
+      bien() { :; }
+      C_NEG=""; C_RESET=""; C_ROJO=""; C_GRIS=""
+      ${trozo}
+      ${cuando === "ninguno" ? `resolver_real() { resolver_original "$@"; }` : `
+      resolver_real() {
+        # El enlace se cuela en uno de los dos huecos posibles: antes de
+        # resolver (la resolución lo seguiría) o después (el rm lo seguiría).
+        ${cuando === "antes" ? `mv -- "${raiz}/padre" "${raiz}/padre-real"
+        ln -s -- "${victima}" "${raiz}/padre"
+        resolver_original "$@"` : `local r
+        r="$(resolver_original "$@")"
+        mv -- "${raiz}/padre" "${raiz}/padre-real"
+        ln -s -- "${victima}" "${raiz}/padre"
+        printf '%s\n' "$r"`}
+      }`}
+      borrar_arbol ${JSON.stringify(objetivo)} prueba
+    `;
+    const r = spawnSync("bash", ["-c", guion], { encoding: "utf8" });
+    return {
+      status: r.status,
+      salida: `${r.stdout || ""}${r.stderr || ""}`,
+      victimaintacta: fs.existsSync(path.join(victima, "hijo", "importante.txt")),
+    };
+  };
+
+  // Sin carrera: borra lo que le piden y no toca la víctima.
+  const normal = correrFunciones("ninguno");
+  assert.equal(normal.status, 0, normal.salida);
+  assert.ok(normal.victimaintacta);
+
+  for (const cuando of ["antes", "despues"]) {
+    const conCarrera = correrFunciones(cuando);
+    assert.equal(conCarrera.status, 9,
+      `enlace ${cuando} de resolver: debía negarse, no borrar:\n${conCarrera.salida}`);
+    assert.match(conCarrera.salida, /enlace|enlaces|cambió/i);
+    assert.ok(conCarrera.victimaintacta,
+      `enlace ${cuando} de resolver: se borró la carpeta apuntada por el enlace`);
+  }
+});
+
+test("--purge avisa de que también se lleva los respaldos", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+
+  // Un respaldo válido, como en la prueba 51.
+  baseSqlite(path.join(proyecto, "data", "shin.db"), 3);
+  const r = correr(instalador, ["--repair"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+  assert.equal(r.status, 0, r.salida);
+  const respaldos = fs.readdirSync(path.join(proyecto, "backups"))
+    .filter((n) => n.startsWith("pre-reparacion-"));
+  assert.equal(respaldos.length, 1);
+
+  // Se cancela la purga escribiendo otra cosa: además de no borrar nada,
+  // el aviso ya tenía que haber nombrado los respaldos.
+  const cancelado = correr(instalador, ["--uninstall", "--purge"],
+    { cwd: proyecto, entrada: "si\nno borrar\n" });
+  assert.notEqual(cancelado.status, 0, "cancelar debe terminar con error");
+  assert.match(cancelado.salida, /Y tus 1 respaldo\(s\) de backups\//,
+    "el aviso tiene que decir que se lleva los respaldos");
+  assert.match(cancelado.salida, /con --uninstall se conservarían/,
+    "y tiene que decir cuál es la alternativa");
+  assert.ok(fs.existsSync(proyecto), "cancelar no borra nada");
+  assert.ok(fs.existsSync(path.join(proyecto, "backups", respaldos[0])), "ni los respaldos");
+
+  // Y si se confirma, se va todo: es lo que pidió quien escribe la frase.
+  const hecho = correr(instalador, ["--uninstall", "--purge"],
+    { cwd: proyecto, entrada: "si\nborrar todo\n" });
+  assert.equal(hecho.status, 0, hecho.salida);
+  assert.ok(!fs.existsSync(proyecto));
 });

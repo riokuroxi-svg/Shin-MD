@@ -120,9 +120,19 @@ se acaba. La huella se regenera con `npm run firma` y se comprueba con
   reparar o desinstalar comprueba el `name` de `package.json`; y si no sabe
   desde dónde se ejecuta, se detiene en vez de suponer `~/Shin-MD`.
 - No pide contraseñas ni tokens, y no escribe credenciales en pantalla.
+- No sigue un enlace al borrar: ni si el destino es un enlace, ni si lo es
+  cualquier tramo de la ruta, ni si un tramo cambia de ser carpeta a enlace
+  entre la comprobación y el borrado (se vuelve a mirar justo antes).
+- No deja respaldos a medias: si no puede copiar bien una base, se detiene en
+  vez de dejarte con una copia incompleta.
 
-`--uninstall --purge` sí borra los datos, pero es la única forma de hacerlo y
-avisa antes de empezar.
+`--uninstall` guarda `.env`, `Sessions/`, `data/` **y `backups/`** en una
+carpeta al lado antes de borrar la instalación: un respaldo válido no se va con
+la carpeta a la que respaldaba.
+
+`--uninstall --purge` sí borra los datos y también los respaldos, pero es la
+única forma de hacerlo: hay que escribir `borrar todo`, y si hay respaldos el
+aviso dice cuántos se van y que con `--uninstall` se conservarían.
 
 ## Variables de entorno
 

@@ -12,9 +12,11 @@ Estilo: dashboard anime pastel — píldoras, tarjetas con barra de acento, curv
 iconos dibujados a mano y todo el texto en trazado vectorial.
 """
 import os
+import re
 import sys
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
+RAIZ = os.path.dirname(AQUI)
 sys.path.insert(0, AQUI)
 
 from pastel_lienzo import (  # noqa: E402
@@ -453,6 +455,28 @@ def pie():
 
 
 # --------------------------------------------------------------------------
+def sincronizar_alt_del_readme():
+    """El alt de las insignias del README se queda viejo cada vez que cambia
+    el número de pruebas, y hay una prueba que falla justo por eso. En vez de
+    acordarse a mano, se reescribe aquí, que es donde se generan las cifras."""
+    readme = os.path.join(RAIZ, "README.md")
+    if not os.path.exists(readme):
+        return
+    with open(readme, encoding="utf-8") as f:
+        texto = f.read()
+    cambios = [
+        (r'alt="\d+/\d+ pruebas"', 'alt="%d/%d pruebas"' % (PR, D["pruebas_total"])),
+        (r'alt="\d+ comandos"', 'alt="%d comandos"' % C),
+    ]
+    nuevo = texto
+    for patron, reemplazo in cambios:
+        nuevo = re.sub(patron, reemplazo, nuevo)
+    if nuevo != texto:
+        with open(readme, "w", encoding="utf-8") as f:
+            f.write(nuevo)
+        print("README.md: alt de las insignias al día")
+
+
 def main():
     os.makedirs(SALIDA, exist_ok=True)
     print("\nnúmeros usados: %d comandos · %d nombres (%d alias) · %d categorías · "
@@ -733,6 +757,7 @@ def laboratorio():
             texto(c, nunito_suave, linea, 15.5, x + 28, base, P["tinta_suave"], 0.2)
             base += 20
     guardar(c, "laboratorio.svg")
+    sincronizar_alt_del_readme()
 
 
 if __name__ == "__main__":

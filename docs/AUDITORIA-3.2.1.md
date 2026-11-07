@@ -326,3 +326,87 @@ con la ruta de la copia si se revierte el código con la base por delante.
   durante esa llamada, y una prueba final compara una firma del repositorio
   tomada al empezar. No afirmo una causa que no tengo.
 - **Rollback de una migración**: no existe. Se restaura la copia, a mano.
+
+---
+
+# Segunda revisión: copia de SQLite, rutas alternativas y el misterio de node_modules
+
+## La copia de la base no era consistente — corregido
+
+Señalado como duda razonable y era un fallo real. `cp` de `shin.db` con el bot
+corriendo **pierde las transacciones que están en el WAL**. Medido con un
+proceso escribiendo en paralelo:
+
+```
+copia simple  (cp shin.db)      → 1872 filas
+copia de verdad (VACUUM INTO)   → 2019 filas
+```
+
+Ahora `respaldar_datos()` usa `VACUUM INTO` desde `node:sqlite` y valida con
+`PRAGMA integrity_check`. Hay una prueba que levanta un proceso escribiendo en
+WAL, lanza `--repair`, y exige que el respaldo tenga todas las filas y pase la
+comprobación de integridad.
+
+### Y si la copia no se puede hacer, se para
+
+Antes caía a un `cp` avisando. Eso no vale: quien lee «aviso» y sigue adelante
+termina con un respaldo incompleto y sin saberlo hasta que lo necesita. Ahora,
+si cualquier base de `data/` no se puede copiar de forma consistente:
+
+- el instalador **se detiene** y no sigue con la actualización ni la reparación;
+- dice qué archivo falló y por qué;
+- no toca nada de lo que había;
+- deja intactos los respaldos anteriores.
+
+El respaldo se escribe en `backups/.<motivo>-<fecha>.parcial` y solo se
+renombra al nombre definitivo cuando está completo. Un respaldo a medias nunca
+llega a tener nombre bueno.
+
+Además, `--uninstall` ahora **conserva `backups/`** con el resto de los datos:
+antes se llevaba `.env`, `Sessions/` y `data/`, y borraba con la carpeta unos
+respaldos que seguían siendo válidos.
+
+Nota de implementación: `node:sqlite` de Node 22.14 **no** expone `backup()`;
+`VACUUM INTO` sí está y es equivalente para este caso.
+
+## Rutas alternativas al mismo destino
+
+Probado, una instalación nueva por caso:
+
+| Se le pasa | Resultado | Correcto |
+|---|---|---|
+| `<instalación>` | borra | sí |
+| `<instalación>/` | borra | sí |
+| `<raíz>//Shin-MD` | borra | sí |
+| `<raíz>/otra/../Shin-MD` (con `otra` inexistente) | se niega | sí |
+| el directorio padre | se niega | sí |
+| `/` | se niega | sí |
+| un nivel más arriba | se niega | sí |
+| ruta con un enlace en cualquier tramo | se niega | sí |
+| cwd alcanzado por un enlace | funciona: se opera sobre la ruta real | sí |
+
+El último caso obligó a un cambio: cuando la instalación se **deduce** (no la
+escribe el usuario), se resuelve a su ruta real al principio. Si el usuario la
+escribe con `--dir`, un enlace en cualquier tramo sigue siendo motivo de
+rechazo.
+
+## node_modules: causa encontrada, y no era el instalador
+
+Durante tres turnos `node_modules` desapareció del repositorio y no conseguí
+reproducirlo. La causa no estaba en el código: **el entorno no guarda
+`node_modules` entre turnos** (está excluido de las instantáneas del espacio de
+trabajo por ser dependencia regenerable). Cada vez que lo encontré vacío era al
+principio de un turno, nunca durante una ejecución.
+
+Dentro de un mismo turno sobrevive: la suite completa lo deja intacto (312
+módulos antes y después). Las dos guardas que añadí siguen puestas, porque
+detectar es más barato que investigar.
+
+Lo digo claro porque en el informe anterior afirmé que no tenía causa. Sí la
+tenía escrita desde el principio y no la conecté.
+
+## Registro del estado del repositorio
+
+Al añadir la copia consistente, la suite del instalador pasó de 43 a 47 casos.
+Verificado sobre el árbol de trabajo: `247/247` pruebas, `shellcheck` limpio,
+`eslint` 0 errores, `tsc` limpio.
