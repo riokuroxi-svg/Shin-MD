@@ -100,8 +100,8 @@ las comprobaciones, vuelve a la etiqueta de la que venías.
 `main` cambia. Una release, no:
 
 ```bash
-curl -fsSL .../releases/download/v3.2.1/install.sh -o install.sh
-curl -fsSL .../releases/download/v3.2.1/SHA256SUMS -o SHA256SUMS
+curl -fsSL .../raw/v3.2.2/install.sh -o install.sh
+curl -fsSL .../raw/v3.2.2/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS        # → install.sh: OK
 bash install.sh --version v3.2.1
 ```

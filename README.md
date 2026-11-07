@@ -15,7 +15,7 @@
 
 <!-- El único recurso externo del README: el badge del CI, porque su estado
      cambia en cada push. Si quieres cero peticiones a terceros, borra esta línea. -->
-[![CI](https://img.shields.io/github/actions/workflow/status/riokuroxi-svg/Shin-MD/test.yml?style=flat-square&label=CI&labelColor=2F1A24&color=EE3D86)](https://github.com/riokuroxi-svg/Shin-MD/actions)
+[![CI](https://img.shields.io/github/actions/workflow/status/riokuroxi-svg/Shin-MD/test.yml?style=flat-square&label=CI&labelColor=2E2740&color=7C5FC4)](https://github.com/riokuroxi-svg/Shin-MD/actions)
 
 **El bot de WhatsApp que sobrevive a los cortes de red, no pierde tu sesión
 y reduce el riesgo de bloqueo.**
@@ -126,8 +126,8 @@ npm run docs:web
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/install.sh -o install.sh
-curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.2/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.2/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS && bash install.sh --version v3.2.1
 ```
 
@@ -153,8 +153,8 @@ En WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono**.
 **Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
 
 ```bash
-curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/install.sh -o install.sh
-curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.2/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.2/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS && bash install.sh --version v3.2.1
 cd ~/Shin-MD && npm start
 ```

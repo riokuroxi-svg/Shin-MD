@@ -27,15 +27,17 @@ SALIDA = os.path.join(RAIZ, "docs", "assets", "pastel")
 # paleta única (saturada, para claro y oscuro)
 # --------------------------------------------------------------------------
 P = dict(
-    canvas1="#FFDCEB", canvas2="#FFF1F7", canvas3="#DDF6EB",
-    tinta="#3B1F2B", tinta_suave="#87687A", tinta_tenue="#B08FA0",
-    rosa="#EE3D86", rosa_fuerte="#C9246A", rosa_claro="#FFB9D5", rosa_palido="#FFE3EF",
-    menta="#1FAE7F", menta_claro="#BFEBD9",
-    ambar="#E8890C", ambar_claro="#FFE3BC",
-    blanco="#FFFFFF", tarjeta="#FFFAFC", tarjeta2="#FFF2F7",
-    borde="#F6CFDF",
-    terminal="#2F1A24", terminal_texto="#FFF2F7", terminal_suave="#C9A5B4", terminal_linea="#4E2B3A",
-    sombra="#C97BA0",
+    # Lavanda y crema. El morado carga los acentos, el crema sujeta el fondo
+    # para que no se vuelva un pastel azucarado.
+    canvas1="#E7DCF6", canvas2="#F6F1FC", canvas3="#FBF3E4",
+    tinta="#2E2740", tinta_suave="#6E6285", tinta_tenue="#9C90B4",
+    lila="#7C5FC4", lila_fuerte="#5B3F9E", lila_claro="#C3AEEC", lila_palido="#EEE7FA",
+    verde="#3F9C86", verde_claro="#C6E6DC",
+    ambar="#C98A2E", ambar_claro="#F5E0BC",
+    blanco="#FFFFFF", tarjeta="#FDFBFF", tarjeta2="#F4EEFB",
+    borde="#DCD0EF",
+    terminal="#221C31", terminal_texto="#F6F1FC", terminal_suave="#B0A3C7", terminal_linea="#3D3357",
+    sombra="#9C86C9",
 )
 
 ANCHO = 1160          # ancho de todas las piezas de sección
@@ -168,7 +170,7 @@ def banner(numero, titulo, subtitulo, icono_nombre, color, etiqueta=None):
     c = Lienzo(ANCHO, alto, etiqueta or titulo)
     c.gradiente_lineal("gb", [("0", P["canvas1"]), ("0.5", P["canvas2"]), ("1", P["canvas3"])],
                        x1=0, y1=0, x2=1, y2=1)
-    c.gradiente_lineal("gi", [("0", color), ("1", P["rosa_fuerte"])], x1=0, y1=0, x2=1, y2=1)
+    c.gradiente_lineal("gi", [("0", color), ("1", P["lila_fuerte"])], x1=0, y1=0, x2=1, y2=1)
     c.sombra("shb", dy=5, desenfoque=11, color=P["sombra"], opacidad=0.30)
     c.rect(0, 0, ANCHO, alto, RADIO, "url(#gb)", filtro="shb")
     c.rect(0, 0, ANCHO, 10, 5, "url(#gi)")
@@ -196,7 +198,7 @@ def banner(numero, titulo, subtitulo, icono_nombre, color, etiqueta=None):
         texto(c, nunito_suave, subtitulo, 17, x + ancho_t + 16,
               alto / 2 + nunito_suave.alto(17, "cap") / 2, P["tinta_tenue"], 0.2)
     adorno(c, ANCHO - PAD - 190, alto / 2 - 16, 9, P["ambar"], giro=12, opacidad=0.85)
-    adorno(c, ANCHO - PAD - 214, alto / 2 + 18, 7, P["menta"], giro=30, opacidad=0.8)
+    adorno(c, ANCHO - PAD - 214, alto / 2 + 18, 7, P["verde"], giro=30, opacidad=0.8)
     return c
 
 
@@ -247,7 +249,7 @@ def tabla(columnas, filas, acentos, etiqueta, alto_fila=52, alto_enc=44, pie=Non
                        x1=0, y1=0, x2=1, y2=1)
     c.sombra("sht", dy=6, desenfoque=12, color=P["sombra"], opacidad=0.26)
     c.rect(0, 0, ANCHO, alto, RADIO, "url(#gt)", filtro="sht")
-    c.rect(0, 0, ANCHO, 10, 5, P["rosa"])
+    c.rect(0, 0, ANCHO, 10, 5, P["lila"])
 
     y = 14
     if titulo:
@@ -258,9 +260,9 @@ def tabla(columnas, filas, acentos, etiqueta, alto_fila=52, alto_enc=44, pie=Non
     else:
         y += 8
 
-    c.rect(PAD, y, ANCHO - PAD * 2, alto_enc, 14, P["rosa_palido"])
+    c.rect(PAD, y, ANCHO - PAD * 2, alto_enc, 14, P["lila_palido"])
     for x, ancho, titulo_col in columnas:
-        texto(c, quicksand, titulo_col.upper(), 15, PAD + x, y + alto_enc / 2 + 5, P["rosa_fuerte"], 1.4)
+        texto(c, quicksand, titulo_col.upper(), 15, PAD + x, y + alto_enc / 2 + 5, P["lila_fuerte"], 1.4)
     y += alto_enc + 8
 
     for i, ((celdas, alto_r), color_acento) in enumerate(zip(medidas, acentos)):
@@ -305,7 +307,7 @@ def tarjeta_lista(elementos, etiqueta, columnas=2, titulo=None, subtitulo=None,
                        x1=0, y1=0, x2=1, y2=1)
     c.sombra("shl", dy=6, desenfoque=12, color=P["sombra"], opacidad=0.26)
     c.rect(0, 0, ANCHO, alto, RADIO, "url(#gl)", filtro="shl")
-    c.rect(0, 0, ANCHO, 10, 5, P["menta"])
+    c.rect(0, 0, ANCHO, 10, 5, P["verde"])
 
     y = 24
     if titulo:
