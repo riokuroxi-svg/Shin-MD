@@ -62,21 +62,21 @@ installAntiCrash();
   log.ui(chalk.magenta("Shin-MD v" + __ver + " - Powered by riokuroxi-svg"));
 }
 
-// Red de seguridad de vinculación (companion_reg_refresh):
-// el npm install aplica el parche a Baileys (postinstall), pero si el
-// update se hizo solo con "git pull", node_modules queda viejo. El script
-// es idempotente (solo parchea lo que falta y se auto-verifica), así que
-// siempre nos deja en estado conocido. Si falla NO bloqueamos el arranque:
-// las sesiones existentes siguen funcionando; solo la vinculación nueva se
-// ve afectada y el aviso manda a ejecutar "npm install".
+// Red de seguridad del conector: el npm install aplica los parches a
+// Baileys (postinstall), pero si el update se hizo solo con "git pull",
+// node_modules queda viejo. El script es idempotente (solo parchea lo que
+// falta y se auto-verifica), así que siempre nos deja en estado conocido.
+// Si falla NO bloqueamos el arranque: las sesiones existentes siguen
+// funcionando; lo que se pierde son los arreglos de vinculación, y el aviso
+// manda a ejecutar "npm install".
 {
   const __rootDir = path.dirname(fileURLToPath(import.meta.url));
-  const __patchScript = path.resolve(__rootDir, "..", "scripts", "patch-baileys-pairing.cjs");
+  const __patchScript = path.resolve(__rootDir, "..", "scripts", "patch-baileys.cjs");
   const __baileysSocket = path.resolve(__rootDir, "..", "node_modules", "baileys", "lib", "Socket", "socket.js");
   if (fs.existsSync(__patchScript) && fs.existsSync(__baileysSocket)) {
     const r = spawnSync(process.execPath, [__patchScript], { stdio: "inherit" });
     if (r.status !== 0) {
-      log.ui(chalk.red("[ ✗ ]  AVISO: no se pudo aplicar el parche de vinculación. Si no puedes vincular un dispositivo nuevo, ejecuta \"npm install\"."));
+      log.ui(chalk.red("[ ✗ ]  AVISO: no se pudieron aplicar los parches del conector. Si no puedes vincular un dispositivo nuevo, ejecuta \"npm install\"."));
     }
   }
 }

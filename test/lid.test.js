@@ -384,6 +384,30 @@ test("parejaDeClave entiende la clave de la 7.x y la de la 6.x", () => {
   assert.deepEqual(lid.parejaDeClave({ remoteJid: "120363000000000000@g.us" }), { lid: "", pn: "" });
 });
 
+test("un estado con dos personas en la clave no mezcla sus identidades", () => {
+  // Caso real del protocolo (issue #2652): en <status> convive el autor
+  // (participant + participantAlt) con el destinatario del estado
+  // (remoteJidAlt). Emparejar por "primer LID / primer teléfono" uniría a
+  // dos desconocidos y fusionaría sus economías.
+  const autorLid = "111111111111111@lid";
+  const autorPn = "5215500000001@s.whatsapp.net";
+  const otroPn = "5215500000002@s.whatsapp.net";
+
+  const pareja = lid.parejaDeClave({
+    remoteJid: "status@broadcast",
+    participant: autorLid,
+    participantAlt: autorPn,
+    remoteJidAlt: otroPn,
+  });
+  assert.deepEqual(pareja, { lid: autorLid, pn: autorPn });
+
+  // Y al revés: el autor llega con teléfono y su LID en el alternativo.
+  assert.deepEqual(
+    lid.parejaDeClave({ participant: autorPn, participantAlt: autorLid }),
+    { lid: autorLid, pn: autorPn }
+  );
+});
+
 test("serializeMessage aprende la pareja desde participantAlt", () => {
   lid.reiniciar();
   const grupo = serializeMessage(

@@ -279,6 +279,33 @@ export function mismaPersona(a, b) {
  */
 export function parejaDeClave(key) {
   if (!key || typeof key !== "object") return { lid: "", pn: "" };
+  const jid = (x) => normalizeJid(x || "");
+  const cara = (a, b) => {
+    const x = jid(a);
+    const y = jid(b);
+    if (esLid(x) && esTelefono(y)) return { lid: x, pn: y };
+    if (esTelefono(x) && esLid(y)) return { lid: y, pn: x };
+    return null;
+  };
+
+  // 1) Parejas declaradas: cada identificador con SU alternativo. Es el
+  // orden que importa: en un estado (status@broadcast) y en algunos
+  // mensajes de sistema conviven `participant`/`participantAlt` de una
+  // persona y `remoteJid`/`remoteJidAlt` de otra, y emparejar por "el
+  // primer LID con el primer teléfono" uniría a dos desconocidos.
+  const declaradas = [
+    cara(key.participant, key.participantAlt),
+    cara(key.remoteJid, key.remoteJidAlt),
+    cara(key.participant, key.participantLid),
+    cara(key.participant, key.participantPn),
+    cara(key.remoteJid, key.senderLid),
+    cara(key.remoteJid, key.senderPn),
+    cara(key.participantLid, key.participantPn),
+  ].filter(Boolean);
+  if (declaradas.length) return declaradas[0];
+
+  // 2) Sin pareja declarada: se recogen todas las caras. Solo se usa cuando
+  // no hay nada mejor (una clave con una cara sola, o formas exóticas).
   const formas = [
     key.participant,
     key.participantAlt,
@@ -289,12 +316,14 @@ export function parejaDeClave(key) {
     key.senderLid,
     key.senderPn,
   ]
-    .map((x) => normalizeJid(x || ""))
+    .map(jid)
     .filter(Boolean);
-  return {
-    lid: formas.find((x) => esLid(x)) || "",
-    pn: formas.find((x) => esTelefono(x)) || "",
-  };
+  const lid = formas.find((x) => esLid(x)) || "";
+  // El teléfono propio del chat no puede ser el compañero de otro LID: si
+  // hay un LID, se busca el teléfono en las mismas formas; si no lo hay, la
+  // pareja queda incompleta a propósito.
+  const pn = lid ? formas.find((x) => esTelefono(x)) || "" : "";
+  return { lid, pn };
 }
 
 /**

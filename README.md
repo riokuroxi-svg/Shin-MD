@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 184 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 198 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="184/184 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="198/198 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -26,6 +26,7 @@
 [🧩 Comandos](#los-212-comandos) ·
 [🛡️ Anti-ban](#el-anti-ban-por-dentro) ·
 [🪪 Identidades](#identidades-lid) ·
+[🔌 El conector](#el-conector) ·
 [📜 Licencia](#licencia-y-marca) ·
 [🧪 Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab)
 
@@ -140,6 +141,32 @@ La primera vez hace falta `python3 -m pip install fonttools cairosvg pillow`
 (y `fonts-noto-cjk` en Debian/Ubuntu para el kanji 反魂).
 
 </details>
+
+<h2 id="el-conector">El conector</h2>
+
+El bot habla con WhatsApp a través de Baileys, y Baileys no está en su mejor
+momento: la última versión es de julio y el proyecto lleva meses sin publicar,
+con 46 arreglos esperando en la cola. En vez de esperar, el `npm install` aplica
+un juego de parches propios —idempotentes, verificados y con su issue de
+origen— que cubren lo que duele de verdad:
+
+- **Vinculación**: QR que caduca, código que el teléfono rechaza por un nonce
+  mal puesto y reconexión que manda el nodo equivocado.
+- **Reconexiones**: los estados llegan como `<status>` y sin ack el servidor
+  corta el stream cada ~50 minutos.
+- **Multimedia**: una URL caducada ya no deja el archivo sin descargar; se pide
+  el reenvío.
+- **Memoria**: una fuga de `AsyncLocalStorage` por socket que crecía en cada
+  reconexión.
+
+Lo que no se puede arreglar (y por qué) también está escrito, con las 1 662
+incidencias revisadas y su estado. Informe completo en
+**[docs/CONECTOR.md](docs/CONECTOR.md)** · detalle de LID en
+**[docs/LID.md](docs/LID.md)**.
+
+```bash
+node scripts/patch-baileys.cjs --check   # ¿están los ocho parches aplicados?
+```
 
 <h2 id="identidades-lid">Identidades: LID y teléfono</h2>
 
