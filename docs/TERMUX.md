@@ -1,0 +1,144 @@
+# Shin-MD en Termux (Android)
+
+Guía para dejar el bot corriendo en el teléfono. Está escrita para alguien que
+nunca ha usado una terminal: cada comando se pega tal cual.
+
+> **Lo que no está comprobado.** Este documento se escribió sin un Android
+> delante. La lógica del instalador se probó simulando Termux (`PREFIX`,
+> `TERMUX_VERSION` y un `pkg` de mentira) y con bash, git y npm reales en
+> Linux. Lo que solo se puede probar en un teléfono —que los paquetes de
+> Termux instalen bien, que sharp cargue su versión wasm, que Android no mate
+> el proceso— está marcado como **pendiente de tu prueba**.
+
+## Antes de empezar
+
+| Cosa | Cuánto |
+|---|---|
+| Android | 7.0 o superior |
+| Arquitectura | arm64 (casi todos), armv7 o x86_64 |
+| Espacio libre | unos 1,5 GB (dependencias incluidas) |
+| RAM | 2 GB; con 4 GB el bot respira mejor |
+| Número de teléfono | **uno secundario**, nunca el tuyo de siempre |
+
+## 1. Instalar Termux
+
+Descárgalo de [F-Droid](https://f-droid.org/packages/com.termux/). La versión
+de Play Store está sin mantenimiento desde hace años y sus paquetes están
+congelados: con ella, `pkg install` falla o instala Node viejo.
+
+## 2. Abrir y pegar tres comandos
+
+```bash
+pkg update -y && pkg install -y curl
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
+bash install.sh
+```
+
+El instalador hace esto, en orden, y se detiene en el primer problema:
+
+1. Detecta que está en Termux y qué arquitectura tiene el teléfono.
+2. Instala `git` y `nodejs-lts` si faltan. Si ya tienes un Node 22.5 o más
+   reciente, **no lo toca ni lo degrada**.
+3. Instala `ffmpeg` y `yt-dlp` para multimedia y descargas. Si no están en tu
+   repositorio, avisa y sigue: el bot arranca igual.
+4. Clona el proyecto en `~/Shin-MD`.
+5. Instala las dependencias con `npm ci` (reproducible, desde el lockfile).
+6. Comprueba que los **ocho parches** del conector están puestos, que los
+   módulos clave están y que la carpeta se puede escribir.
+7. Pide el wakelock y te dice cómo arrancar.
+
+Si algo falla a medias, **nada queda marcado como instalado**: vuelves a
+ejecutar el mismo comando y continúa donde se quedó.
+
+## 3. Que Android no lo mate
+
+Este es el paso que casi nadie documenta y el que hace que un bot "se caiga"
+sin motivo. Android 12 y posteriores matan procesos en segundo plano que no
+lanzó el sistema. Cuando eso pasa, Termux muestra `[Process completed (signal 9)]`
+y el bot desaparece.
+
+1. **Wakelock.** Baja la notificación de Termux y toca *Acquire wakelock*. Hay
+   que volver a activarlo cada vez que reinicies el teléfono.
+2. **Batería.** Ajustes de Android → Batería → Termux → *Sin restricciones*.
+   En Xiaomi, OPPO, Vivo o Huawei hay además un "ahorro de batería" propio del
+   fabricante que hay que desactivar aparte.
+3. **Android 14 o superior.** Opciones de desarrollador → *Desactivar
+   restricciones de procesos hijos*.
+4. **Android 12 o 13.** No hay interruptor en Ajustes. El único remedio es un
+   comando ADB desde un ordenador (`adb shell settings put global
+   max_phantom_processes 2147483647`) o mantener la pantalla/el foco en Termux.
+   Si no tienes ordenador, asúmelo: el bot vivirá mientras uses el teléfono.
+
+Con eso puesto, [problema de Termux #2366](https://github.com/termux/termux-app/issues/2366)
+es el hilo de referencia.
+
+## 4. Arrancar y vincular
+
+```bash
+cd ~/Shin-MD
+npm start
+```
+
+- **Con código:** `npm run start:code`. WhatsApp → *Dispositivos vinculados* →
+  *Vincular con número de teléfono* → mete el código de 8 dígitos en el teléfono.
+- **Con QR:** `npm run start:qr`, y escaneas desde el mismo menú.
+
+Para detenerlo: `Ctrl+C`. En Termux, `Ctrl` está en la fila de teclas extra.
+
+## 5. Actualizar, reparar, desinstalar
+
+```bash
+bash ~/Shin-MD/install.sh --update      # trae la versión nueva, conserva tus datos
+bash ~/Shin-MD/install.sh --repair      # reconstruye dependencias si algo se rompió
+bash ~/Shin-MD/install.sh --verify      # dice si está todo bien
+bash ~/Shin-MD/install.sh --uninstall   # quita el proyecto y deja tus datos al lado
+```
+
+Antes de actualizar, el instalador copia `.env`, `Sessions/` y `data/` a
+`~/Shin-MD/backups/`. Si la versión nueva no arranca, vuelve solo a la anterior
+y te lo dice. Nunca ejecuta `git reset --hard` ni borra archivos que no sean suyos.
+
+## 6. Cuando algo va mal
+
+| Lo que ves | Qué pasa | Qué hacer |
+|---|---|---|
+| `[Process completed (signal 9)]` | Android mató el proceso | wakelock + batería sin restricciones (paso 3) |
+| `Node 20.x es demasiado antiguo` | la Termux de Play Store trae Node viejo | F-Droid + `pkg install -y nodejs-lts` |
+| `pkg: command not found` | PATH tocado | `export PATH=$PREFIX/bin:$PATH` |
+| `E: Unable to locate package` | lista de paquetes vieja o espejo caído | `pkg update -y`; si sigue, `termux-change-repo` |
+| `ENOSPC` al instalar | sin espacio | `pkg clean` y libera 1,5 GB |
+| Se corta al vincular con datos móviles | red inestable | es lo que el bot ya tolera: no borra la sesión, reintenta solo |
+| `conector: los parches NO están completos` | instalación a medias | `bash ~/Shin-MD/install.sh --repair` |
+
+El instalador nunca pide contraseñas ni tokens, y no escribe credenciales en
+ningún registro.
+
+## 7. Si Termux se te queda corto
+
+Cuando el teléfono no da (RAM justa, Android muy agresivo, dependencias que no
+compilan), hay un camino intermedio: **proot-distro con Ubuntu dentro de Termux**.
+
+```bash
+pkg install -y proot-distro
+proot-distro install ubuntu
+proot-distro login ubuntu
+# dentro de Ubuntu:
+apt update && apt install -y curl git
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
+bash install.sh
+```
+
+Ventajas: binarios glibc normales (el `yt-dlp` oficial funciona sin trucos) y
+el killer de procesos fantasma afecta menos. Desventaja: ~1 GB más y hay que
+entrar con `proot-distro login ubuntu` cada vez.
+
+## Lo que falta comprobar en tu teléfono
+
+- [ ] `pkg install -y nodejs-lts` deja un Node ≥ 22.5.
+- [ ] `npm ci` termina sin compilar nada nativo (sharp usa wasm).
+- [ ] El bot sobrevive una hora en segundo plano con el wakelock.
+- [ ] La vinculación por código funciona con la sesión guardada en `auth.db`.
+- [ ] `yt-dlp` y `ffmpeg` de Termux responden (`yt-dlp --version`, `ffmpeg -version`).
+
+Si algo de esta lista falla, el mensaje exacto sirve para arreglarlo: el
+instalador está hecho para decodificar errores, no para esconderlos.

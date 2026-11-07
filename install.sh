@@ -1,0 +1,587 @@
+#!/usr/bin/env bash
+# ═══════════════════════════════════════════════════════════════════
+#  Shin-MD — instalador
+#  https://github.com/riokuroxi-svg/Shin-MD
+#  Copyright (C) 2026 riokuroxi-svg · SPDX-License-Identifier: AGPL-3.0-only
+#
+#  Un comando. Detecta Android/Termux, comprueba Node, clona, instala,
+#  verifica los ocho parches del conector y dice cómo arrancar.
+#
+#    curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
+#    bash install.sh
+#
+#  Regla de oro: NUNCA toca tus datos. `.env`, `Sessions/` y `data/`
+#  sobreviven a --update, --repair y --uninstall (este último los mueve
+#  a un lado; solo --purge los borra, y pregunta dos veces).
+#
+#  Uso:
+#    bash install.sh                 instalar (o actualizar si ya existe)
+#    bash install.sh --update        actualizar conservando datos
+#    bash install.sh --repair        reconstruir dependencias sin tocar datos
+#    bash install.sh --verify        comprobar la instalación actual
+#    bash install.sh --uninstall     desinstalar conservando datos
+#    bash install.sh --uninstall --purge   desinstalar y borrar todo
+#
+#  Opciones:
+#    --dir RUTA     instalar en otra carpeta (por defecto ~/Shin-MD)
+#    --yes          no preguntar
+#    --shallow      clon rápido sin historial (no permite volver atrás)
+#    --no-boost     no intentar el wakelock en Termux
+# ═══════════════════════════════════════════════════════════════════
+set -Eeuo pipefail
+
+readonly REPO_URL="${SHIN_REPO_URL:-https://github.com/riokuroxi-svg/Shin-MD.git}"
+readonly RAMA="${SHIN_BRANCH:-main}"
+readonly NODE_MINIMO="22.5.0"
+readonly NPM_MINIMO="10.0.0"
+readonly NOMBRE="Shin-MD"
+
+BASE_DIR="${SHIN_INSTALL_ROOT:-$HOME}"
+DESTINO="${SHIN_INSTALL_DIR:-$BASE_DIR/$NOMBRE}"
+DESTINO_EXPLICITO=0
+if [ -n "${SHIN_INSTALL_DIR:-}" ] || [ -n "${SHIN_INSTALL_ROOT:-}" ]; then
+  DESTINO_EXPLICITO=1
+fi
+
+ORIGEN_DEDUCIDO=0
+ACCION=""
+PEDIR_CONFIRMACION=1
+SUPERFICIAL=0
+PURGAR=0
+BOOST=1
+
+# ─────────────────────────── salida ───────────────────────────
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_RESET=$'\033[0m'; C_ROSA=$'\033[38;5;205m'; C_GRIS=$'\033[38;5;245m'
+  C_ROJO=$'\033[38;5;203m'; C_VERDE=$'\033[38;5;114m'; C_AMAR=$'\033[38;5;221m'
+  C_NEG=$'\033[1m'
+else
+  C_RESET=""; C_ROSA=""; C_GRIS=""; C_ROJO=""; C_VERDE=""; C_AMAR=""; C_NEG=""
+fi
+
+paso()   { printf '\n%s▸ %s%s\n' "$C_ROSA$C_NEG" "$*" "$C_RESET"; }
+bien()   { printf '  %s✓%s %s\n' "$C_VERDE" "$C_RESET" "$*"; }
+aviso()  { printf '  %s!%s %s\n' "$C_AMAR" "$C_RESET" "$*" >&2; }
+dato()   { printf '  %s·%s %s\n' "$C_GRIS" "$C_RESET" "$*"; }
+error()  { printf '\n  %s✗ %s%s\n' "$C_ROJO" "$*" "$C_RESET" >&2; }
+morir()  { error "$*"; exit 1; }
+
+# ───────────────────── limpieza ante interrupción ─────────────────────
+INSTALANDO=0
+al_salir() {
+  local codigo=$?
+  rm -f "$DESTINO/.shin-install.tmp" 2>/dev/null || true
+  if [ "$codigo" -ne 0 ] && [ "$INSTALANDO" -eq 1 ]; then
+    printf '\n%s  La instalación no terminó. Nada quedó marcado como instalado:%s\n' "$C_GRIS" "$C_RESET" >&2
+    printf '  %svuelve a ejecutar el mismo comando y continuará donde se quedó.%s\n\n' "$C_GRIS" "$C_RESET" >&2
+  fi
+  return "$codigo"
+}
+trap al_salir EXIT
+trap 'exit 130' INT TERM
+
+# ─────────────────────────── utilidades ───────────────────────────
+version_mayor_o_igual() {  # $1 >= $2
+  [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
+}
+
+hay() { command -v "$1" >/dev/null 2>&1; }
+
+es_termux() {
+  [ -n "${TERMUX_VERSION:-}" ] && return 0
+  case "${PREFIX:-}" in */com.termux/*) return 0 ;; esac
+  [ "$(uname -s 2>/dev/null || true)" = "Android" ]
+}
+
+arquitectura() {
+  local a
+  a="$(uname -m 2>/dev/null || echo desconocida)"
+  case "$a" in
+    aarch64|arm64)      echo "arm64" ;;
+    armv7l|armv8l|arm)  echo "armv7" ;;
+    x86_64|amd64)       echo "x86_64" ;;
+    i686|i386)          echo "x86" ;;
+    *)                  echo "$a" ;;
+  esac
+}
+
+leer_version_paquete() {
+  [ -f "$DESTINO/package.json" ] || { echo "?"; return; }
+  node -p "require('$DESTINO/package.json').version" 2>/dev/null || echo "?"
+}
+
+# Para actualizar, reparar, verificar o desinstalar hay que saber CUÁL es la
+# instalación. Se acepta la carpeta desde la que se ejecuta (deducida) o una
+# ruta que pida el usuario. Nunca se actúa sobre ~/Shin-MD por suposición:
+# ahí puede haber una instalación de otra persona.
+exigir_destino_conocido() {
+  [ "$DESTINO_EXPLICITO" -eq 1 ] && return 0
+  [ "$ORIGEN_DEDUCIDO" -eq 1 ] && return 0
+  morir "No sé sobre qué instalación actuar.
+  Ejecuta este script desde la carpeta de la instalación, o indica la ruta:
+    bash install.sh --dir RUTA --$1"
+}
+
+# Antes de tocar nada: ¿esta carpeta es de verdad una instalación?
+exigir_proyecto() {
+  [ -f "$DESTINO/package.json" ] || morir "No hay ninguna instalación de $NOMBRE en $DESTINO."
+  if ! grep -q '"name"[[:space:]]*:[[:space:]]*"shin-md"' "$DESTINO/package.json"; then
+    morir "$DESTINO no parece una instalación de $NOMBRE; no voy a tocar esa carpeta."
+  fi
+  return 0
+}
+
+# ─────────────────────── comprobaciones ───────────────────────
+comprobar_node() {
+  if ! hay node; then
+    error "No hay Node.js instalado."
+    if es_termux; then
+      printf '  %sEn Termux se instala así:%s\n    pkg install -y nodejs-lts\n\n' "$C_GRIS" "$C_RESET" >&2
+    else
+      printf '  %sNecesitas Node %s o superior: https://nodejs.org%s\n\n' "$C_GRIS" "$NODE_MINIMO" "$C_RESET" >&2
+    fi
+    return 1
+  fi
+  NODE_V="$(node -p 'process.versions.node' 2>/dev/null || echo "0.0.0")"
+  if ! version_mayor_o_igual "$NODE_V" "$NODE_MINIMO"; then
+    error "Node $NODE_V es demasiado antiguo (hace falta $NODE_MINIMO o más)."
+    if es_termux; then
+      printf '  %sSolución:%s pkg install -y nodejs-lts\n\n' "$C_GRIS" "$C_RESET" >&2
+    else
+      printf '  %sInstala Node %s o superior:%s https://nodejs.org\n\n' "$C_GRIS" "$NODE_MINIMO" "$C_RESET" >&2
+    fi
+    return 1
+  fi
+  return 0
+}
+
+comprobar_npm() {
+  if ! hay npm; then
+    error "No hay npm (viene con Node.js)."
+    return 1
+  fi
+  NPM_V="$(npm -v 2>/dev/null || echo "0.0.0")"
+  if ! version_mayor_o_igual "$NPM_V" "$NPM_MINIMO"; then
+    error "npm $NPM_V es antiguo (hace falta $NPM_MINIMO o más)."
+    printf '  %sActualizar:%s npm install -g npm@latest\n\n' "$C_GRIS" "$C_RESET" >&2
+    return 1
+  fi
+  return 0
+}
+
+# ───────────────────────── Termux ─────────────────────────
+preparar_termux() {
+  es_termux || return 0
+  # Termux pone $PREFIX/bin en el PATH; si alguien arranca con un PATH raro,
+  # lo añadimos para que pkg, git y termux-wake-lock se encuentren igual.
+  if [ -n "${PREFIX:-}" ] && [ -d "$PREFIX/bin" ]; then
+    case ":$PATH:" in
+      *":$PREFIX/bin:"*) ;;
+      *) PATH="$PREFIX/bin:$PATH"; export PATH ;;
+    esac
+  fi
+  paso "Android / Termux detectado"
+  dato "PREFIX=$PREFIX"
+  dato "arquitectura $(arquitectura)"
+
+  if hay pkg; then
+    if ! hay git; then
+      dato "instalando git…"
+      pkg install -y git >/dev/null 2>&1 || morir "No se pudo instalar git con pkg."
+    fi
+    if ! comprobar_node; then
+      dato "instalando nodejs-lts… (puede tardar varios minutos)"
+      pkg install -y nodejs-lts >/dev/null 2>&1 || morir "No se pudo instalar nodejs-lts."
+      comprobar_node || morir "Node sigue sin cumplir el mínimo tras instalarlo."
+    fi
+    # Opcionales: si fallan, el bot arranca igual.
+    if ! hay ffmpeg; then
+      dato "instalando ffmpeg (multimedia y stickers)…"
+      pkg install -y ffmpeg >/dev/null 2>&1 || aviso "ffmpeg no se instaló; stickers animados y audio pueden fallar."
+    fi
+    if ! hay yt-dlp; then
+      dato "instalando yt-dlp (descargas)…"
+      pkg install -y yt-dlp >/dev/null 2>&1 || aviso "yt-dlp no se instaló; las descargas usarán solo los proveedores web."
+    fi
+    if ! hay termux-wake-lock; then
+      pkg install -y termux-api >/dev/null 2>&1 || true
+    fi
+  else
+    aviso "Estás en Termux pero no encuentro 'pkg'. Instala git y nodejs-lts a mano."
+  fi
+}
+
+wakelock() {
+  [ "$BOOST" -eq 1 ] || return 0
+  es_termux || return 0
+  if hay termux-wake-lock; then
+    termux-wake-lock >/dev/null 2>&1 && bien "wakelock activo (Android no dormirá el bot)"
+  else
+    aviso "sin wakelock: instala termux-api y actívalo desde la notificación de Termux."
+  fi
+}
+
+# ───────────────────────── respaldo de datos ─────────────────────────
+rutas_de_datos() {
+  local r
+  for r in ".env" "Sessions" "session" "data"; do
+    [ -e "$DESTINO/$r" ] && printf '%s\n' "$r"
+  done
+}
+
+respaldar_datos() {
+  local motivo="${1:-manual}" destino marca r
+  local -a presentes=()
+  while IFS= read -r r; do [ -n "$r" ] && presentes+=("$r"); done < <(rutas_de_datos)
+  if [ "${#presentes[@]}" -eq 0 ]; then
+    dato "sin datos que respaldar todavía"
+    return 0
+  fi
+  marca="$(date +%Y%m%d-%H%M%S)"
+  destino="$DESTINO/backups/$motivo-$marca"
+  mkdir -p "$destino"
+  for r in "${presentes[@]}"; do
+    cp -a "$DESTINO/$r" "$destino/" 2>/dev/null || aviso "no se pudo respaldar $r"
+  done
+  RESPALDO_HECHO="$destino"
+  bien "datos respaldados en ${destino#"$DESTINO/"}"
+}
+
+# ───────────────────────── instalar ─────────────────────────
+clonar() {
+  paso "Descargando $NOMBRE"
+  if [ -d "$DESTINO" ] && [ -n "$(ls -A "$DESTINO" 2>/dev/null || true)" ]; then
+    if [ -d "$DESTINO/.git" ]; then
+      if estado_instalado; then
+        morir "Ya existe una instalación en $DESTINO. Usa: bash install.sh --update"
+      fi
+      # Quedó a medias (corte, Ctrl+C, npm que falló): se reutiliza el clon
+      # en vez de pedir al usuario que borre algo. Los archivos del proyecto
+      # son del repositorio, así que volver a descargarlos no aporta nada.
+      dato "instalación incompleta encontrada; continúo donde se quedó"
+      return 0
+    fi
+    morir "La carpeta $DESTINO no está vacía y no es una instalación de $NOMBRE.
+  Elige otra con --dir RUTA o vacíala tú mismo."
+  fi
+  mkdir -p "$(dirname "$DESTINO")"
+  local -a args=(clone --quiet)
+  if [ "$SUPERFICIAL" -eq 1 ]; then
+    args+=(--depth 1)
+  else
+    args+=(--branch "$RAMA")
+  fi
+  if ! git "${args[@]}" "$REPO_URL" "$DESTINO"; then
+    morir "No se pudo descargar el repositorio. Comprueba tu conexión y que git esté instalado."
+  fi
+  bien "descargado en $DESTINO"
+}
+
+instalar_dependencias() {
+  paso "Instalando dependencias"
+  dato "en Android esto tarda varios minutos; no cierres la terminal"
+  if [ -f "$DESTINO/package-lock.json" ]; then
+    if ! ( cd "$DESTINO" && npm ci --include=optional --no-audit --no-fund ); then
+      morir "Falló la instalación de dependencias.
+  Nada quedó marcado como instalado. Vuelve a ejecutar el instalador;
+  si el error se repite, revisa los mensajes de npm de arriba."
+    fi
+  else
+    if ! ( cd "$DESTINO" && npm install --include=optional --no-audit --no-fund ); then
+      morir "Falló la instalación de dependencias."
+    fi
+  fi
+  bien "dependencias instaladas"
+}
+
+preparar_env() {
+  [ -f "$DESTINO/.env" ] && return 0
+  if [ -f "$DESTINO/.env.example" ]; then
+    cp "$DESTINO/.env.example" "$DESTINO/.env"
+    bien "creado .env a partir del ejemplo"
+  fi
+}
+
+# ───────────────────────── verificar ─────────────────────────
+verificar() {
+  local fallos=0 modulos=(express pino baileys sharp) m
+  paso "Comprobando la instalación"
+
+  if [ ! -f "$DESTINO/index.js" ]; then
+    error "falta index.js en $DESTINO"; fallos=$((fallos+1))
+  fi
+  if [ ! -f "$DESTINO/package.json" ]; then
+    error "falta package.json en $DESTINO"; fallos=$((fallos+1))
+  fi
+  [ "$fallos" -eq 0 ] && bien "archivos del proyecto presentes"
+
+  for m in "${modulos[@]}"; do
+    if ! ( cd "$DESTINO" && node -e "require.resolve('$m')" >/dev/null 2>&1 ); then
+      error "módulo '$m' no instalado"; fallos=$((fallos+1))
+    fi
+  done
+  [ "$fallos" -eq 0 ] && bien "dependencias clave presentes (${modulos[*]})"
+
+  if [ -d "$DESTINO/node_modules/baileys" ]; then
+    if ( cd "$DESTINO" && node scripts/patch-baileys.cjs --check >/dev/null 2>&1 ); then
+      bien "conector: los 8 parches aplicados"
+    else
+      error "conector: los parches NO están completos"
+      printf '  %sreparar con:%s bash install.sh --repair\n' "$C_GRIS" "$C_RESET" >&2
+      fallos=$((fallos+1))
+    fi
+  else
+    aviso "conector: sin baileys instalado, no se puede comprobar todavía"
+    fallos=$((fallos+1))
+  fi
+
+  if [ -w "$DESTINO" ]; then
+    bien "la carpeta del proyecto es escribible"
+  else
+    error "la carpeta del proyecto no es escribible"; fallos=$((fallos+1))
+  fi
+
+  return "$fallos"
+}
+
+escribir_estado() {
+  local version
+  version="$(leer_version_paquete)"
+  {
+    printf 'version=%s\n' "$version"
+    printf 'fecha=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "-")"
+    printf 'node=%s\n' "${NODE_V:-?}"
+    printf 'arquitectura=%s\n' "$(arquitectura)"
+  } > "$DESTINO/.shin-install.tmp"
+  mv -f "$DESTINO/.shin-install.tmp" "$DESTINO/.shin-install"
+}
+
+estado_instalado() { [ -f "$DESTINO/.shin-install" ] && [ -d "$DESTINO/node_modules" ]; }
+
+# ───────────────────────── resumen final ─────────────────────────
+resumen() {
+  local version
+  version="$(leer_version_paquete)"
+  printf '\n%s╭──────────────────────────────────────────────╮%s\n' "$C_ROSA" "$C_RESET"
+  printf '%s│%s  %s%s %s%s instalado%s\n' "$C_ROSA" "$C_RESET" "$C_NEG" "$NOMBRE" "$version" "$C_RESET" "$C_RESET"
+  printf '%s╰──────────────────────────────────────────────╯%s\n' "$C_ROSA" "$C_RESET"
+  dato "carpeta    $DESTINO"
+  dato "node       ${NODE_V:-?}   npm ${NPM_V:-?}   $(arquitectura)"
+  dato "conector   8 parches verificados"
+  printf '\n%s  Arrancar%s\n' "$C_NEG" "$C_RESET"
+  printf '    cd %s\n    npm start\n\n' "$DESTINO"
+  printf '%s  Vincular WhatsApp%s\n' "$C_NEG" "$C_RESET"
+  printf '    npm run start:code    (código de 8 dígitos: WhatsApp → Dispositivos vinculados)\n'
+  printf '    npm run start:qr      (si prefieres escanear un QR)\n\n'
+  printf '%s  Parar%s\n' "$C_NEG" "$C_RESET"
+  printf '    Ctrl+C\n\n'
+  printf '%s  Mantenerlo vivo%s\n' "$C_NEG" "$C_RESET"
+  if es_termux; then
+    printf '    1. baja la notificación de Termux → "Acquire wakelock"\n'
+    printf '    2. Ajustes de Android → Batería → Termux → Sin restricciones\n'
+    printf '    3. Android 14+: Opciones de desarrollador → Desactivar restricciones de procesos hijos\n'
+    printf '    (sin esto, Android puede matar el bot al rato: no es un fallo del bot)\n\n'
+  else
+    printf '    en un servidor: usa tmux o systemd, o deja la terminal abierta\n\n'
+  fi
+  printf '%s  Actualizar / reparar / ver registros%s\n' "$C_NEG" "$C_RESET"
+  printf '    bash %s/install.sh --update\n' "$DESTINO"
+  printf '    bash %s/install.sh --repair\n' "$DESTINO"
+  printf '    tail -f %s/logs/*.log\n\n' "$DESTINO"
+  printf '%s  Tus datos (.env, Sessions/, data/) nunca se tocan.%s\n\n' "$C_GRIS" "$C_RESET"
+}
+
+# ───────────────────────── acciones ─────────────────────────
+accion_instalar() {
+  preparar_termux
+  comprobar_node || exit 1
+  comprobar_npm  || exit 1
+  paso "Entorno"
+  bien "node $NODE_V   npm $NPM_V   $(arquitectura)"
+
+  INSTALANDO=1
+  clonar
+  instalar_dependencias
+  preparar_env
+
+  if ! verificar; then
+    INSTALANDO=0
+    morir "La instalación quedó incompleta. Vuelve a ejecutar el instalador
+  (completa solo lo que falte) o usa --repair. Tus datos no se tocaron."
+  fi
+
+  escribir_estado
+  INSTALANDO=0
+  wakelock
+  resumen
+}
+
+accion_actualizar() {
+  exigir_destino_conocido update
+  exigir_proyecto
+  [ -d "$DESTINO/.git" ] || morir "$DESTINO no es un repositorio git; no puedo actualizarlo."
+  comprobar_node || exit 1
+  paso "Actualizando $NOMBRE"
+  if [ -n "$(git -C "$DESTINO" status --porcelain --untracked-files=no 2>/dev/null || true)" ]; then
+    morir "Tienes cambios propios en archivos del proyecto. No los toco.
+  Revísalos con: git -C $DESTINO status
+  Guárdalos o descártalos tú, y vuelve a intentarlo."
+  fi
+  respaldar_datos "pre-actualizacion"
+  local previo
+  previo="$(git -C "$DESTINO" rev-parse HEAD)"
+  dato "versión actual ${previo:0:7}"
+
+  if ! git -C "$DESTINO" fetch --quiet --tags origin; then
+    morir "No se pudo consultar el repositorio (¿sin conexión?)."
+  fi
+  if ! git -C "$DESTINO" merge --quiet --ff-only "origin/$RAMA"; then
+    morir "La actualización no es una simple suma de cambios.
+  No fuerzo nada: tus archivos siguen como estaban."
+  fi
+  bien "código actualizado a $(git -C "$DESTINO" rev-parse --short HEAD)"
+
+  INSTALANDO=1
+  if ! instalar_dependencias || ! verificar; then
+    error "La nueva versión no supera las comprobaciones; vuelvo a la anterior."
+    git -C "$DESTINO" checkout --quiet "$previo" || aviso "no se pudo volver al commit ${previo:0:7}"
+    ( cd "$DESTINO" && npm ci --include=optional --no-audit --no-fund >/dev/null 2>&1 ) || true
+    INSTALANDO=0
+    error "Actualización revertida. Sigues en la versión ${previo:0:7} y tus datos están intactos."
+    if [ -n "${RESPALDO_HECHO:-}" ]; then dato "respaldo: ${RESPALDO_HECHO#"$DESTINO/"}"; fi
+    exit 1
+  fi
+  escribir_estado
+  INSTALANDO=0
+  aviso "reinicia el bot para usar la versión nueva (Ctrl+C y npm start)."
+  resumen
+}
+
+accion_reparar() {
+  exigir_destino_conocido repair
+  exigir_proyecto
+  comprobar_node || exit 1
+  paso "Reparando dependencias"
+  respaldar_datos "pre-reparacion"
+  if [ -d "$DESTINO/node_modules" ]; then
+    dato "borrando node_modules (es regenerable; tus datos no están ahí)"
+    rm -rf "$DESTINO/node_modules"
+  fi
+  INSTALANDO=1
+  instalar_dependencias
+  if ! verificar; then
+    INSTALANDO=0
+    morir "La reparación no dejó la instalación sana. Revisa los mensajes de arriba."
+  fi
+  escribir_estado
+  INSTALANDO=0
+  bien "instalación reparada; tus sesiones y tu base siguen donde estaban"
+}
+
+accion_verificar() {
+  exigir_destino_conocido verify
+  exigir_proyecto
+  comprobar_node || exit 1
+  if [ -f "$DESTINO/.shin-install" ]; then
+    dato "marcada como instalada el $(grep -m1 '^fecha=' "$DESTINO/.shin-install" | cut -d= -f2- || echo '?')"
+  else
+    aviso "no hay marca de instalación completa: puede ser una instalación a medias"
+  fi
+  if verificar; then
+    bien "todo correcto"
+    return 0
+  fi
+  morir "hay problemas (ver arriba). Prueba: bash install.sh --repair"
+}
+
+accion_desinstalar() {
+  exigir_destino_conocido uninstall
+  exigir_proyecto
+  case "$DESTINO" in
+    "/"|"$HOME"|"") morir "Me niego a borrar $DESTINO." ;;
+  esac
+
+  local destino_datos
+  destino_datos="$BASE_DIR/$NOMBRE-datos-$(date +%Y%m%d-%H%M%S)"
+  paso "Desinstalando $NOMBRE"
+  if [ "$PURGAR" -eq 1 ]; then
+    printf '  %sSe borrarán TAMBIÉN tus sesiones, tu base de datos y tu .env.%s\n' "$C_ROJO" "$C_RESET"
+    printf '  Esto significa volver a vincular WhatsApp desde cero y perder tus datos.\n'
+  else
+    printf '  Tus datos (Sessions/, data/, .env) se moverán a:\n    %s\n' "$destino_datos"
+    printf '  No se borra nada.\n'
+  fi
+  if [ "$PEDIR_CONFIRMACION" -eq 1 ]; then
+    printf '\n  Escribe "si" para continuar: '
+    local respuesta=""
+    read -r respuesta || true
+    case "$respuesta" in
+      si|sí|SI|Sí|yes|y) ;;
+      *) morir "cancelado; no se tocó nada." ;;
+    esac
+  fi
+
+  if [ "$PURGAR" -eq 0 ]; then
+    mkdir -p "$destino_datos"
+    local r
+    while IFS= read -r r; do [ -n "$r" ] && cp -a "$DESTINO/$r" "$destino_datos/"; done < <(rutas_de_datos)
+    bien "datos guardados en $destino_datos"
+  fi
+  rm -rf "$DESTINO"
+  bien "carpeta del proyecto eliminada ($DESTINO)"
+  if [ "$PURGAR" -eq 1 ]; then
+    printf '\n%s  Todo borrado.%s\n\n' "$C_GRIS" "$C_RESET"
+  else
+    printf '\n%s  Para volver: instala otra vez y copia de vuelta esas carpetas.%s\n\n' "$C_GRIS" "$C_RESET"
+  fi
+}
+
+ayuda() {
+  sed -n '5,30p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# ───────────────────────── argumentos ─────────────────────────
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --update|--actualizar)     ACCION="update" ;;
+    --repair|--reparar)        ACCION="repair" ;;
+    --verify|--verificar)      ACCION="verify" ;;
+    --uninstall|--desinstalar) ACCION="uninstall" ;;
+    --purge|--purgar)          PURGAR=1 ;;
+    --yes|-y)                  PEDIR_CONFIRMACION=0 ;;
+    --shallow)                 SUPERFICIAL=1 ;;
+    --no-boost)                BOOST=0 ;;
+    --dir)
+      [ $# -ge 2 ] || morir "--dir necesita una ruta"
+      DESTINO="$2"; DESTINO_EXPLICITO=1; shift ;;
+    -h|--help)                 ayuda; exit 0 ;;
+    *) morir "opción desconocida: $1 (usa --help)" ;;
+  esac
+  shift
+done
+
+# Si se ejecuta desde dentro de una instalación, opera sobre ella.
+if [ "$DESTINO_EXPLICITO" -eq 0 ]; then
+  ORIGEN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if [ -f "$ORIGEN/package.json" ] && grep -q '"name"[[:space:]]*:[[:space:]]*"shin-md"' "$ORIGEN/package.json"; then
+    DESTINO="$ORIGEN"
+    ORIGEN_DEDUCIDO=1
+    # Los datos deben quedar JUNTO a la instalación, no en $HOME.
+    BASE_DIR="$(dirname "$DESTINO")"
+  fi
+fi
+
+case "$ACCION" in
+  update)    accion_actualizar ;;
+  repair)    accion_reparar ;;
+  verify)    accion_verificar ;;
+  uninstall) accion_desinstalar ;;
+  "")
+    if estado_instalado; then
+      paso "Ya hay una instalación en $DESTINO"
+      accion_actualizar
+    else
+      accion_instalar
+    fi
+    ;;
+esac

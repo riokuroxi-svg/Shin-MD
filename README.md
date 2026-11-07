@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 200 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 216 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="200/200 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="216/216 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -17,9 +17,12 @@
      cambia en cada push. Si quieres cero peticiones a terceros, borra esta línea. -->
 [![CI](https://img.shields.io/github/actions/workflow/status/riokuroxi-svg/Shin-MD/test.yml?style=flat-square&label=CI&labelColor=2F1A24&color=EE3D86)](https://github.com/riokuroxi-svg/Shin-MD/actions)
 
-**El bot de WhatsApp que no se cae, no se banea y no borra tu sesión.**
+**El bot de WhatsApp que sobrevive a los cortes de red, no pierde tu sesión
+y reduce el riesgo de bloqueo.**
 
 212 comandos · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
+
+_Reducir el riesgo no es eliminarlo: eso lo decide WhatsApp, no el bot. Lo que sí está en nuestra mano está contado en [el anti-ban por dentro](#el-anti-ban-por-dentro)._
 
 [🌐 Página del proyecto](docs/web/index.html) ·
 [⚡ Instalar](#instalación-en-5-minutos) ·
@@ -50,6 +53,15 @@ persona y se proteja solo:
 <img src="docs/assets/pastel/anti-ban-curva.svg" alt="Curva del jitter gaussiano y calentamiento diario 20 a 500" width="100%">
 
 <img src="docs/assets/pastel/anti-ban-tabla.svg" alt="Tabla: las ocho piezas del anti-ban" width="100%">
+
+**Lo que esto consigue y lo que no.** Estas piezas están en el código y se pueden
+leer: riesgo medido por el watchdog (a 80 se pausa la cola de envíos, a 95 se
+reconecta), jitter gaussiano entre mensajes, calentamiento diario, límite por
+comando y sesión que no se borra por un corte de red. Ninguna de ellas puede
+prometer que WhatsApp no suspenda una cuenta: eso lo decide WhatsApp con
+señales que el bot no ve. Lo que sí se puede decir es que el bot no se
+comporta como un robot que dispara mil mensajes por minuto. **Usa un número
+secundario.**
 
 <details>
 <summary><b>Huella de Shin-MD (marcador de obras derivadas)</b></summary>
@@ -103,16 +115,57 @@ npm run docs:web
 
 <img src="docs/assets/pastel/panel.svg" alt="Panel en 127.0.0.1:3000 con /health y /metrics" width="100%">
 
-<h2 id="instalación-en-5-minutos">Instalación en 5 minutos</h2>
+<h2 id="instalación-en-un-comando">Instalación en un comando</h2>
 
-<img src="docs/assets/pastel/banner-05.svg" alt="05 · Instalación en 5 minutos" width="100%">
+<img src="docs/assets/pastel/banner-05.svg" alt="05 · Instalación en un comando" width="100%">
 
 <img src="docs/assets/pastel/subbanner-1.svg" alt="Termux (Android)" width="100%">
+
+**Android (Termux).** Instala Termux desde [F-Droid](https://f-droid.org/packages/com.termux/)
+—la versión de Play Store está abandonada y rompe los paquetes— y pega esto:
+
+```bash
+pkg update -y && pkg install -y curl
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
+bash install.sh
+```
+
+El instalador mira la versión de Node, instala lo que falte con `pkg`, descarga
+Shin-MD en `~/Shin-MD`, instala las dependencias, deja los ocho parches del
+conector puestos y comprueba que todo esté sano. Si ya tenías una instalación,
+**actualiza en vez de duplicar**, y nunca toca `.env`, `Sessions/` ni `data/`.
+
+Antes de arrancarlo, para que Android no lo mate mientras duerme:
+
+1. Notificación de Termux → **Acquire wakelock**.
+2. Ajustes → Batería → Termux → **Sin restricciones**.
+3. Android 14 o más: Opciones de desarrollador → **Desactivar restricciones de procesos hijos**.
 
 <img src="docs/assets/pastel/terminal-termux.svg" alt="Comandos para instalar en Termux" width="100%">
 
 En WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono**.
 ¿Prefieres QR? `npm start -- --qr`.
+
+**Servidor o VPS.** Los mismos tres comandos, con Node 22.5 o superior instalado:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
+bash install.sh
+cd ~/Shin-MD && npm start
+```
+
+**Ya instalado.** Un solo archivo manda sobre todo:
+
+| Quiero… | Comando |
+|---|---|
+| actualizar conservando mi sesión | `bash ~/Shin-MD/install.sh --update` |
+| arreglar una instalación rota | `bash ~/Shin-MD/install.sh --repair` |
+| saber si todo está bien | `bash ~/Shin-MD/install.sh --verify` |
+| desinstalar y guardar mis datos | `bash ~/Shin-MD/install.sh --uninstall` |
+
+Por qué se descarga y luego se ejecuta, en lugar de `curl … | bash`: así puedes
+leerlo antes de correrlo, y si falla a mitad sabes qué archivo estaba haciendo qué.
+[Guía completa de Termux](docs/TERMUX.md) · [Instalador y recuperación](docs/INSTALACION.md)
 
 <img src="docs/assets/pastel/subbanner-2.svg" alt="Servidor o VPS" width="100%">
 
