@@ -209,13 +209,47 @@ con intereses.
 
 ---
 
-## 7. Mantenimiento
+## 7. El instalador es atómico (o los ocho, o ninguno)
+
+Un instalador que aplica siete parches y muere en el octavo es peor que uno
+que no aplica ninguno: el conector queda con la mitad de los arreglos, se ve
+sano y falla de formas raras. Por eso el script no escribe mientras piensa.
+
+| Fase | Qué hace | Si algo falla |
+|---|---|---|
+| **1. Planificar** | aplica los ocho parches sobre una copia **en memoria** de los archivos | nada se escribió: se aborta con el disco intacto |
+| **2. Validar** | parsea el contenido resultante con `node --check` (en un temporal) | nada se escribió: se aborta |
+| **3. Confirmar** | escribe cada archivo a un `.tmp` y lo **renombra** (atómico) | el archivo queda nuevo o viejo, nunca truncado |
+| **4. Humo** | importa los módulos y ejercita el renderer y las transacciones | se **restauran** los originales: vuelve al estado anterior |
+
+Prueba de que funciona, con el mismo árbol roto (ancla del parche 8 cambiada):
+
+```
+SIN la corrección            CON la corrección
+❌ 8. cabecera no encontrada   ❌ 8. cabecera no encontrada → no se escribió ningún archivo
+socket.js .......... MODIFICADO    socket.js .......... intacto
+messages-recv.js ... MODIFICADO    messages-recv.js ... intacto
+messages.js ........ MODIFICADO    messages.js ........ intacto
+companion-reg.js ... MODIFICADO    companion-reg.js ... intacto
+```
+
+Si el proceso se muere a mitad de la fase 3 (corte de luz), la siguiente
+ejecución vuelve a planificar desde cero y converge: cada parche es
+independiente e idempotente.
+
+### Mantenimiento
 
 ```bash
-node scripts/patch-baileys.cjs --check   # ¿están los 8? (no escribe nada)
-node scripts/patch-baileys.cjs           # aplicar lo que falte (idempotente)
-npm test                                 # incluye test/conector-parches.test.js
+node scripts/patch-baileys.cjs --check                     # ¿están los 8? no escribe
+node scripts/patch-baileys.cjs                             # aplica lo que falte
+node scripts/patch-baileys.cjs --lib ruta/a/baileys/lib    # sobre otra copia
+npm test                                                   # incluye test/conector-parches.test.js
 ```
+
+`--lib` (o la variable `SHIN_BAILEYS_LIB`) sirve para trabajar sobre una copia
+en otro directorio —lo usan las pruebas para montar un Baileys prístino y
+comprobar la atomicidad— y para instalaciones donde la librería no está en el
+`node_modules` de siempre.
 
 El día que la librería publique uno de estos arreglos:
 

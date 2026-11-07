@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 198 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 200 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="198/198 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="200/200 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">

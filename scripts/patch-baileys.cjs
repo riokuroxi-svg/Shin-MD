@@ -35,14 +35,32 @@
 //
 // ── CÓMO ────────────────────────────────────────────────────────────────────
 // Se aplica sobre node_modules/baileys DESPUÉS del npm install. Es
-// IDEMPOTENTE: si un parche ya está, no toca el archivo. Se AUTO-VERIFICA con
-// node --check sobre cada archivo modificado y con pruebas de humo de las
-// piezas nuevas. Si un ancla no aparece (cambió la versión de la librería)
-// FALLA CON ERROR: mejor un install rojo que un bot que parece sano y no
-// funciona.
+// IDEMPOTENTE: si un parche ya está, no lo repite.
 //
-// Uso: node scripts/patch-baileys.cjs   (lo invoca "npm install")
-//      node scripts/patch-baileys.cjs --check   solo comprueba, no escribe
+// ── ES TODO O NADA ──────────────────────────────────────────────────────────
+// Aplicar siete parches y dejar el octavo a medias sería peor que no aplicar
+// ninguno: una sesión con la mitad de los arreglos se ve sana y falla de
+// formas raras. Por eso el script trabaja en tres fases:
+//
+//   1. PLANIFICAR  — los ocho parches se aplican sobre una copia EN MEMORIA
+//                    de los archivos. Aquí no se escribe nada en disco.
+//   2. VALIDAR     — si algún ancla falta o está repetida, se aborta con los
+//                    archivos intactos. El contenido resultante se parsea con
+//                    `node --check` (también en memoria, vía temporal) y, si
+//                    hay un error de sintaxis, tampoco se escribe nada.
+//   3. CONFIRMAR   — recién aquí se escribe: cada archivo va a un temporal y
+//                    se renombra (rename atómico), así un corte de luz no
+//                    deja un archivo truncado. Se guardan los originales.
+//
+// Si la prueba de humo posterior falla, se RESTAURAN los originales: el
+// resultado siempre es "los ocho o ninguno". Si el proceso muere en medio del
+// paso 3, la siguiente ejecución vuelve a planificar desde cero y converge
+// (cada parche es independiente e idempotente).
+//
+// Uso: node scripts/patch-baileys.cjs          (lo invoca "npm install")
+//      node scripts/patch-baileys.cjs --check  solo comprueba, no escribe
+//      node scripts/patch-baileys.cjs --lib <ruta>/baileys/lib
+//                                              trabaja sobre otra copia
 'use strict';
 
 const fs = require('fs');
@@ -57,35 +75,127 @@ function fail(m) {
   process.exit(1);
 }
 
-const LIB = path.join(__dirname, '..', 'node_modules', 'baileys', 'lib');
-const FILES = {
-  utils: path.join(LIB, 'Utils', 'companion-reg-client-utils.js'),
-  socket: path.join(LIB, 'Socket', 'socket.js'),
-  recv: path.join(LIB, 'Socket', 'messages-recv.js'),
-  messages: path.join(LIB, 'Utils', 'messages.js'),
-  auth: path.join(LIB, 'Utils', 'auth-utils.js'),
-};
+const LIB_POR_DEFECTO = path.join(__dirname, '..', 'node_modules', 'baileys', 'lib');
+const os = require('os');
 
-const leer = (f) => fs.readFileSync(f, 'utf8');
-const tiene = (f, marcador) => leer(f).includes(marcador);
+/** Un error de parcheo: quien llama decide si aborta el proceso o no. */
+class ErrorDeParche extends Error {}
 
 /**
- * Reemplaza exactamente UNA ocurrencia. Si el ancla no está, o está repetida,
- * el parche no se puede aplicar con garantías: se aborta en vez de escribir
- * algo a medias. Exportada para poder probarla sin tocar la librería.
+ * Almacén virtual: los archivos se leen una vez y todos los cambios viven en
+ * memoria hasta `confirmar()`. Es lo que hace que el proceso sea atómico.
+ *
+ * @param {string} dirLib  ruta a node_modules/baileys/lib
+ */
+function crearAlmacen(dirLib) {
+  const FILES = {
+    utils: path.join(dirLib, 'Utils', 'companion-reg-client-utils.js'),
+    socket: path.join(dirLib, 'Socket', 'socket.js'),
+    recv: path.join(dirLib, 'Socket', 'messages-recv.js'),
+    messages: path.join(dirLib, 'Utils', 'messages.js'),
+    auth: path.join(dirLib, 'Utils', 'auth-utils.js'),
+  };
+
+  for (const ruta of Object.values(FILES)) {
+    if (!fs.existsSync(ruta)) {
+      throw new ErrorDeParche(`no existe ${ruta}. ¿Se ejecutó "npm install" completo?`);
+    }
+  }
+
+  /** ruta → { original, actual } */
+  const archivos = new Map();
+  const cargar = (ruta) => {
+    if (!archivos.has(ruta)) {
+      archivos.set(ruta, { original: fs.readFileSync(ruta, 'utf8'), actual: null });
+    }
+    return archivos.get(ruta);
+  };
+  const actualDe = (ruta) => {
+    const f = cargar(ruta);
+    return f.actual === null ? f.original : f.actual;
+  };
+
+  return {
+    FILES,
+    dirLib,
+
+    leer: (ruta) => actualDe(ruta),
+
+    tiene: (ruta, marca) => actualDe(ruta).includes(marca),
+
+    /** Escribe en MEMORIA. No toca el disco. */
+    escribir(ruta, texto) {
+      const f = cargar(ruta);
+      f.actual = texto;
+    },
+
+    /** Archivos cuyo contenido cambió, con su texto final. */
+    modificados() {
+      return [...archivos.entries()]
+        .filter(([, f]) => f.actual !== null && f.actual !== f.original)
+        .map(([ruta, f]) => ({ ruta, original: f.original, final: f.actual }));
+    },
+
+    /**
+     * Escribe de verdad. Cada archivo va a un temporal y se renombra: si el
+     * proceso muere a mitad, ningún archivo queda truncado (o está el viejo
+     * o está el nuevo).
+     */
+    confirmar() {
+      for (const { ruta, final } of this.modificados()) {
+        const temporal = `${ruta}.shin-patch-${process.pid}`;
+        fs.writeFileSync(temporal, final, 'utf8');
+        fs.renameSync(temporal, ruta);
+      }
+    },
+
+    /** Devuelve todo a como estaba antes de `confirmar()`. */
+    revertir() {
+      let devueltos = 0;
+      for (const { ruta, original } of this.modificados()) {
+        const temporal = `${ruta}.shin-revert-${process.pid}`;
+        try {
+          fs.writeFileSync(temporal, original, 'utf8');
+          fs.renameSync(temporal, ruta);
+          devueltos++;
+        } catch {
+          try { fs.unlinkSync(temporal); } catch { /* nada que limpiar */ }
+        }
+      }
+      return devueltos;
+    },
+  };
+}
+
+// El almacén activo. Se rellena con abrirAlmacen() antes de parchear.
+let ALMACEN = null;
+let FILES = null;
+
+function abrirAlmacen(dirLib) {
+  ALMACEN = crearAlmacen(dirLib);
+  FILES = ALMACEN.FILES;
+  return ALMACEN;
+}
+
+const leer = (f) => ALMACEN.leer(f);
+const tiene = (f, marcador) => ALMACEN.tiene(f, marcador);
+
+/**
+ * Reemplaza exactamente UNA ocurrencia EN MEMORIA. Si el ancla no está, o
+ * está repetida, el parche no se puede aplicar con garantías: se lanza
+ * ErrorDeParche y el proceso entero se aborta sin haber escrito nada.
  *
  * @param {string} file
  * @param {string} find
  * @param {string} replace
  * @param {string} label
- * @returns {string} ruta del archivo escrito
  */
 function replaceOnce(file, find, replace, label) {
   const texto = leer(file);
   const veces = texto.split(find).length - 1;
-  if (veces === 0) fail(`ancla no encontrada en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
-  if (veces > 1) fail(`ancla ambigua (${veces}x) en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
-  fs.writeFileSync(file, texto.replace(find, replace), 'utf8');
+  if (veces === 0) throw new ErrorDeParche(`ancla no encontrada en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
+  if (veces > 1) throw new ErrorDeParche(`ancla ambigua (${veces}x) en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
+  ALMACEN.escribir(file, texto.replace(find, replace));
   return file;
 }
 
@@ -96,7 +206,7 @@ function parchear(titulo, archivo, marcador, aplicar) {
     return false;
   }
   aplicar();
-  if (!tiene(archivo, marcador)) fail(`${titulo}: el parche no dejó su marca en ${path.basename(archivo)}`);
+  if (!tiene(archivo, marcador)) throw new ErrorDeParche(`${titulo}: el parche no dejó su marca en ${path.basename(archivo)}`);
   ok(`${titulo}`);
   return true;
 }
@@ -170,8 +280,8 @@ export const handleCompanionRegRefresh = (node, { creds, emitCredsUpdate, refres
   if (!/import\s*\{[^}]*\bgetBinaryNodeChild\b[^}]*\}/.test(texto)) {
     texto = `import { getBinaryNodeChild } from '../WABinary/index.js';\n` + texto;
   }
-  fs.writeFileSync(FILES.utils, texto.trimEnd() + '\n' + extra, 'utf8');
-  if (!tiene(FILES.utils, MARCA_RENDERER)) fail('1. no se pudo añadir el renderer del QR');
+  ALMACEN.escribir(FILES.utils, texto.trimEnd() + '\n' + extra);
+  if (!tiene(FILES.utils, MARCA_RENDERER)) throw new ErrorDeParche('1. no se pudo añadir el renderer del QR');
   ok('1. renderer del QR y rotación de la adv secret');
 }
 
@@ -402,7 +512,7 @@ function parchearTxStorage() {
   // propio parche.
   let texto = leer(FILES.auth);
   const lecturas = texto.split('txStorage.getStore()').length - 1;
-  if (lecturas !== 4) fail(`8. se esperaban 4 lecturas de txStorage.getStore() y hay ${lecturas}; la versión de Baileys cambió.`);
+  if (lecturas !== 4) throw new ErrorDeParche(`8. se esperaban 4 lecturas de txStorage.getStore() y hay ${lecturas}; la versión de Baileys cambió.`);
 
   texto = texto
     .replaceAll('txStorage.getStore()', 'contexto()')
@@ -430,115 +540,213 @@ export const addTransactionCapability = (state, logger, { maxCommitRetries, dela
     };`;
 
   const veces = texto.split(cabecera).length - 1;
-  if (veces !== 1) fail(`8. cabecera de addTransactionCapability encontrada ${veces} veces; la versión de Baileys cambió.`);
+  if (veces !== 1) throw new ErrorDeParche(`8. cabecera de addTransactionCapability encontrada ${veces} veces; la versión de Baileys cambió.`);
   texto = texto.replace(cabecera, reemplazo);
-  fs.writeFileSync(FILES.auth, texto, 'utf8');
+  ALMACEN.escribir(FILES.auth, texto);
 
-  if (!tiene(FILES.auth, 'txStorageCompartido')) fail('8. el parche no dejó su marca en auth-utils.js');
+  if (!tiene(FILES.auth, 'txStorageCompartido')) throw new ErrorDeParche('8. el parche no dejó su marca en auth-utils.js');
   ok('8. AsyncLocalStorage compartido');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// EJECUCIÓN
+// VALIDACIÓN Y EJECUCIÓN
 // ═══════════════════════════════════════════════════════════════════════════
-const soloComprobar = process.argv.includes('--check');
+
+/** Opciones de línea de comandos. */
+function leerArgumentos(argv = process.argv.slice(2)) {
+  const opciones = { soloComprobar: argv.includes('--check'), lib: null };
+  const i = argv.indexOf('--lib');
+  if (i !== -1 && argv[i + 1]) opciones.lib = path.resolve(argv[i + 1]);
+  else if (process.env.SHIN_BAILEYS_LIB) opciones.lib = path.resolve(process.env.SHIN_BAILEYS_LIB);
+  return opciones;
+}
+
+/** Las ocho marcas: una por parche. Si falta una, el install está a medias. */
+const MARCAS = () => [
+  [FILES.utils, 'handleCompanionRegRefresh', 'renderer del QR'],
+  [FILES.socket, 'CB:notification,type:companion_reg_refresh', 'handler companion_reg_refresh'],
+  [FILES.socket, 'content: Buffer.alloc(1)', 'nonce del pairing code'],
+  [FILES.socket, 'if (!creds.me || !creds.registered)', 'nodo de registro'],
+  [FILES.recv, "attrs?.stage !== 'primary_hello'", 'filtro de stage'],
+  [FILES.recv, "ws.on('CB:status'", 'ack de <status>'],
+  [FILES.messages, 'const estadoHttp', 'reenvío de multimedia'],
+  [FILES.auth, 'txStorageCompartido', 'AsyncLocalStorage compartido'],
+];
+
+/** Qué parches faltan, por su nombre legible. */
+function faltantes() {
+  return MARCAS().filter(([archivo, marca]) => !tiene(archivo, marca)).map(([, , titulo]) => titulo);
+}
+
+/**
+ * Parsea el contenido que va a quedar en disco, SIN escribirlo: se copia a un
+ * temporal con extensión .mjs (el código de Baileys es ESM) y se pasa
+ * `node --check`. Si algo no parsea, no se toca la instalación.
+ */
+function verificarSintaxis(almacen) {
+  const pendientes = almacen.modificados();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shin-baileys-check-'));
+  try {
+    for (const { ruta, final } of pendientes) {
+      const copia = path.join(tmpDir, path.basename(ruta).replace(/\.js$/, '') + '-' + process.pid + '.mjs');
+      fs.writeFileSync(copia, final, 'utf8');
+      try {
+        execFileSync(process.execPath, ['--check', copia], { stdio: 'pipe' });
+      } catch (e) {
+        throw new ErrorDeParche(`sintaxis inválida tras parchear ${path.basename(ruta)}: ${e.stderr?.toString?.() || e.message}`);
+      }
+    }
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+  ok(`sintaxis válida en ${pendientes.length} archivo(s) (verificada antes de escribir)`);
+}
+
+/** Aplica los ocho parches sobre el almacén. No escribe nada en disco. */
+function aplicarTodo(almacen) {
+  const resumen = { aplicados: [], saltados: [] };
+  const pasos = [
+    ['1. renderer del QR', () => { parchearRenderer(); }],
+    ['2. socket del QR', () => { parchearSocketQR(); }],
+    ['3. filtro de stage', () => { parchearStageGuard(); }],
+    ['4. nonce del pairing code', () => { parchearNonce(); }],
+    ['5. nodo de registro', () => { parchearRegistro(); }],
+    ['6. ack de <status>', () => { parchearAckStatus(); }],
+    ['7. reenvío de multimedia', () => { parchearReenvioMedia(); }],
+    ['8. AsyncLocalStorage compartido', () => { parchearTxStorage(); }],
+  ];
+
+  const cambiosIniciales = almacen.modificados().length;
+  for (const [titulo, ejecutar] of pasos) {
+    ejecutar();
+    resumen.aplicados.push(titulo);
+  }
+  const cambioFinal = almacen.modificados().length;
+  if (cambioFinal === cambiosIniciales) resumen.saltados = resumen.aplicados.slice();
+  return resumen;
+}
+
+/** Pruebas de humo sobre lo que ya está en disco. */
+async function humo(almacen) {
+  // Escotilla de prueba: permite ejercitar la reversión sin romper la librería.
+  if (process.env.SHIN_PATCH_TEST_FALLO_SMOKE === '1') {
+    throw new ErrorDeParche('fallo de humo forzado por SHIN_PATCH_TEST_FALLO_SMOKE');
+  }
+
+  let utils;
+  let auth;
+  try {
+    utils = await import(path.join('file://', almacen.FILES.utils));
+    auth = await import(path.join('file://', almacen.FILES.auth));
+  } catch (e) {
+    // Un árbol aislado (--lib) puede no tener las dependencias a mano; en la
+    // instalación real, en cambio, no poder importar es un fallo de verdad.
+    if (almacen.dirLib !== LIB_POR_DEFECTO && /ERR_MODULE_NOT_FOUND|Cannot find package/.test(String(e.message))) {
+      info('prueba de humo omitida: el árbol indicado no tiene sus dependencias instaladas');
+      return;
+    }
+    throw new ErrorDeParche(`no se pudo cargar el conector parcheado: ${e.message.split('\n')[0]}`);
+  }
+
+  if (typeof utils.makePairingQRRenderer !== 'function') throw new ErrorDeParche('makePairingQRRenderer no exportada');
+  if (typeof utils.handleCompanionRegRefresh !== 'function') throw new ErrorDeParche('handleCompanionRegRefresh no exportada');
+
+  const vistos = [];
+  const r = utils.makePairingQRRenderer(['a', 'b'], (ref) => vistos.push(ref));
+  if (!r.next() || !r.next() || r.next() !== false) throw new ErrorDeParche('el renderer no respeta el pool de refs');
+  if (!r.refresh()) throw new ErrorDeParche('el renderer no puede refrescar');
+  if (vistos.join(',') !== 'a,b,b') throw new ErrorDeParche(`orden de renders inesperado: ${vistos.join(',')}`);
+
+  const creds = { advSecretKey: 'vieja' };
+  const nodo = { attrs: { id: 'x' }, content: [{ tag: 'companion_reg_refresh', attrs: {} }] };
+  const logger = { warn() {}, info() {}, debug() {} };
+  let refrescos = 0;
+  const base = { emitCredsUpdate: () => {}, refreshQR: () => refrescos++, logger };
+  if (utils.handleCompanionRegRefresh(nodo, { ...base, creds }) !== 'rotated') throw new ErrorDeParche('no rotó la adv secret');
+  if (creds.advSecretKey === 'vieja' || refrescos !== 1) throw new ErrorDeParche('la rotación no hizo efecto');
+  creds.me = { id: 'x@s.whatsapp.net' };
+  if (utils.handleCompanionRegRefresh(nodo, { ...base, creds }) !== 'ignored_registered') {
+    throw new ErrorDeParche('rotó la adv secret de una sesión ya vinculada');
+  }
+
+  const almacen_ = () => {
+    const datos = {};
+    return { datos, async get() { return {}; }, async set(obj) { Object.assign(datos, obj); } };
+  };
+  const A = almacen_();
+  const B = almacen_();
+  const silencioso = { trace() {}, debug() {}, info() {}, warn() {}, error() {} };
+  const storeA = auth.addTransactionCapability(A, silencioso, { maxCommitRetries: 1, delayBetweenTriesMs: 1 });
+  const storeB = auth.addTransactionCapability(B, silencioso, { maxCommitRetries: 1, delayBetweenTriesMs: 1 });
+  await storeA.transaction(async () => {
+    await storeB.transaction(async () => {
+      await storeB.set({ 'pre-key': { 9: { id: 9 } } });
+    });
+  }, 'k');
+  if (!B.datos['pre-key'] || A.datos['pre-key']) {
+    throw new ErrorDeParche('el AsyncLocalStorage compartido mezcla transacciones entre almacenes');
+  }
+
+  ok('humo: renderer del QR, rotación de la adv secret y transacciones aisladas');
+}
 
 function main() {
-  for (const p of [FILES.utils, FILES.socket, FILES.recv]) {
-    if (!fs.existsSync(p)) fail(`no existe ${p}. ¿Se ejecutó "npm install" completo?`);
-  }
+  const opciones = leerArgumentos();
 
-  if (soloComprobar) {
-    const faltan = [
-      [FILES.utils, MARCA_RENDERER, 'renderer del QR'],
-      [FILES.socket, 'CB:notification,type:companion_reg_refresh', 'handler companion_reg_refresh'],
-      [FILES.socket, 'content: Buffer.alloc(1)', 'nonce del pairing code'],
-      [FILES.socket, 'if (!creds.me || !creds.registered)', 'nodo de registro'],
-      [FILES.recv, "attrs?.stage !== 'primary_hello'", 'filtro de stage'],
-      [FILES.recv, "ws.on('CB:status'", 'ack de <status>'],
-      [FILES.messages, 'const estadoHttp', 'reenvío de multimedia'],
-      [FILES.auth, 'txStorageCompartido', 'AsyncLocalStorage compartido'],
-    ]
-      .filter(([archivo, marca]) => !fs.existsSync(archivo) || !tiene(archivo, marca))
-      .map(([, , titulo]) => titulo);
-    if (faltan.length) {
-      console.error('[patch-baileys] faltan parches: ' + faltan.join(', '));
-      process.exit(1);
+  try {
+    const almacen = abrirAlmacen(opciones.lib || LIB_POR_DEFECTO);
+
+    if (opciones.soloComprobar) {
+      const faltan = faltantes();
+      if (faltan.length) {
+        console.error('[patch-baileys] faltan parches: ' + faltan.join(', '));
+        process.exit(1);
+      }
+      ok(`los ${MARCAS().length} parches están aplicados`);
+      return;
     }
-    ok('los 8 parches están aplicados');
-    return;
-  }
 
-  parchearRenderer();
-  parchearSocketQR();
-  parchearStageGuard();
-  parchearNonce();
-  parchearRegistro();
-  parchearAckStatus();
-  parchearReenvioMedia();
-  parchearTxStorage();
+    // ── Fase 1 y 2: planificar y validar, sin escribir ──
+    aplicarTodo(almacen);
+    const pendientes = almacen.modificados();
 
-  // ── Sintaxis ──
-  for (const f of Object.values(FILES)) {
-    try {
-      execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' });
-    } catch (e) {
-      fail(`sintaxis inválida tras parchear ${path.basename(f)}: ${e.stderr?.toString?.() || e.message}`);
+    if (pendientes.length === 0) {
+      info('todo estaba ya parcheado; no hay nada que escribir');
+      const faltan = faltantes();
+      if (faltan.length) throw new ErrorDeParche(`quedaron marcas sin poner: ${faltan.join(', ')}`);
+      return;
     }
-  }
-  ok('sintaxis válida en los cinco archivos');
 
-  // ── Humo: renderer y rotación ──
-  return (async () => {
-    const utils = await import(path.join('file://', FILES.utils));
-    if (typeof utils.makePairingQRRenderer !== 'function') fail('makePairingQRRenderer no exportada');
-    if (typeof utils.handleCompanionRegRefresh !== 'function') fail('handleCompanionRegRefresh no exportada');
+    verificarSintaxis(almacen);
 
-    const vistos = [];
-    const r = utils.makePairingQRRenderer(['a', 'b'], (ref) => vistos.push(ref));
-    if (!r.next() || !r.next() || r.next() !== false) fail('el renderer no respeta el pool de refs');
-    if (!r.refresh()) fail('el renderer no puede refrescar');
-    if (vistos.join(',') !== 'a,b,b') fail(`orden de renders inesperado: ${vistos.join(',')}`);
+    // ── Fase 3: escribir ──
+    almacen.confirmar();
+    ok(`escritos ${pendientes.length} de ${Object.keys(almacen.FILES).length} archivos`);
 
-    const creds = { advSecretKey: 'vieja' };
-    const nodo = { attrs: { id: 'x' }, content: [{ tag: 'companion_reg_refresh', attrs: {} }] };
-    const logger = { warn() {}, info() {}, debug() {} };
-    let refrescos = 0;
-    const eventos = [];
-    const base = { emitCredsUpdate: (u) => eventos.push(u), refreshQR: () => refrescos++, logger };
-    const rotado = utils.handleCompanionRegRefresh(nodo, { ...base, creds });
-    if (rotado !== 'rotated' || creds.advSecretKey === 'vieja' || refrescos !== 1) fail('no rotó la adv secret');
-    creds.me = { id: 'x@s.whatsapp.net' };
-    if (utils.handleCompanionRegRefresh(nodo, { ...base, creds }) !== 'ignored_registered') fail('rotó la adv secret de una sesión ya vinculada');
-    ok('humo: renderer del QR y rotación de la adv secret');
-
-    // ── Humo: dos almacenes no comparten transacción ──
-    const { addTransactionCapability } = await import(path.join('file://', FILES.auth));
-    const almacen = () => {
-      const datos = {};
-      return {
-        datos,
-        async get() { return {}; },
-        async set(obj) { Object.assign(datos, obj); },
-      };
-    };
-    const A = almacen();
-    const B = almacen();
-    const silencioso = { trace() {}, debug() {}, info() {}, warn() {}, error() {} };
-    const storeA = addTransactionCapability(A, silencioso, { maxCommitRetries: 1, delayBetweenTriesMs: 1 });
-    const storeB = addTransactionCapability(B, silencioso, { maxCommitRetries: 1, delayBetweenTriesMs: 1 });
-    await storeA.transaction(async () => {
-      await storeB.transaction(async () => {
-        await storeB.set({ 'pre-key': { 9: { id: 9 } } });
-      });
-    }, 'k');
-    if (!B.datos['pre-key'] || A.datos['pre-key']) {
-      fail('el AsyncLocalStorage compartido mezcla transacciones entre almacenes');
+    // ── Humo: si falla, se devuelve TODO a como estaba ──
+    return humo(almacen).catch((error) => {
+      const devueltos = almacen.revertir();
+      fail(`${error.message} → se revirtieron ${devueltos} archivo(s); la instalación quedó como estaba`);
+    });
+  } catch (error) {
+    if (error instanceof ErrorDeParche) {
+      fail(error.message + ' → no se escribió ningún archivo');
     }
-    ok('humo: transacciones aisladas con el almacén compartido');
-  })();
+    fail(error?.message || String(error));
+  }
 }
 
 if (require.main === module) main();
 
-module.exports = { replaceOnce, parchear, tiene, FILES };
+module.exports = {
+  crearAlmacen,
+  abrirAlmacen,
+  aplicarTodo,
+  replaceOnce,
+  parchear,
+  tiene,
+  humo,
+  main,
+  leerArgumentos,
+  ErrorDeParche,
+};

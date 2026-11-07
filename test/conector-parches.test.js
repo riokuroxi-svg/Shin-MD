@@ -28,10 +28,12 @@ import http from "node:http";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 import { downloadMediaMessage, buildAckStanza } from "baileys";
 import { addTransactionCapability } from "baileys/lib/Utils/auth-utils.js";
 
+const require = createRequire(import.meta.url);
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(raiz, "scripts", "patch-baileys.cjs");
 const lib = path.join(raiz, "node_modules", "baileys", "lib");
@@ -89,40 +91,196 @@ test("volver a ejecutarlo no cambia ni un byte (idempotencia)", () => {
   assert.match(r.stdout, /ya aplicado/);
 });
 
-// ─── El script no escribe a medias ─────────────────────────────────
+// ─── Atomicidad del instalador ─────────────────────────────────────
+//
+// El riesgo real no es que un parche suelto se equivoque, sino que el
+// instalador aplique seis, falle en el séptimo y deje el conector a medias:
+// eso se ve sano y falla de formas raras. Estas pruebas montan un árbol
+// prístino de Baileys en un temporal y comprueban que el resultado siempre es
+// "los ocho o ninguno".
 
-function ejecutarReplaceOnce(rutaArchivo) {
-  const codigo = `
-    const { replaceOnce } = require(${JSON.stringify(script)});
-    replaceOnce(${JSON.stringify(rutaArchivo)}, "ANCLA", "reemplazo", "prueba");
-    process.stdout.write("aplicado");
-  `;
-  return spawnSync(process.execPath, ["-e", codigo], { encoding: "utf8" });
+const PAQUETE = "@whiskeysockets/baileys@7.0.0-rc14";
+
+/** Baja el tarball de Baileys y lo descomprime en un temporal. */
+function arbolPristino() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shin-baileys-"));
+  const packDir = path.join(dir, "pack");
+  fs.mkdirSync(packDir);
+
+  const intentos = [
+    ["npm", ["pack", "--offline", "--pack-destination", packDir, PAQUETE]],
+    ["npm", ["pack", "--pack-destination", packDir, PAQUETE]],
+  ];
+  let tgz = null;
+  for (const [cmd, args] of intentos) {
+    const r = spawnSync(cmd, args, { encoding: "utf8", cwd: dir });
+    if (r.status === 0) {
+      tgz = fs.readdirSync(packDir).find((f) => f.endsWith(".tgz"));
+      if (tgz) break;
+    }
+  }
+  if (!tgz) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    return null;
+  }
+
+  const r = spawnSync("tar", ["xzf", path.join(packDir, tgz), "-C", dir], { encoding: "utf8" });
+  if (r.status !== 0) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    return null;
+  }
+  return { dir, lib: path.join(dir, "package", "lib") };
 }
 
-test("replaceOnce corta el install si el ancla no existe", () => {
-  const { archivo, dir } = temporal("otra cosa\n");
-  const r = ejecutarReplaceOnce(archivo);
-  assert.equal(r.status, 1, "debía abortar");
-  assert.match(r.stderr, /ancla no encontrada/);
-  assert.equal(fs.readFileSync(archivo, "utf8"), "otra cosa\n", "no debe tocar el archivo");
-  fs.rmSync(dir, { recursive: true, force: true });
+/** Huella de los cinco archivos que toca el instalador. */
+function huellas(lib) {
+  const rutas = {
+    utils: path.join(lib, "Utils", "companion-reg-client-utils.js"),
+    socket: path.join(lib, "Socket", "socket.js"),
+    recv: path.join(lib, "Socket", "messages-recv.js"),
+    messages: path.join(lib, "Utils", "messages.js"),
+    auth: path.join(lib, "Utils", "auth-utils.js"),
+  };
+  return Object.fromEntries(Object.entries(rutas).map(([k, f]) => [k, hash(f)]));
+}
+
+function correrInstalador(args, env = {}) {
+  return spawnSync(process.execPath, [script, ...args], {
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+}
+
+test("si un parche falla, NINGUNO queda escrito (todo o nada)", (t) => {
+  const arbol = arbolPristino();
+  if (!arbol) return t.skip("no hay tarball de Baileys disponible");
+
+  try {
+    // El parche 8 es el último de la fila: con el diseño anterior, los siete
+    // primeros ya estarían en disco cuando este fallara.
+    const auth = path.join(arbol.lib, "Utils", "auth-utils.js");
+    const original = fs.readFileSync(auth, "utf8");
+    const roto = original.replace(
+      "const txStorage = new AsyncLocalStorage();",
+      "const txStorage = new AsyncLocalStorageQueYaNoSeLlamaAsi();"
+    );
+    assert.notEqual(roto, original, "el ancla del parche 8 debe existir en el árbol prístino");
+    fs.writeFileSync(auth, roto, "utf8");
+
+    const antes = huellas(arbol.lib);
+    const r = correrInstalador(["--lib", arbol.lib]);
+
+    assert.equal(r.status, 1, "el install debía fallar");
+    assert.match(r.stderr, /no se escribió ningún archivo/);
+    assert.deepEqual(huellas(arbol.lib), antes, "ninguno de los cinco archivos puede cambiar");
+  } finally {
+    fs.rmSync(arbol.dir, { recursive: true, force: true });
+  }
 });
 
-test("replaceOnce corta el install si el ancla está repetida", () => {
-  const { archivo, dir } = temporal("ANCLA\nANCLA\n");
-  const r = ejecutarReplaceOnce(archivo);
-  assert.equal(r.status, 1);
-  assert.match(r.stderr, /ancla ambigua \(2x\)/);
-  fs.rmSync(dir, { recursive: true, force: true });
+test("un parche que rompería la sintaxis tampoco escribe nada", (t) => {
+  const arbol = arbolPristino();
+  if (!arbol) return t.skip("no hay tarball de Baileys disponible");
+
+  try {
+    // Los anclas siguen ahí, pero el archivo no parsea: la fase de validación
+    // corre ANTES de escribir, así que la instalación debe quedar intacta.
+    const socket = path.join(arbol.lib, "Socket", "socket.js");
+    fs.appendFileSync(socket, "\nfunction (\n", "utf8");
+
+    const antes = huellas(arbol.lib);
+    const r = correrInstalador(["--lib", arbol.lib]);
+
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /sintaxis inválida/);
+    assert.deepEqual(huellas(arbol.lib), antes);
+  } finally {
+    fs.rmSync(arbol.dir, { recursive: true, force: true });
+  }
 });
 
-test("replaceOnce sustituye una sola vez y respeta el resto", () => {
-  const { archivo, dir } = temporal("antes\nANCLA\ndespues\n");
-  const r = ejecutarReplaceOnce(archivo);
-  assert.equal(r.status, 0, r.stderr);
-  assert.equal(fs.readFileSync(archivo, "utf8"), "antes\nreemplazo\ndespues\n");
-  fs.rmSync(dir, { recursive: true, force: true });
+test("si la prueba de humo falla después de escribir, se revierte todo", (t) => {
+  const arbol = arbolPristino();
+  if (!arbol) return t.skip("no hay tarball de Baileys disponible");
+
+  try {
+    // Árbol aislado: no puede importar sus dependencias, así que el humo se
+    // omite por diseño. Se fuerza un fallo para ejercitar la reversión.
+    const antes = huellas(arbol.lib);
+    const r = correrInstalador(["--lib", arbol.lib], { SHIN_PATCH_TEST_FALLO_SMOKE: "1" });
+
+    assert.equal(r.status, 1, "debía fallar");
+    assert.match(r.stderr, /se revirtieron 5 archivo/);
+    assert.deepEqual(huellas(arbol.lib), antes, "la instalación debe quedar byte a byte como estaba");
+  } finally {
+    fs.rmSync(arbol.dir, { recursive: true, force: true });
+  }
+});
+
+test("en un árbol prístino aplica los ocho y la segunda pasada no toca nada", (t) => {
+  const arbol = arbolPristino();
+  if (!arbol) return t.skip("no hay tarball de Baileys disponible");
+
+  try {
+    const antes = huellas(arbol.lib);
+
+    const r1 = correrInstalador(["--lib", arbol.lib]);
+    assert.equal(r1.status, 0, r1.stderr || r1.stdout);
+    assert.match(r1.stdout, /escritos 5 de 5 archivos/);
+
+    const despues = huellas(arbol.lib);
+    for (const k of Object.keys(antes)) {
+      assert.notEqual(despues[k], antes[k], `${k} debía cambiar`);
+    }
+
+    // --check reconoce el estado…
+    const check = correrInstalador(["--check", "--lib", arbol.lib]);
+    assert.equal(check.status, 0, check.stderr);
+    assert.match(check.stdout, /los 8 parches están aplicados/);
+
+    // …y una segunda aplicación no escribe ni un byte.
+    const r2 = correrInstalador(["--lib", arbol.lib]);
+    assert.equal(r2.status, 0);
+    assert.match(r2.stdout, /no hay nada que escribir/);
+    assert.deepEqual(huellas(arbol.lib), despues);
+  } finally {
+    fs.rmSync(arbol.dir, { recursive: true, force: true });
+  }
+});
+
+// ─── El reemplazo, en pequeño ──────────────────────────────────────
+
+test("replaceOnce trabaja en memoria: nunca toca el disco por su cuenta", (t) => {
+  const { abrirAlmacen, replaceOnce, ErrorDeParche } = require(script);
+  const arbol = arbolPristino();
+  if (!arbol) return t.skip("no hay tarball de Baileys disponible");
+
+  try {
+    const almacen = abrirAlmacen(arbol.lib);
+    const ruta = almacen.FILES.socket;
+    const enDisco = fs.readFileSync(ruta, "utf8");
+
+    // Ancla que no existe: lanza y no escribe.
+    assert.throws(
+      () => replaceOnce(ruta, "ESTA_CADENA_NO_EXISTE_EN_BAILEYS", "x", "prueba"),
+      (e) => e instanceof ErrorDeParche && /ancla no encontrada/.test(e.message)
+    );
+    assert.equal(fs.readFileSync(ruta, "utf8"), enDisco, "el archivo del disco no se toca");
+
+    // Ancla repetida: tampoco adivina cuál reemplazar.
+    assert.throws(() => replaceOnce(ruta, "ws.on(", "x", "ambigua"), /ancla ambigua/);
+    assert.equal(fs.readFileSync(ruta, "utf8"), enDisco);
+
+    // Ancla real: el cambio queda EN MEMORIA hasta confirmar().
+    const ancla = "getNextPreKeysNode, makeEventBuffer, makeNoiseHandler, promiseTimeout";
+    assert.ok(enDisco.includes(ancla), "el árbol prístino debe traer el ancla");
+    replaceOnce(ruta, ancla, ancla + ", marcaDePrueba", "prueba");
+    assert.equal(fs.readFileSync(ruta, "utf8"), enDisco, "seguimos sin escribir en disco");
+    assert.ok(almacen.leer(ruta).includes("marcaDePrueba"), "el cambio vive en memoria");
+    assert.equal(almacen.modificados().length, 1);
+  } finally {
+    fs.rmSync(arbol.dir, { recursive: true, force: true });
+  }
 });
 
 // ─── Ack de los estados ────────────────────────────────────────────

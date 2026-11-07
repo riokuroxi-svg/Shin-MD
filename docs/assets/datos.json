@@ -3,10 +3,10 @@
   "nombres": 750,
   "alias": 538,
   "categorias": 15,
-  "pruebas": 198,
-  "pruebasTotal": 198,
+  "pruebas": 200,
+  "pruebasTotal": 200,
   "archivos": 30,
-  "version": "3.1.1",
+  "version": "3.1.2",
   "node": "22.5",
   "baileys": "6.7.24",
   "licencia": "AGPL-3.0-only"
