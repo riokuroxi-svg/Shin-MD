@@ -1558,3 +1558,76 @@ test("una instalación a medias con cambios propios no se pisa", () => {
   assert.equal(fs.readFileSync(path.join(destino, "index.js"), "utf8"),
     "// lo que fuera que hizo el usuario\n", "no puede tocar el archivo del usuario");
 });
+
+test("una carpeta de otra historia se aparta entera y sus datos se recuperan", () => {
+  // Caso real de Termux: el usuario tenía ~/Shin-MD de la 3.0.3, con una
+  // historia que no comparte ni un commit con la actual (95 y 134 commits
+  // distintos). El fetch contra el "origin" de esa carpeta fallaba y el
+  // instalador no podía avanzar de ninguna forma.
+  const origen = crearOrigen();
+  git(origen, "tag", "v9.9.9");
+
+  // La carpeta "vieja": otro repositorio, otra historia, con datos dentro.
+  const raiz = temporal("shin-otra-historia");
+  const destino = path.join(raiz, "Shin-MD");
+  const antiguo = temporal("shin-repo-antiguo");
+  escribir(path.join(antiguo, "package.json"), JSON.stringify({
+    name: "shin-md", version: "3.0.3", private: true, type: "module",
+  }, null, 2) + "\n");
+  escribir(path.join(antiguo, "index.js"), "export const viejo = true;\n");
+  git(antiguo, "init", "-q");
+  git(antiguo, "add", "-A");
+  git(antiguo, "commit", "-q", "-m", "version antigua");
+  git(antiguo, "branch", "-M", "main");
+  spawnSync("git", ["clone", "--quiet", antiguo, destino], { encoding: "utf8" });
+
+  // Datos del usuario dentro de la carpeta vieja.
+  escribir(path.join(destino, ".env"), "OWNER_NUMBER=5210000000000\nSECRETO=intacto\n");
+  escribir(path.join(destino, "Sessions", "Owner", "auth.db"), "credenciales");
+  baseSqlite(path.join(destino, "data", "shin.db"), 7);
+
+  const r = correr(INSTALADOR, ["--version", "9.9.9", "--yes"],
+    { raiz, env: { SHIN_REPO_URL: origen } });
+
+  assert.equal(r.status, 0, `debía instalarlo:\n${r.salida}`);
+  assert.match(r.salida, /otra versión del proyecto/);
+  assert.match(r.salida, /apart[oa] a /i);
+
+  // El código nuevo manda.
+  const pkg = JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8"));
+  assert.equal(pkg.version, "9.9.9");
+
+  // Los datos del usuario volvieron.
+  assert.equal(fs.readFileSync(path.join(destino, ".env"), "utf8"),
+    "OWNER_NUMBER=5210000000000\nSECRETO=intacto\n");
+  assert.equal(fs.readFileSync(path.join(destino, "Sessions", "Owner", "auth.db"), "utf8"), "credenciales");
+  assert.ok(fs.existsSync(path.join(destino, "data", "shin.db")), "la base tiene que volver");
+
+  // Y la carpeta vieja sigue existiendo, entera y con su código.
+  const apartadas = fs.readdirSync(raiz).filter((n) => n.startsWith("Shin-MD-viejo-"));
+  assert.equal(apartadas.length, 1, "tiene que quedar la instalación anterior apartada");
+  const apartada = path.join(raiz, apartadas[0]);
+  assert.ok(fs.existsSync(path.join(apartada, "index.js")), "sin borrar nada de la anterior");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(apartada, "package.json"), "utf8")).version, "3.0.3");
+});
+
+test("si el repositorio no responde, el error dice qué pasó de verdad", () => {
+  const raiz = temporal("shin-sin-red");
+  const destino = path.join(raiz, "Shin-MD");
+  const antiguo = temporal("shin-repo-mudo");
+  escribir(path.join(antiguo, "package.json"), '{"name":"shin-md","version":"1.0.0"}\n');
+  git(antiguo, "init", "-q");
+  git(antiguo, "add", "-A");
+  git(antiguo, "commit", "-q", "-m", "x");
+  spawnSync("git", ["clone", "--quiet", antiguo, destino], { encoding: "utf8" });
+
+  const r = correr(INSTALADOR, ["--version", "9.9.9", "--yes"],
+    { raiz, env: { SHIN_REPO_URL: path.join(raiz, "no-existe.git") } });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /No pude consultar/);
+  assert.match(r.salida, /git dijo:/, "el mensaje tiene que traer lo que dijo git, no una suposición");
+  assert.doesNotMatch(r.salida, /¿sin conexión\?/, "no se adivina la causa");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8")).version, "1.0.0",
+    "la carpeta tiene que quedar como estaba");
+});

@@ -41,6 +41,7 @@ readonly NOMBRE="Shin-MD"
 BASE_DIR="${SHIN_INSTALL_ROOT:-$HOME}"
 DESTINO="${SHIN_INSTALL_DIR:-$BASE_DIR/$NOMBRE}"
 DESTINO_EXPLICITO=0
+ULTIMO_APARTADO=""
 if [ -n "${SHIN_INSTALL_DIR:-}" ] || [ -n "${SHIN_INSTALL_ROOT:-}" ]; then
   DESTINO_EXPLICITO=1
 fi
@@ -610,37 +611,71 @@ clonar() {
       # Quedó a medias (corte, Ctrl+C, npm que falló): se reutiliza el clon
       # en vez de pedir al usuario que borre algo.
       #
-      # Pero hay que ponerla EN LA VERSIÓN QUE SE PIDIÓ. Antes se continuaba
-      # con el código que hubiera, aunque fuera de otra versión: el usuario
-      # creía estar instalando la nueva y se quedaba con la vieja, con sus
-      # parches viejos, y la comprobación final fallaba sin explicar por qué.
+      # Pero hay que ponerla EN LA VERSIÓN QUE SE PIDIÓ, y para eso no basta
+      # con fiarse del "origin" que tenga esa carpeta: puede apuntar a una
+      # URL muerta o a otro repositorio. Se pregunta al de verdad.
       dato "instalación incompleta encontrada en $DESTINO"
-      local referencia="${VERSION_PEDIDA:-$RAMA}"
+      local referencia="${VERSION_PEDIDA:-$RAMA}" salida_git
       if [ -n "$(git -C "$DESTINO" status --porcelain --untracked-files=no 2>/dev/null || true)" ]; then
         morir "La instalación a medias de $DESTINO tiene cambios propios.
   No los piso. Revísalos con: git -C $DESTINO status
   Si no te importan: git -C $DESTINO checkout -- .
   Si no sabes qué es: mueve la carpeta a otro sitio y vuelve a ejecutar."
       fi
-      if ! git -C "$DESTINO" fetch --quiet --tags origin 2>/dev/null; then
-        morir "No pude consultar el repositorio desde $DESTINO (¿sin conexión?)."
+      if ! salida_git="$(git -C "$DESTINO" fetch --quiet --tags "$REPO_URL" 2>&1)"; then
+        morir "No pude consultar $REPO_URL desde $DESTINO.
+
+  git dijo: ${salida_git:-sin más detalle}
+
+  Comprueba la conexión con: git ls-remote $REPO_URL"
       fi
+      local objetivo
       if [ -n "$VERSION_PEDIDA" ]; then
-        if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
-          morir "No existe la versión $VERSION_PEDIDA.
-  Lista las disponibles: git ls-remote --tags $REPO_URL"
+        # Acepta 3.2.5 y v3.2.5: escribir la versión sin la "v" es lo normal.
+        if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1 \
+           && git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/v$VERSION_PEDIDA" >/dev/null 2>&1; then
+          VERSION_PEDIDA="v$VERSION_PEDIDA"
         fi
-        git -C "$DESTINO" checkout --quiet --detach "$VERSION_PEDIDA" \
-          || morir "No pude poner la instalación a medias en $VERSION_PEDIDA."
+        objetivo="refs/tags/$VERSION_PEDIDA"
+        git -C "$DESTINO" rev-parse --verify --quiet "$objetivo" >/dev/null 2>&1 \
+          || morir "No existe la versión $VERSION_PEDIDA.
+  Lista las disponibles: git ls-remote --tags $REPO_URL"
       else
-        git -C "$DESTINO" checkout --quiet -B "$RAMA" "origin/$RAMA" \
-          || morir "No pude poner la instalación a medias en la rama $RAMA."
+        objetivo="FETCH_HEAD"
       fi
-      bien "continuando en $referencia (el código de antes no se reutiliza)"
-      return 0
+
+      if git -C "$DESTINO" merge-base HEAD "$objetivo" >/dev/null 2>&1; then
+        # Misma historia: basta con moverse a la versión pedida.
+        if [ -n "$VERSION_PEDIDA" ]; then
+          git -C "$DESTINO" checkout --quiet --detach "$VERSION_PEDIDA" \
+            || morir "No pude poner la instalación a medias en $VERSION_PEDIDA."
+        else
+          git -C "$DESTINO" checkout --quiet -B "$RAMA" "FETCH_HEAD" \
+            || morir "No pude poner la instalación a medias en la rama $RAMA."
+        fi
+        bien "continuando en $referencia (el código de antes no se reutiliza)"
+        return 0
+      fi
+
+      # La carpeta es de OTRA historia: no comparte ni un commit con la que se
+      # quiere instalar (le pasa a quien viene de una versión antigua del
+      # proyecto). Cambiar de rama aquí dejaría mezclados dos árboles, así que
+      # se aparta entera y se instala limpio. No se borra nada: se mueve.
+      local apartada
+      apartada="$DESTINO-viejo-$(date +%Y%m%d-%H%M%S)"
+      aviso "esa carpeta es de otra versión del proyecto (no comparten historia)."
+      aviso "la aparto a ${apartada} y tus datos se copian a la instalación nueva."
+      if ! mv -- "$DESTINO" "$apartada"; then
+        morir "No pude apartar $DESTINO. Muévela tú a otro sitio y vuelve a ejecutar."
+      fi
+      ULTIMO_APARTADO="$apartada"
     fi
-    morir "La carpeta $DESTINO no está vacía y no es una instalación de $NOMBRE.
+    # Tras apartar una instalación de otra historia la carpeta ya no existe;
+    # solo se llega aquí si sigue habiendo algo que no es nuestro.
+    if [ -d "$DESTINO" ] && [ -n "$(ls -A "$DESTINO" 2>/dev/null || true)" ]; then
+      morir "La carpeta $DESTINO no está vacía y no es una instalación de $NOMBRE.
   Elige otra con --dir RUTA o vacíala tú mismo."
+    fi
   fi
   mkdir -p "$(dirname "$DESTINO")"
   local -a args=(clone --quiet)
@@ -658,6 +693,21 @@ clonar() {
     morir "No se pudo descargar el repositorio. Comprueba tu conexión y que git esté instalado."
   fi
   bien "descargado ${VERSION_PEDIDA:-$RAMA} en $DESTINO"
+
+  # Si se apartó una instalación de otra historia, sus datos vuelven aquí:
+  # sesiones, .env, base y respaldos. Las carpetas del código NO se copian.
+  if [ -n "${ULTIMO_APARTADO:-}" ] && [ -d "$ULTIMO_APARTADO" ]; then
+    local r
+    for r in .env Sessions session data backups; do
+      [ -e "$ULTIMO_APARTADO/$r" ] || continue
+      if cp -a "$ULTIMO_APARTADO/$r" "$DESTINO/" 2>/dev/null; then
+        dato "recuperado $r de la instalación anterior"
+      else
+        aviso "no pude recuperar $r; sigue en $ULTIMO_APARTADO/$r"
+      fi
+    done
+    bien "la instalación anterior quedó intacta en $ULTIMO_APARTADO"
+  fi
 }
 
 comprobar_espacio() {

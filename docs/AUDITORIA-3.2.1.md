@@ -92,14 +92,14 @@ distintos. Ahora:
 
 ```bash
 # descargar del release, no de main
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.5/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.5/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.6/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.6/SHA256SUMS -o SHA256SUMS
 
 # comprobar la huella ANTES de ejecutar
 sha256sum -c SHA256SUMS
 
 # instalar exactamente esa versión (clona la etiqueta, no main)
-bash install.sh --version v3.2.5
+bash install.sh --version v3.2.6
 ```
 
 `npm run firma` genera `SHA256SUMS`; `npm run firma:check` comprueba que
