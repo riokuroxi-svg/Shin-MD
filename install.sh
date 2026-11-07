@@ -603,99 +603,158 @@ bot_corriendo() {
 clonar() {
   paso "Descargando $NOMBRE"
   destino_instalable "$DESTINO"
+  local referencia="${VERSION_PEDIDA:-$RAMA}"
+
   if [ -d "$DESTINO" ] && [ -n "$(ls -A "$DESTINO" 2>/dev/null || true)" ]; then
     if [ -d "$DESTINO/.git" ]; then
       if estado_instalado; then
         morir "Ya existe una instalación en $DESTINO. Usa: bash install.sh --update"
       fi
-      # Quedó a medias (corte, Ctrl+C, npm que falló): se reutiliza el clon
-      # en vez de pedir al usuario que borre algo.
-      #
-      # Pero hay que ponerla EN LA VERSIÓN QUE SE PIDIÓ, y para eso no basta
-      # con fiarse del "origin" que tenga esa carpeta: puede apuntar a una
-      # URL muerta o a otro repositorio. Se pregunta al de verdad.
       dato "instalación incompleta encontrada en $DESTINO"
-      local referencia="${VERSION_PEDIDA:-$RAMA}" salida_git
-      if [ -n "$(git -C "$DESTINO" status --porcelain --untracked-files=no 2>/dev/null || true)" ]; then
-        morir "La instalación a medias de $DESTINO tiene cambios propios.
-  No los piso. Revísalos con: git -C $DESTINO status
-  Si no te importan: git -C $DESTINO checkout -- .
-  Si no sabes qué es: mueve la carpeta a otro sitio y vuelve a ejecutar."
-      fi
-      if ! salida_git="$(git -C "$DESTINO" fetch --quiet --tags "$REPO_URL" 2>&1)"; then
-        morir "No pude consultar $REPO_URL desde $DESTINO.
 
-  git dijo: ${salida_git:-sin más detalle}
-
-  Comprueba la conexión con: git ls-remote $REPO_URL"
-      fi
-      local objetivo
-      if [ -n "$VERSION_PEDIDA" ]; then
-        # Acepta 3.2.5 y v3.2.5: escribir la versión sin la "v" es lo normal.
-        if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1 \
-           && git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/v$VERSION_PEDIDA" >/dev/null 2>&1; then
-          VERSION_PEDIDA="v$VERSION_PEDIDA"
-        fi
-        objetivo="refs/tags/$VERSION_PEDIDA"
-        git -C "$DESTINO" rev-parse --verify --quiet "$objetivo" >/dev/null 2>&1 \
-          || morir "No existe la versión $VERSION_PEDIDA.
-  Lista las disponibles: git ls-remote --tags $REPO_URL"
-      else
-        objetivo="FETCH_HEAD"
-      fi
-
-      if git -C "$DESTINO" merge-base HEAD "$objetivo" >/dev/null 2>&1; then
-        # Misma historia: basta con moverse a la versión pedida.
-        if [ -n "$VERSION_PEDIDA" ]; then
-          git -C "$DESTINO" checkout --quiet --detach "$VERSION_PEDIDA" \
-            || morir "No pude poner la instalación a medias en $VERSION_PEDIDA."
-        else
-          git -C "$DESTINO" checkout --quiet -B "$RAMA" "FETCH_HEAD" \
-            || morir "No pude poner la instalación a medias en la rama $RAMA."
-        fi
-        bien "continuando en $referencia (el código de antes no se reutiliza)"
+      # Se INTENTA aprovecharla, pero no se depende de ello: git dentro de esa
+      # carpeta puede fallar por motivos que no controlamos (en un Android, el
+      # sistema mata procesos cuando se queda sin memoria, y git se muere sin
+      # decir nada). Si no sale, se aparta y se instala limpio.
+      if reutilizar_incompleta "$referencia"; then
         return 0
       fi
-
-      # La carpeta es de OTRA historia: no comparte ni un commit con la que se
-      # quiere instalar (le pasa a quien viene de una versión antigua del
-      # proyecto). Cambiar de rama aquí dejaría mezclados dos árboles, así que
-      # se aparta entera y se instala limpio. No se borra nada: se mueve.
-      local apartada
-      apartada="$DESTINO-viejo-$(date +%Y%m%d-%H%M%S)"
-      aviso "esa carpeta es de otra versión del proyecto (no comparten historia)."
-      aviso "la aparto a ${apartada} y tus datos se copian a la instalación nueva."
-      if ! mv -- "$DESTINO" "$apartada"; then
-        morir "No pude apartar $DESTINO. Muévela tú a otro sitio y vuelve a ejecutar."
-      fi
-      ULTIMO_APARTADO="$apartada"
-    fi
-    # Tras apartar una instalación de otra historia la carpeta ya no existe;
-    # solo se llega aquí si sigue habiendo algo que no es nuestro.
-    if [ -d "$DESTINO" ] && [ -n "$(ls -A "$DESTINO" 2>/dev/null || true)" ]; then
+      apartar_instalacion
+    else
       morir "La carpeta $DESTINO no está vacía y no es una instalación de $NOMBRE.
   Elige otra con --dir RUTA o vacíala tú mismo."
     fi
   fi
-  mkdir -p "$(dirname "$DESTINO")"
-  local -a args=(clone --quiet)
-  local referencia="${VERSION_PEDIDA:-$RAMA}"
-  if [ "$SUPERFICIAL" -eq 1 ]; then
-    args+=(--depth 1 --branch "$referencia")
-  else
-    args+=(--branch "$referencia")
+
+  descargar_limpio "$referencia"
+}
+
+# Intenta dejar una instalación a medias en la versión pedida, sin descargar
+# nada nuevo. Devuelve 1 (y explica por qué) si no es seguro reutilizarla.
+reutilizar_incompleta() {
+  local referencia="$1" salida codigo
+  if [ -n "$(git -C "$DESTINO" status --porcelain --untracked-files=no 2>/dev/null || true)" ]; then
+    aviso "tiene cambios propios; no la reutilizo (se apartará entera, sin perderla)."
+    return 1
   fi
-  if ! git "${args[@]}" "$REPO_URL" "$DESTINO"; then
-    if [ -n "$VERSION_PEDIDA" ]; then
-      morir "No existe la versión $VERSION_PEDIDA (o no se pudo descargar).
-  Lista las disponibles: git ls-remote --tags $REPO_URL"
+  # Con set -e, una asignación desde un comando que falla mata el script
+  # antes de poder mirar el código. El "|| codigo=$?" lo evita.
+  codigo=0
+  salida="$(GIT_TERMINAL_PROMPT=0 GIT_ASKPASS='' git -C "$DESTINO" fetch --quiet --tags "$REPO_URL" 2>&1)" || codigo=$?
+  if [ "$codigo" -ne 0 ]; then
+    # Un git que falla en silencio es lo peor: el usuario no sabe qué mirar.
+    aviso "git no pudo actualizarla (código $codigo)."
+    if [ -n "$salida" ]; then
+      printf '        %s\n' "$salida" >&2
+    else
+      printf '        %s\n' "git no dijo nada; suele ser falta de memoria o un repositorio dañado." >&2
     fi
-    morir "No se pudo descargar el repositorio. Comprueba tu conexión y que git esté instalado."
+    return 1
+  fi
+
+  local objetivo
+  if [ -n "$VERSION_PEDIDA" ]; then
+    if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1 \
+       && git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/v$VERSION_PEDIDA" >/dev/null 2>&1; then
+      VERSION_PEDIDA="v$VERSION_PEDIDA"
+    fi
+    objetivo="refs/tags/$VERSION_PEDIDA"
+    if ! git -C "$DESTINO" rev-parse --verify --quiet "$objetivo" >/dev/null 2>&1; then
+      aviso "la versión $VERSION_PEDIDA no llegó a esa carpeta; la instalo limpia."
+      return 1
+    fi
+  else
+    objetivo="FETCH_HEAD"
+  fi
+
+  if ! git -C "$DESTINO" merge-base HEAD "$objetivo" >/dev/null 2>&1; then
+    aviso "esa carpeta es de otra versión del proyecto (no comparten historia)."
+    return 1
+  fi
+
+  if [ -n "$VERSION_PEDIDA" ]; then
+    git -C "$DESTINO" checkout --quiet --detach "$VERSION_PEDIDA" 2>/dev/null || return 1
+  else
+    git -C "$DESTINO" checkout --quiet -B "$RAMA" "FETCH_HEAD" 2>/dev/null || return 1
+  fi
+  bien "continuando en $referencia (el código de antes no se reutiliza)"
+  return 0
+}
+
+# Aparta la carpeta entera con fecha en el nombre. No borra nada.
+apartar_instalacion() {
+  local apartada
+  apartada="$DESTINO-viejo-$(date +%Y%m%d-%H%M%S)"
+  aviso "aparto la carpeta anterior a $apartada y tus datos se copian a la nueva."
+  if ! mv -- "$DESTINO" "$apartada"; then
+    morir "No pude apartar $DESTINO. Muévela tú a otro sitio y vuelve a ejecutar."
+  fi
+  ULTIMO_APARTADO="$apartada"
+}
+
+# Descarga en una carpeta temporal y solo la coloca si salió bien: si el clon
+# falla a mitad, no queda nada a medio escribir en su sitio definitivo.
+descargar_limpio() {
+  local referencia="$1" temporal salida codigo
+  temporal="$DESTINO.parcial-$$"
+
+  intentar_clon() {
+    local ref="$1"
+    rm -rf -- "$temporal"
+    local -a args=(clone --quiet)
+    if [ "$SUPERFICIAL" -eq 1 ]; then
+      args+=(--depth 1 --branch "$ref")
+    else
+      args+=(--branch "$ref")
+    fi
+    codigo=0
+    salida="$(GIT_TERMINAL_PROMPT=0 GIT_ASKPASS='' git "${args[@]}" "$REPO_URL" "$temporal" 2>&1)" || codigo=$?
+    [ "$codigo" -eq 0 ]
+  }
+
+  local primera_salida="" primera_codigo=0
+  if ! intentar_clon "$referencia"; then
+    primera_salida="$salida"; primera_codigo="$codigo"
+    # Escribir la versión con o sin "v" es lo normal: se prueba la otra forma
+    # antes de darse por vencido.
+    if [ -n "$VERSION_PEDIDA" ]; then
+      local alternativa
+      case "$referencia" in
+        v*) alternativa="${referencia#v}" ;;
+        *)  alternativa="v$referencia" ;;
+      esac
+      if ! intentar_clon "$alternativa"; then
+        rm -rf -- "$temporal"
+        salida="$primera_salida"; codigo="$primera_codigo"
+        if printf '%s' "$salida" | grep -qi "not found\|does not exist\|couldn't find\|does not appear"; then
+          morir "No existe la versión ${VERSION_PEDIDA} (probé con y sin la «v»).
+  git dijo: ${salida}
+  Lista las disponibles: git ls-remote --tags $REPO_URL"
+        fi
+        morir "No pude descargar la versión $VERSION_PEDIDA (código $codigo).
+  git dijo: ${salida:-nada}
+  Comprueba la conexión con: git ls-remote --tags $REPO_URL"
+      fi
+      VERSION_PEDIDA="$alternativa"
+    else
+      rm -rf -- "$temporal"
+      morir "No pude descargar el repositorio (código $codigo).
+  git dijo: ${salida:-nada}"
+    fi
+  fi
+
+  # Si DESTINO existe y está vacío, `mv` metería la carpeta DENTRO de ella.
+  if [ -d "$DESTINO" ]; then
+    rmdir -- "$DESTINO" 2>/dev/null || true
+  fi
+  if ! mv -- "$temporal" "$DESTINO"; then
+    rm -rf -- "$temporal"
+    morir "Descargué el proyecto pero no pude colocarlo en $DESTINO."
   fi
   bien "descargado ${VERSION_PEDIDA:-$RAMA} en $DESTINO"
 
-  # Si se apartó una instalación de otra historia, sus datos vuelven aquí:
-  # sesiones, .env, base y respaldos. Las carpetas del código NO se copian.
+  # Si se apartó una instalación anterior, sus datos vuelven aquí: sesiones,
+  # .env, base y respaldos. Las carpetas del código NO se copian.
   if [ -n "${ULTIMO_APARTADO:-}" ] && [ -d "$ULTIMO_APARTADO" ]; then
     local r
     for r in .env Sessions session data backups; do

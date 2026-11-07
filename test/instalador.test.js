@@ -1541,7 +1541,7 @@ test("una instalación a medias de otra versión se pone en la pedida, no se reu
   assert.equal(pkg.version, "9.9.9", "tiene que quedar en la versión pedida, no en la vieja");
 });
 
-test("una instalación a medias con cambios propios no se pisa", () => {
+test("una instalación a medias con cambios propios se aparta sin perderlos", () => {
   const origen = crearOrigen();
   git(origen, "tag", "v9.9.9");
   const raiz = temporal("shin-a-medias-sucio");
@@ -1553,9 +1553,13 @@ test("una instalación a medias con cambios propios no se pisa", () => {
   const r = correr(INSTALADOR, ["--version", "v9.9.9", "--yes"],
     { raiz, env: { SHIN_REPO_URL: origen } });
 
-  assert.notEqual(r.status, 0, `debía negarse:\n${r.salida}`);
-  assert.match(r.salida, /cambios propios/i);
-  assert.equal(fs.readFileSync(path.join(destino, "index.js"), "utf8"),
+  // No se pisa: el archivo del usuario sigue intacto, pero en la carpeta
+  // apartada. Antes esto abortaba y dejaba al usuario sin salida.
+  assert.match(r.salida, /cambios propios/i, r.salida);
+  assert.match(r.salida, /aparto la carpeta anterior/i);
+  const apartada = fs.readdirSync(raiz).find((n) => n.startsWith("Shin-MD-viejo-"));
+  assert.ok(apartada, "la carpeta con sus cambios tiene que quedar guardada");
+  assert.equal(fs.readFileSync(path.join(raiz, apartada, "index.js"), "utf8"),
     "// lo que fuera que hizo el usuario\n", "no puede tocar el archivo del usuario");
 });
 
@@ -1591,7 +1595,7 @@ test("una carpeta de otra historia se aparta entera y sus datos se recuperan", (
 
   assert.equal(r.status, 0, `debía instalarlo:\n${r.salida}`);
   assert.match(r.salida, /otra versión del proyecto/);
-  assert.match(r.salida, /apart[oa] a /i);
+  assert.match(r.salida, /aparto la carpeta anterior/i);
 
   // El código nuevo manda.
   const pkg = JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8"));
@@ -1625,9 +1629,93 @@ test("si el repositorio no responde, el error dice qué pasó de verdad", () => 
     { raiz, env: { SHIN_REPO_URL: path.join(raiz, "no-existe.git") } });
 
   assert.notEqual(r.status, 0);
-  assert.match(r.salida, /No pude consultar/);
   assert.match(r.salida, /git dijo:/, "el mensaje tiene que traer lo que dijo git, no una suposición");
+  assert.match(r.salida, /no-existe\.git|does not appear|not found|does not exist/i);
   assert.doesNotMatch(r.salida, /¿sin conexión\?/, "no se adivina la causa");
-  assert.equal(JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8")).version, "1.0.0",
-    "la carpeta tiene que quedar como estaba");
+  // La carpeta vieja no se pierde: se aparta.
+  const apartada = fs.readdirSync(raiz).find((n) => n.startsWith("Shin-MD-viejo-"));
+  assert.ok(apartada, "la carpeta anterior tiene que seguir existiendo");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(raiz, apartada, "package.json"), "utf8")).version, "1.0.0");
+});
+
+test("si git falla en silencio dentro de la carpeta vieja, se instala limpio igual", () => {
+  // Caso real de Termux: dentro de ~/Shin-MD, "git fetch" terminaba con error
+  // y sin imprimir NADA (probablemente el mata-procesos de Android por falta
+  // de memoria). El instalador se quedaba atascado para siempre: no había
+  // forma de avanzar. Ahora, si no se puede reutilizar, se aparta y se
+  // descarga limpio, sin depender de que git funcione dentro de esa carpeta.
+  const origen = crearOrigen();
+  git(origen, "tag", "v9.9.9");
+
+  const raiz = temporal("shin-git-mudo");
+  const destino = path.join(raiz, "Shin-MD");
+  const antiguo = temporal("shin-repo-mudo2");
+  escribir(path.join(antiguo, "package.json"), '{"name":"shin-md","version":"3.0.3"}\n');
+  escribir(path.join(antiguo, "index.js"), "export const viejo = true;\n");
+  git(antiguo, "init", "-q");
+  git(antiguo, "add", "-A");
+  git(antiguo, "commit", "-q", "-m", "viejo");
+  spawnSync("git", ["clone", "--quiet", antiguo, destino], { encoding: "utf8" });
+  escribir(path.join(destino, ".env"), "SECRETO=intacto\n");
+  baseSqlite(path.join(destino, "data", "shin.db"), 4);
+
+  // Un git de mentira que falla sin decir nada SOLO dentro de esa carpeta:
+  // imita lo que pasó en el móvil.
+  const basura = temporal("shin-git-falso");
+  const gitReal = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+  escribir(path.join(basura, "git"), `#!/bin/sh
+for a in "$@"; do
+  case "$a" in
+    *"/Shin-MD"*) : ;;
+  esac
+done
+case "$1" in
+  -C)
+    case "$2" in
+      */Shin-MD) exit 128 ;;   # muere sin decir ni una palabra
+    esac
+    ;;
+esac
+exec ${gitReal} "$@"
+`, 0o755);
+
+  const r = correr(INSTALADOR, ["--version", "v9.9.9", "--yes"], {
+    raiz,
+    env: { SHIN_REPO_URL: origen, PATH: `${basura}:${process.env.PATH}` },
+  });
+
+  assert.equal(r.status, 0, `tenía que instalarlo igual:\n${r.salida}`);
+  assert.match(r.salida, /git no pudo actualizarla \(código 128\)/);
+  assert.match(r.salida, /git no dijo nada/);
+  assert.match(r.salida, /aparto la carpeta anterior/);
+
+  // El código es el nuevo y los datos volvieron.
+  assert.equal(JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8")).version, "9.9.9");
+  assert.equal(fs.readFileSync(path.join(destino, ".env"), "utf8"), "SECRETO=intacto\n");
+  assert.ok(fs.existsSync(path.join(destino, "data", "shin.db")));
+});
+
+test("si la descarga limpia falla, no deja nada a medias en su sitio", () => {
+  const raiz = temporal("shin-descarga-mala");
+  const destino = path.join(raiz, "Shin-MD");
+  const antiguo = temporal("shin-repo-previo");
+  escribir(path.join(antiguo, "package.json"), '{"name":"shin-md","version":"3.0.3"}\n');
+  git(antiguo, "init", "-q");
+  git(antiguo, "add", "-A");
+  git(antiguo, "commit", "-q", "-m", "x");
+  spawnSync("git", ["clone", "--quiet", antiguo, destino], { encoding: "utf8" });
+
+  const r = correr(INSTALADOR, ["--version", "v9.9.9", "--yes"],
+    { raiz, env: { SHIN_REPO_URL: path.join(raiz, "no-existe.git") } });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /No existe la versión|No pude descargar/);
+  assert.match(r.salida, /git dijo:/);
+
+  // Ni carpeta parcial con restos, ni la instalación vieja tocada.
+  const restos = fs.readdirSync(raiz).filter((n) => n.includes(".parcial-"));
+  assert.deepEqual(restos, [], `no puede quedar basura: ${restos.join(", ")}`);
+  const apartadas = fs.readdirSync(raiz).filter((n) => n.startsWith("Shin-MD-viejo-"));
+  assert.equal(apartadas.length, 1, "la carpeta vieja se aparta, no se pierde");
+  assert.ok(fs.existsSync(path.join(raiz, apartadas[0], "package.json")));
 });
