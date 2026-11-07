@@ -24,6 +24,7 @@
 #
 #  Opciones:
 #    --dir RUTA     instalar en otra carpeta (por defecto ~/Shin-MD)
+#    --version TAG  instalar una versión concreta (por ejemplo v3.2.1)
 #    --yes          no preguntar
 #    --shallow      clon rápido sin historial (no permite volver atrás)
 #    --no-boost     no intentar el wakelock en Termux
@@ -44,7 +45,9 @@ if [ -n "${SHIN_INSTALL_DIR:-}" ] || [ -n "${SHIN_INSTALL_ROOT:-}" ]; then
 fi
 
 ORIGEN_DEDUCIDO=0
+VERSION_PEDIDA=""
 ACCION=""
+ACTUALIZANDO=0
 PEDIR_CONFIRMACION=1
 SUPERFICIAL=0
 PURGAR=0
@@ -66,11 +69,118 @@ dato()   { printf '  %s·%s %s\n' "$C_GRIS" "$C_RESET" "$*"; }
 error()  { printf '\n  %s✗ %s%s\n' "$C_ROJO" "$*" "$C_RESET" >&2; }
 morir()  { error "$*"; exit 1; }
 
+# ═══════════════════════════════════════════════════════════════════
+#  PROTECCIÓN DE RUTAS
+#
+#  Todo lo que borra o reemplaza pasa por aquí. La regla es simple:
+#  si no puedo demostrar que la ruta es la correcta, no la toco.
+#
+#  SHIN_NO_BORRAR contiene rutas que jamás se borran (separadas por
+#  dos puntos o espacios). La suite de pruebas la usa para blindar el
+#  repositorio desde el que se ejecuta: aunque algo saliera mal, el
+#  borrado se detiene aquí.
+# ═══════════════════════════════════════════════════════════════════
+
+# Ruta absoluta y real: resuelve `..` y enlaces simbólicos. Si el
+# último tramo todavía no existe (una instalación que se va a crear),
+# resuelve el directorio padre.
+resolver_real() {
+  local p="${1:-}" padre base
+  [ -n "$p" ] || return 1
+  while [ "${p%/}" != "$p" ] && [ "$p" != "/" ]; do p="${p%/}"; done
+  if [ -e "$p" ]; then
+    ( cd "$p" 2>/dev/null && pwd -P )
+    return
+  fi
+  padre="$(dirname "$p")"
+  base="$(basename "$p")"
+  if [ -d "$padre" ]; then
+    printf '%s/%s\n' "$( cd "$padre" 2>/dev/null && pwd -P )" "$base"
+  else
+    printf '%s\n' "$p"
+  fi
+}
+
+# ¿La ruta es intocable? Devuelve 0 (sí) si es el sistema, $HOME o
+# algo que contiene al propio instalador.
+ruta_intocable() {
+  local real="$1" propio p rp
+  case "$real" in
+    ""|"/")     echo "es la raíz del sistema"; return 0 ;;
+    "/home"|"/Users"|"/root"|"/storage"|"/storage/emulated") echo "es una carpeta de usuarios"; return 0 ;;
+    "/usr"|"/usr/"*|"/etc"|"/etc/"*|"/bin"|"/sbin"|"/lib"|"/lib64"|"/boot"|"/dev"|"/proc"|"/sys"|"/var"|"/opt"|"/system"|"/vendor"|"/data"|"/data/data"|"/data/data/"*)
+      echo "es una ruta del sistema"; return 0 ;;
+  esac
+  if [ "$real" = "$HOME" ]; then echo "es tu carpeta personal"; return 0; fi
+  if [ "${#real}" -lt 4 ]; then echo "es una ruta demasiado corta"; return 0; fi
+
+  # Nunca borrar un ANCESTRO de este script (borraría el instalador y, con
+  # él, todo lo que lo rodea), pero sí el proyecto donde vive: para eso
+  # existe justamente --uninstall.
+  propio="$(resolver_real "$(dirname "${BASH_SOURCE[0]}")")"
+  if [ "$real" != "$propio" ]; then
+    case "$propio/" in
+      "$real"/*) echo "contiene al propio instalador ($propio)"; return 0 ;;
+    esac
+  fi
+
+  if [ -n "${SHIN_NO_BORRAR:-}" ]; then
+    local lista="${SHIN_NO_BORRAR//:/ }"
+    for p in $lista; do
+      [ -n "$p" ] || continue
+      rp="$(resolver_real "$p")"
+      case "$rp/" in
+        "$real"/*) echo "contiene $rp, que está protegido por SHIN_NO_BORRAR"; return 0 ;;
+      esac
+    done
+  fi
+  return 1
+}
+
+# La única forma de borrar un árbol. Sin excepciones.
+borrar_arbol() {
+  local objetivo="${1:-}" motivo="${2:-}" real razon
+  [ -n "$objetivo" ] || morir "borrar_arbol sin objetivo"
+  if [ -L "$objetivo" ]; then
+    morir "$objetivo es un enlace simbólico; no borro a través de enlaces."
+  fi
+  real="$(resolver_real "$objetivo")" || morir "no pude resolver la ruta de $objetivo"
+  if razon="$(ruta_intocable "$real")"; then
+    morir "me niego a borrar $real: $razon."
+  fi
+  dato "borrando $real${motivo:+ ($motivo)}"
+  rm -rf -- "$real"
+  bien "borrado $real"
+}
+
+# ¿Se puede instalar aquí? Se rechazan las rutas del sistema y las que
+# no cuelgan de un sitio razonable (tu casa, /tmp o la raíz que pidas).
+destino_instalable() {
+  local real razon base
+  real="$(resolver_real "$1")" || return 1
+  if razon="$(ruta_intocable "$real")"; then
+    morir "no puedo instalar en $real: $razon."
+  fi
+  base="$(resolver_real "$BASE_DIR")"
+  case "$real" in
+    "$base"|"$base/"*) : ;;
+    "/tmp/"*|"/var/tmp/"*) : ;;
+    *) if [ "$DESTINO_EXPLICITO" -eq 1 ]; then
+         : # el usuario lo pidió a propósito con --dir
+       else
+         morir "no puedo instalar en $real: no está dentro de $base."
+       fi ;;
+  esac
+  return 0
+}
+
 # ───────────────────── limpieza ante interrupción ─────────────────────
 INSTALANDO=0
 al_salir() {
   local codigo=$?
-  rm -f "$DESTINO/.shin-install.tmp" 2>/dev/null || true
+  if [ -n "${DESTINO:-}" ] && [ -f "$DESTINO/.shin-install.tmp" ] && [ ! -L "$DESTINO/.shin-install.tmp" ]; then
+    rm -f -- "$DESTINO/.shin-install.tmp" || true
+  fi
   if [ "$codigo" -ne 0 ] && [ "$INSTALANDO" -eq 1 ]; then
     printf '\n%s  La instalación no terminó. Nada quedó marcado como instalado:%s\n' "$C_GRIS" "$C_RESET" >&2
     printf '  %svuelve a ejecutar el mismo comando y continuará donde se quedó.%s\n\n' "$C_GRIS" "$C_RESET" >&2
@@ -127,6 +237,13 @@ exigir_proyecto() {
   [ -f "$DESTINO/package.json" ] || morir "No hay ninguna instalación de $NOMBRE en $DESTINO."
   if ! grep -q '"name"[[:space:]]*:[[:space:]]*"shin-md"' "$DESTINO/package.json"; then
     morir "$DESTINO no parece una instalación de $NOMBRE; no voy a tocar esa carpeta."
+  fi
+  # Un clon tiene .git; una carpeta cualquiera llamada shin-md, no.
+  if [ ! -d "$DESTINO/.git" ]; then
+    morir "$DESTINO no es un clon de $NOMBRE (no tiene .git); no voy a tocar esa carpeta."
+  fi
+  if [ -L "$DESTINO" ]; then
+    morir "$DESTINO es un enlace simbólico; esa es justo la forma de borrar otra cosa sin querer."
   fi
   return 0
 }
@@ -250,6 +367,7 @@ respaldar_datos() {
 # ───────────────────────── instalar ─────────────────────────
 clonar() {
   paso "Descargando $NOMBRE"
+  destino_instalable "$DESTINO"
   if [ -d "$DESTINO" ] && [ -n "$(ls -A "$DESTINO" 2>/dev/null || true)" ]; then
     if [ -d "$DESTINO/.git" ]; then
       if estado_instalado; then
@@ -266,28 +384,69 @@ clonar() {
   fi
   mkdir -p "$(dirname "$DESTINO")"
   local -a args=(clone --quiet)
+  local referencia="${VERSION_PEDIDA:-$RAMA}"
   if [ "$SUPERFICIAL" -eq 1 ]; then
-    args+=(--depth 1)
+    args+=(--depth 1 --branch "$referencia")
   else
-    args+=(--branch "$RAMA")
+    args+=(--branch "$referencia")
   fi
   if ! git "${args[@]}" "$REPO_URL" "$DESTINO"; then
+    if [ -n "$VERSION_PEDIDA" ]; then
+      morir "No existe la versión $VERSION_PEDIDA (o no se pudo descargar).
+  Lista las disponibles: git ls-remote --tags $REPO_URL"
+    fi
     morir "No se pudo descargar el repositorio. Comprueba tu conexión y que git esté instalado."
   fi
-  bien "descargado en $DESTINO"
+  bien "descargado ${VERSION_PEDIDA:-$RAMA} en $DESTINO"
+}
+
+comprobar_espacio() {
+  # Dos umbrales: por debajo del duro no se empieza (las dependencias no
+  # caben), entre ambos se avisa y se deja decidir al usuario.
+  local libre_kb duro_mb="${SHIN_ESPACIO_MIN_MB:-400}" aviso_mb=1200 libre_mb
+  libre_kb="$(df -Pk "$DESTINO" 2>/dev/null | awk 'NR==2 {print $4}')"
+  case "$libre_kb" in ''|*[!0-9]*) return 0 ;; esac   # si no se puede medir, no se bloquea
+  libre_mb=$((libre_kb / 1024))
+  if [ "$libre_mb" -lt "$duro_mb" ]; then
+    error "Queda muy poco espacio: ${libre_mb} MB libres."
+    printf '  Hacen falta al menos %s MB solo para descomprimir las dependencias.\n' "$duro_mb"
+    if es_termux; then
+      printf '  %sLibera espacio:%s pkg clean && rm -rf ~/.npm/_cacache\n\n' "$C_GRIS" "$C_RESET" >&2
+    else
+      printf '  %sLibera espacio y vuelve a intentarlo.%s\n\n' "$C_GRIS" "$C_RESET" >&2
+    fi
+    morir "no empiezo una instalación que no cabe."
+  fi
+  if [ "$libre_mb" -lt "$aviso_mb" ]; then
+    aviso "quedan ${libre_mb} MB libres; la instalación completa ronda 1,2 GB."
+  else
+    dato "espacio libre: $(awk -v k="$libre_kb" 'BEGIN{printf "%.1f", k/1048576}') GB"
+  fi
 }
 
 instalar_dependencias() {
   paso "Instalando dependencias"
   dato "en Android esto tarda varios minutos; no cierres la terminal"
+  comprobar_espacio
+  # En una actualización NO se sale del proceso: hay que dejar que el llamador
+  # revierta al commit anterior. Matar el script aquí dejaría el código nuevo
+  # a medio instalar y sin vuelta atrás.
   if [ -f "$DESTINO/package-lock.json" ]; then
     if ! ( cd "$DESTINO" && npm ci --include=optional --no-audit --no-fund ); then
+      if [ "$ACTUALIZANDO" -eq 1 ]; then
+        error "Falló la instalación de dependencias."
+        return 1
+      fi
       morir "Falló la instalación de dependencias.
   Nada quedó marcado como instalado. Vuelve a ejecutar el instalador;
   si el error se repite, revisa los mensajes de npm de arriba."
     fi
   else
     if ! ( cd "$DESTINO" && npm install --include=optional --no-audit --no-fund ); then
+      if [ "$ACTUALIZANDO" -eq 1 ]; then
+        error "Falló la instalación de dependencias."
+        return 1
+      fi
       morir "Falló la instalación de dependencias."
     fi
   fi
@@ -442,7 +601,9 @@ accion_actualizar() {
   bien "código actualizado a $(git -C "$DESTINO" rev-parse --short HEAD)"
 
   INSTALANDO=1
+  ACTUALIZANDO=1
   if ! instalar_dependencias || ! verificar; then
+    ACTUALIZANDO=0
     error "La nueva versión no supera las comprobaciones; vuelvo a la anterior."
     git -C "$DESTINO" checkout --quiet "$previo" || aviso "no se pudo volver al commit ${previo:0:7}"
     ( cd "$DESTINO" && npm ci --include=optional --no-audit --no-fund >/dev/null 2>&1 ) || true
@@ -451,6 +612,7 @@ accion_actualizar() {
     if [ -n "${RESPALDO_HECHO:-}" ]; then dato "respaldo: ${RESPALDO_HECHO#"$DESTINO/"}"; fi
     exit 1
   fi
+  ACTUALIZANDO=0
   escribir_estado
   INSTALANDO=0
   aviso "reinicia el bot para usar la versión nueva (Ctrl+C y npm start)."
@@ -464,8 +626,7 @@ accion_reparar() {
   paso "Reparando dependencias"
   respaldar_datos "pre-reparacion"
   if [ -d "$DESTINO/node_modules" ]; then
-    dato "borrando node_modules (es regenerable; tus datos no están ahí)"
-    rm -rf "$DESTINO/node_modules"
+    borrar_arbol "$DESTINO/node_modules" "dependencias, se regeneran"
   fi
   INSTALANDO=1
   instalar_dependencias
@@ -501,12 +662,14 @@ accion_desinstalar() {
     "/"|"$HOME"|"") morir "Me niego a borrar $DESTINO." ;;
   esac
 
-  local destino_datos
+  local destino_datos real_destino
+  real_destino="$(resolver_real "$DESTINO")"
   destino_datos="$BASE_DIR/$NOMBRE-datos-$(date +%Y%m%d-%H%M%S)"
   paso "Desinstalando $NOMBRE"
+  printf '  %sSe va a borrar:%s %s\n' "$C_NEG" "$C_RESET" "$real_destino"
   if [ "$PURGAR" -eq 1 ]; then
-    printf '  %sSe borrarán TAMBIÉN tus sesiones, tu base de datos y tu .env.%s\n' "$C_ROJO" "$C_RESET"
-    printf '  Esto significa volver a vincular WhatsApp desde cero y perder tus datos.\n'
+    printf '  %sY TAMBIÉN tus sesiones, tu base de datos y tu .env.%s\n' "$C_ROJO" "$C_RESET"
+    printf '  Eso es volver a vincular WhatsApp desde cero y perder tus datos.\n'
   else
     printf '  Tus datos (Sessions/, data/, .env) se moverán a:\n    %s\n' "$destino_datos"
     printf '  No se borra nada.\n'
@@ -520,6 +683,14 @@ accion_desinstalar() {
       *) morir "cancelado; no se tocó nada." ;;
     esac
   fi
+  # Borrar los datos es lo único irreversible de todo el instalador, así que
+  # no se conforma con --yes: hay que escribir la frase entera.
+  if [ "$PURGAR" -eq 1 ] && [ "${SHIN_PURGA_CONFIRMADA:-0}" != "1" ]; then
+    printf '\n  Esta acción no se puede deshacer. Para seguir escribe: borrar todo\n  > '
+    local frase=""
+    read -r frase || true
+    [ "$frase" = "borrar todo" ] || morir "cancelado; no se tocó nada."
+  fi
 
   if [ "$PURGAR" -eq 0 ]; then
     mkdir -p "$destino_datos"
@@ -527,8 +698,7 @@ accion_desinstalar() {
     while IFS= read -r r; do [ -n "$r" ] && cp -a "$DESTINO/$r" "$destino_datos/"; done < <(rutas_de_datos)
     bien "datos guardados en $destino_datos"
   fi
-  rm -rf "$DESTINO"
-  bien "carpeta del proyecto eliminada ($DESTINO)"
+  borrar_arbol "$DESTINO" "desinstalación"
   if [ "$PURGAR" -eq 1 ]; then
     printf '\n%s  Todo borrado.%s\n\n' "$C_GRIS" "$C_RESET"
   else
@@ -550,6 +720,9 @@ while [ $# -gt 0 ]; do
     --purge|--purgar)          PURGAR=1 ;;
     --yes|-y)                  PEDIR_CONFIRMACION=0 ;;
     --shallow)                 SUPERFICIAL=1 ;;
+    --version|-v)
+      [ $# -ge 2 ] || morir "--version necesita una etiqueta (por ejemplo v3.2.1)"
+      VERSION_PEDIDA="$2"; shift ;;
     --no-boost)                BOOST=0 ;;
     --dir)
       [ $# -ge 2 ] || morir "--dir necesita una ruta"

@@ -3,12 +3,13 @@
 Guía para dejar el bot corriendo en el teléfono. Está escrita para alguien que
 nunca ha usado una terminal: cada comando se pega tal cual.
 
-> **Lo que no está comprobado.** Este documento se escribió sin un Android
-> delante. La lógica del instalador se probó simulando Termux (`PREFIX`,
-> `TERMUX_VERSION` y un `pkg` de mentira) y con bash, git y npm reales en
-> Linux. Lo que solo se puede probar en un teléfono —que los paquetes de
-> Termux instalen bien, que sharp cargue su versión wasm, que Android no mate
-> el proceso— está marcado como **pendiente de tu prueba**.
+> **Estado real, sin adornos.** Esto se escribió sin un Android delante. El
+> instalador se probó simulando Termux (`PREFIX`, `TERMUX_VERSION` y un `pkg`
+> que registra las llamadas) con bash, git y npm reales en Linux. Los nombres
+> de los paquetes (`nodejs-lts`, `ffmpeg`, `yt-dlp`, `termux-api`) están
+> contrastados con la documentación de Termux, pero **que instalen bien en tu
+> teléfono está pendiente de tu prueba**. La palabra "compatible" todavía no
+> está ganada.
 
 ## Antes de empezar
 
@@ -30,9 +31,17 @@ congelados: con ella, `pkg install` falla o instala Node viejo.
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
-bash install.sh
+curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/install.sh -o install.sh
+curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS
+bash install.sh --version v3.2.1
 ```
+
+Los tres primeros comandos descargan una versión concreta y **comprueban su
+huella**; la cuarta ejecuta solo si el archivo es el que se publicó. Si
+`sha256sum` dice `OK`, ese `install.sh` es exactamente el de la release. Si
+prefieres lo más corto posible, `curl` desde `main` funciona, pero entonces no
+sabes qué versión te va a tocar.
 
 El instalador hace esto, en orden, y se detiene en el primer problema:
 
@@ -131,6 +140,19 @@ bash install.sh
 Ventajas: binarios glibc normales (el `yt-dlp` oficial funciona sin trucos) y
 el killer de procesos fantasma afecta menos. Desventaja: ~1 GB más y hay que
 entrar con `proot-distro login ubuntu` cada vez.
+
+## Estado de cada pieza
+
+| Pieza | Comprobado | Cómo |
+|---|---|---|
+| Detección de Termux y ARM64 | sí | simulación (`PREFIX`, `uname`) |
+| Nombres de paquetes `pkg` | sí | documentación de Termux |
+| `pkg install nodejs-lts` real | **no** | pendiente de tu teléfono |
+| `pkg install ffmpeg` / `yt-dlp` real | **no** | pendiente |
+| `termux-wake-lock` real | **no** | pendiente |
+| `sharp` wasm32 en Android | parcial | simulé `platform=android` en Linux; falta el dispositivo |
+| Persistencia en segundo plano | **no** | depende de Android, no del bot |
+| Vinculación por código | **no** | requiere WhatsApp real |
 
 ## Lo que falta comprobar en tu teléfono
 

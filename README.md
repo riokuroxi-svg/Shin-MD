@@ -1,15 +1,15 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 216 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 232 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="216/216 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="232/232 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
 <img src="docs/assets/pastel/insignia-licencia.svg" alt="Licencia AGPL-3.0-only" height="52">
-<img src="docs/assets/pastel/insignia-termux.svg" alt="Compatible con Termux" height="52">
+<img src="docs/assets/pastel/insignia-termux.svg" alt="Termux (probado en simulación)" height="52">
 
 <br><br>
 
@@ -126,9 +126,13 @@ npm run docs:web
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
-bash install.sh
+curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/install.sh -o install.sh
+curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.2.1
 ```
+
+La cuarta línea solo ejecuta si la huella coincide: instala una versión
+concreta, no lo que haya en `main` ese día.
 
 El instalador mira la versión de Node, instala lo que falte con `pkg`, descarga
 Shin-MD en `~/Shin-MD`, instala las dependencias, deja los ocho parches del
@@ -146,11 +150,12 @@ Antes de arrancarlo, para que Android no lo mate mientras duerme:
 En WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono**.
 ¿Prefieres QR? `npm start -- --qr`.
 
-**Servidor o VPS.** Los mismos tres comandos, con Node 22.5 o superior instalado:
+**Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
-bash install.sh
+curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/install.sh -o install.sh
+curl -fsSL https://github.com/riokuroxi-svg/Shin-MD/releases/download/v3.2.1/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.2.1
 cd ~/Shin-MD && npm start
 ```
 
@@ -165,7 +170,8 @@ cd ~/Shin-MD && npm start
 
 Por qué se descarga y luego se ejecuta, en lugar de `curl … | bash`: así puedes
 leerlo antes de correrlo, y si falla a mitad sabes qué archivo estaba haciendo qué.
-[Guía completa de Termux](docs/TERMUX.md) · [Instalador y recuperación](docs/INSTALACION.md)
+[Guía completa de Termux](docs/TERMUX.md) · [Instalador y recuperación](docs/INSTALACION.md) ·
+[Auditoría de seguridad](docs/AUDITORIA-3.2.1.md)
 
 <img src="docs/assets/pastel/subbanner-2.svg" alt="Servidor o VPS" width="100%">
 

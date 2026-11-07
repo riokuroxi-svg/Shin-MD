@@ -51,6 +51,43 @@ Se escribe al final, con un renombrado atómico.
 | El bot dejó de funcionar | dependencias corruptas | `--repair` (tus datos no están en `node_modules`) |
 | Quieres empezar de cero | — | `--uninstall` guarda tus datos al lado; luego reinstalas |
 
+## Antes de borrar algo
+
+Todo lo que elimina pasa por una sola función, y no hay ningún `rm -rf` fuera
+de ella. Antes de tocar el disco:
+
+1. Resuelve la ruta real (enlaces simbólicos y `..` incluidos).
+2. Rechaza `/`, `/home`, `/usr`, `/etc`, `/bin`, `/var`, `/opt`, `/system`,
+   `/data`, `/storage` y compañía.
+3. Rechaza tu carpeta personal entera.
+4. Rechaza borrar un directorio que contenga al propio instalador.
+5. Rechaza cualquier ruta que contenga algo de `SHIN_NO_BORRAR`.
+6. Se niega si el objetivo es un enlace simbólico.
+7. **Te enseña la ruta absoluta antes de borrar.**
+
+Para llegar a ese punto, una acción destructiva exige saber sobre qué
+instalación actúa (la carpeta desde la que ejecutas o la que indiques con
+`--dir`, nunca una supuesta), que el `package.json` diga `shin-md` y que la
+carpeta sea un clon con `.git`.
+
+`--purge` no se conforma con `--yes`: hay que escribir **borrar todo**. Es la
+única acción irreversible de todo el instalador.
+
+## Integridad: la versión que instalas es la que se publicó
+
+`main` cambia. Una release, no:
+
+```bash
+curl -fsSL .../releases/download/v3.2.1/install.sh -o install.sh
+curl -fsSL .../releases/download/v3.2.1/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS        # → install.sh: OK
+bash install.sh --version v3.2.1
+```
+
+Si alguien modificara el archivo en el camino, `sha256sum` dice `FAILED` y ahí
+se acaba. La huella se regenera con `npm run firma` y se comprueba con
+`npm run firma:check`; una prueba falla si se olvida regenerarla.
+
 ## Lo que el instalador no hace, nunca
 
 - No ejecuta `git reset --hard` ni `git clean -fdx`.
@@ -77,7 +114,7 @@ Tres, todas opcionales:
 
 ## Cómo se prueba
 
-`test/instalador.test.js` ejecuta el instalador real dieciséis veces en carpetas
+`test/instalador.test.js` ejecuta el instalador real treinta y dos veces en carpetas
 temporales, con bash, git y npm de verdad. Lo que no se puede tener aquí se
 simula por el mismo camino que usaría el sistema:
 
@@ -86,7 +123,7 @@ simula por el mismo camino que usaría el sistema:
 - **npm que falla**: un `npm` de dos líneas en el `PATH`.
 - **Ctrl+C**: `SIGINT` al grupo de procesos, igual que lo manda una terminal.
 
-Cubre: detección de Termux y de arquitectura, rechazo de Node y npm viejos,
+Cubre, además de lo anterior: protección de rutas (`/`, `$HOME`, `/usr`, `/etc`), enlaces simbólicos, carpetas que se hacen pasar por Shin-MD, `SHIN_NO_BORRAR`, disco lleno, permisos, `--version`, y que `SHA256SUMS` no se desincronice. Y en general: detección de Termux y de arquitectura, rechazo de Node y npm viejos,
 instalación limpia, no duplicar instalaciones, no pisar una carpeta ajena,
 fallo de npm, fallo del postinstall, actualización conservando los datos,
 respeto a los cambios propios, reparación, desinstalación con y sin `--purge`,

@@ -88,6 +88,11 @@ function correr(script, args, { cwd, raiz, env = {}, entrada } = {}) {
     ...process.env,
     NO_COLOR: "1",
     PATH: `${BIN_NODE}:${process.env.PATH}`,
+    // Cinturón y tirantes: ni el instalador ni una prueba pueden borrar el
+    // repositorio desde el que se ejecuta esta suite.
+    SHIN_NO_BORRAR: `${RAIZ}:${process.env.SHIN_NO_BORRAR || ""}`,
+    // El entorno de pruebas es un tmpfs pequeño; el umbral real se prueba aparte.
+    SHIN_ESPACIO_MIN_MB: "1",
     ...(raiz ? { SHIN_INSTALL_ROOT: raiz } : {}),
     ...env,
   };
@@ -181,6 +186,17 @@ function sembrarDatos(proyecto) {
     base: hashDe(path.join(proyecto, "data", "shin.db")),
   };
 }
+
+// ─────────────────────── vigilancia del repositorio ───────────────────────
+// Esta suite ejecuta un instalador que borra cosas. Aunque todas las pruebas
+// están encerradas en os.tmpdir(), se deja constancia del estado del
+// repositorio desde el que corre: si algo lo altera, se ve al final y falla.
+function firmaDelRepo() {
+  const entradas = fs.readdirSync(RAIZ).sort();
+  const pkg = crypto.createHash("sha256").update(fs.readFileSync(path.join(RAIZ, "package.json"))).digest("hex");
+  return { entradas, pkg, tests: fs.readdirSync(path.join(RAIZ, "test")).length };
+}
+const REPO_AL_EMPEZAR = firmaDelRepo();
 
 // ─────────────────────── pruebas ───────────────────────
 
@@ -412,7 +428,13 @@ test("desinstalar con --purge borra todo de verdad", () => {
   const { raiz, proyecto, instalador } = instalacionLista(origen);
   sembrarDatos(proyecto);
 
-  const r = correr(instalador, ["--uninstall", "--purge", "--yes"], { cwd: proyecto });
+  // --yes no basta para borrar datos: hay que escribir la frase.
+  const sinFrase = correr(instalador, ["--uninstall", "--purge", "--yes"], { cwd: proyecto, entrada: "no\n" });
+  assert.notEqual(sinFrase.status, 0, "sin la frase no puede borrar los datos");
+  assert.match(sinFrase.salida, /borrar todo/);
+  assert.ok(fs.existsSync(proyecto), "y el proyecto sigue ahí");
+
+  const r = correr(instalador, ["--uninstall", "--purge", "--yes"], { cwd: proyecto, entrada: "borrar todo\n" });
 
   assert.equal(r.status, 0, r.salida);
   assert.ok(!fs.existsSync(proyecto));
@@ -455,6 +477,7 @@ test("un Ctrl+C no deja la instalación marcada como buena ni rota", async () =>
       ...process.env, NO_COLOR: "1",
       SHIN_INSTALL_ROOT: raiz,
       SHIN_REPO_URL: origen,
+      SHIN_NO_BORRAR: RAIZ,
       PATH: `${falso}:${BIN_NODE}:${process.env.PATH}`,
     },
   });
@@ -497,4 +520,272 @@ test("--verify sobre este repositorio real ve los 8 parches del conector", (t) =
   assert.equal(r.status, 0, r.salida);
   assert.match(r.salida, /conector: los 8 parches aplicados/);
   assert.match(r.salida, /todo correcto/);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  Protección de rutas: lo que el instalador NO debe borrar nunca.
+//  Estas pruebas existen por un incidente real: durante el desarrollo,
+//  una ruta deducida mal + --purge --yes borró el repositorio de trabajo.
+// ═══════════════════════════════════════════════════════════════════
+
+/** Crea una carpeta que parece una instalación legítima (clon con .git). */
+function instalacionFalsa(etiqueta = "shin-senuelo") {
+  const dir = temporal(etiqueta);
+  escribir(path.join(dir, "package.json"), JSON.stringify({ name: "shin-md", version: "1.0.0" }));
+  escribir(path.join(dir, ".env"), "OWNER_NUMBER=1\n");
+  git(dir, "init", "--quiet", "--initial-branch", "main");
+  git(dir, "add", "-A");
+  git(dir, "commit", "--quiet", "-m", "instalación de mentira");
+  return dir;
+}
+
+test("no borra una ruta protegida por SHIN_NO_BORRAR, aunque se lo pidan", () => {
+  const protegida = instalacionFalsa("shin-protegida");
+
+  // Se le pide desinstalar la ruta protegida con todo a favor: --dir, --purge,
+  // --yes y la frase de confirmación.
+  escribir(path.join(protegida, "install.sh"), fs.readFileSync(INSTALADOR, "utf8"));
+  const intento = correr(path.join(protegida, "install.sh"), ["--dir", protegida, "--uninstall", "--purge", "--yes"], {
+    cwd: protegida,
+    entrada: "borrar todo\n",
+    env: { SHIN_NO_BORRAR: protegida },
+  });
+
+  assert.notEqual(intento.status, 0, "no puede terminar en éxito");
+  assert.match(intento.salida, /SHIN_NO_BORRAR|protegido/);
+  assert.ok(fs.existsSync(path.join(protegida, ".env")), "los datos tienen que seguir ahí");
+  assert.ok(fs.existsSync(path.join(protegida, "package.json")));
+});
+
+test("se niega a tocar la raíz, el home y las rutas del sistema", () => {
+  const raiz = temporal("shin-rutas");
+  escribir(path.join(raiz, "install.sh"), fs.readFileSync(INSTALADOR, "utf8"));
+
+  for (const peligrosa of ["/", "/usr", "/etc", os.homedir(), "/bin"]) {
+    const r = correr(path.join(raiz, "install.sh"), ["--dir", peligrosa, "--uninstall", "--purge", "--yes"], {
+      cwd: raiz,
+      entrada: "borrar todo\n",
+    });
+    assert.notEqual(r.status, 0, `no puede aceptar ${peligrosa}`);
+    assert.ok(fs.existsSync(peligrosa), `${peligrosa} tiene que seguir existiendo`);
+  }
+});
+
+test("no instala dentro de rutas del sistema", () => {
+  const origen = crearOrigen();
+  const r = correr(INSTALADOR, ["--dir", "/usr/local/shin-md", "--yes"], {
+    raiz: temporal("shin-instsistema"),
+    env: { SHIN_REPO_URL: origen },
+  });
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /no puedo instalar/);
+  assert.ok(!fs.existsSync("/usr/local/shin-md/src"), "no puede escribir fuera");
+});
+
+test("se niega a operar sobre un enlace simbólico", () => {
+  const real = instalacionFalsa("shin-real");
+  const raiz = temporal("shin-enlace");
+  const enlace = path.join(raiz, "Shin-MD");
+  fs.symlinkSync(real, enlace, "dir");
+  escribir(path.join(real, "install.sh"), fs.readFileSync(INSTALADOR, "utf8"));
+
+  const r = correr(path.join(real, "install.sh"), ["--dir", enlace, "--uninstall", "--yes"], {
+    cwd: raiz,
+    entrada: "si\n",
+  });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /enlace simbólico/);
+  assert.ok(fs.existsSync(path.join(real, ".env")), "el destino real sigue intacto");
+});
+
+test("no borra una carpeta llamada Shin-MD que no es un clon", () => {
+  const raiz = temporal("shin-nocl");
+  const falsa = path.join(raiz, "Shin-MD");
+  escribir(path.join(falsa, "package.json"), JSON.stringify({ name: "shin-md", version: "1.0.0" }));
+  escribir(path.join(falsa, "mis-fotos.txt"), "contenido del usuario\n");
+  escribir(path.join(falsa, "install.sh"), fs.readFileSync(INSTALADOR, "utf8"));
+
+  const r = correr(path.join(falsa, "install.sh"), ["--dir", falsa, "--uninstall", "--yes"], {
+    cwd: falsa,
+    entrada: "si\n",
+  });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /no es un clon/);
+  assert.ok(fs.existsSync(path.join(falsa, "mis-fotos.txt")));
+});
+
+test("con poco espacio en disco no empieza a instalar", () => {
+  const origen = crearOrigen();
+  const falso = temporal("shin-df");
+  // df que dice que quedan 10 MB.
+  escribir(path.join(falso, "df"), "#!/bin/sh\necho 'Filesystem 1024-blocks Used Available Capacity Mounted'\necho '/dev/root 1000000 999000 10240 99% /'\n", 0o755);
+
+  const r = correr(INSTALADOR, ["--yes"], {
+    raiz: temporal("shin-sindisco"),
+    env: { SHIN_REPO_URL: origen, SHIN_ESPACIO_MIN_MB: "400", PATH: `${falso}:${BIN_NODE}:${process.env.PATH}` },
+  });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /muy poco espacio/);
+  assert.match(r.salida, /no empiezo una instalación que no cabe/);
+});
+
+test("sin permisos de escritura se detiene sin marcar nada", () => {
+  const origen = crearOrigen();
+  const raiz = temporal("shin-sinpermiso");
+  fs.chmodSync(raiz, 0o500);
+  try {
+    const r = correr(INSTALADOR, ["--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+    assert.notEqual(r.status, 0);
+    assert.ok(!fs.existsSync(path.join(raiz, "Shin-MD", ".shin-install")));
+  } finally {
+    fs.chmodSync(raiz, 0o755);
+  }
+});
+
+test("una actualización interrumpida no pierde los datos", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+  const antes = sembrarDatos(proyecto);
+
+  escribir(path.join(origen, "NOVEDADES.md"), "nueva\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "--quiet", "-m", "novedad");
+
+  // npm que revienta justo en la actualización.
+  const falso = temporal("shin-npmcaido");
+  escribir(path.join(falso, "npm"),
+    "#!/bin/sh\ncase \"$1\" in -v|--version) echo 10.9.2; exit 0;; *) exit 1;; esac\n", 0o755);
+
+  const r = correr(instalador, ["--update"], {
+    cwd: proyecto,
+    env: { SHIN_REPO_URL: origen, PATH: `${falso}:${BIN_NODE}:${process.env.PATH}` },
+  });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /vuelvo a la anterior|revertida/i);
+  // El código vuelve atrás y los datos siguen byte a byte.
+  assert.equal(hashDe(path.join(proyecto, ".env")), antes.env);
+  assert.equal(hashDe(path.join(proyecto, "Sessions", "Owner", "auth.db")), antes.sesion);
+  assert.equal(hashDe(path.join(proyecto, "data", "shin.db")), antes.base);
+  assert.ok(!fs.existsSync(path.join(proyecto, "NOVEDADES.md")), "el código tiene que haber vuelto atrás");
+});
+
+test("si falla el postinstall durante la actualización, vuelve a la versión anterior", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+  const antes = sembrarDatos(proyecto);
+  const commitPrevio = git(proyecto, "rev-parse", "HEAD").trim();
+
+  escribir(path.join(origen, "NOVEDADES.md"), "rompe el conector\n");
+  escribir(path.join(origen, "scripts", "preparar.cjs"),
+    fs.readFileSync(path.join(origen, "scripts", "preparar.cjs"), "utf8") + "\nprocess.exit(1);\n");
+  git(origen, "add", "-A");
+  git(origen, "commit", "--quiet", "-m", "rompe todo");
+
+  const r = correr(instalador, ["--update"], { cwd: proyecto, env: { SHIN_REPO_URL: origen } });
+
+  assert.notEqual(r.status, 0);
+  assert.equal(git(proyecto, "rev-parse", "HEAD").trim(), commitPrevio, "debe volver al commit anterior");
+  assert.equal(hashDe(path.join(proyecto, ".env")), antes.env);
+  assert.equal(hashDe(path.join(proyecto, "Sessions", "Owner", "auth.db")), antes.sesion);
+  assert.equal(hashDe(path.join(proyecto, "data", "shin.db")), antes.base);
+});
+
+test("si no hay red, la actualización falla sin tocar nada", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+  const antes = sembrarDatos(proyecto);
+
+  // Sin red de verdad: el remoto del proyecto apunta a la nada.
+  git(proyecto, "remote", "set-url", "origin", "/tmp/no-existe-este-repo");
+  const r = correr(instalador, ["--update"], { cwd: proyecto });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /No se pudo consultar el repositorio/);
+  assert.equal(hashDe(path.join(proyecto, ".env")), antes.env);
+  assert.equal(hashDe(path.join(proyecto, "data", "shin.db")), antes.base);
+});
+
+test("respeta una base de datos fuera del proyecto (SHIN_DB_PATH)", () => {
+  const origen = crearOrigen();
+  const { proyecto, instalador } = instalacionLista(origen);
+  const externa = temporal("shin-dbexterna");
+  const dbFuera = path.join(externa, "shin.db");
+  // El bot lee SHIN_DB_PATH; el instalador no debe tocarla ni asumir que está en data/.
+  fs.writeFileSync(dbFuera, "base externa\n");
+  const antes = hashDe(dbFuera);
+
+  const r = correr(instalador, ["--repair"], {
+    cwd: proyecto,
+    env: { SHIN_REPO_URL: origen, SHIN_DB_PATH: dbFuera },
+  });
+
+  assert.equal(r.status, 0, r.salida);
+  assert.ok(fs.existsSync(dbFuera), "la base externa no se mueve");
+  assert.equal(hashDe(dbFuera), antes, "y no se modifica");
+});
+
+test("instala una versión concreta por etiqueta", () => {
+  const origen = crearOrigen();
+  git(origen, "tag", "v9.9.9");
+  const raiz = temporal("shin-tag");
+
+  const r = correr(INSTALADOR, ["--version", "v9.9.9", "--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+
+  assert.equal(r.status, 0, r.salida);
+  assert.match(r.salida, /descargado v9\.9\.9/);
+  assert.match(fs.readFileSync(path.join(raiz, "Shin-MD", ".shin-install"), "utf8"), /version=9\.9\.9/);
+});
+
+test("una etiqueta que no existe falla con un mensaje que dice qué hacer", () => {
+  const origen = crearOrigen();
+  const raiz = temporal("shin-tagmalo");
+
+  const r = correr(INSTALADOR, ["--version", "v0.0.0-inexistente", "--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+
+  assert.notEqual(r.status, 0);
+  assert.match(r.salida, /No existe la versión/);
+  assert.ok(!fs.existsSync(path.join(raiz, "Shin-MD", ".shin-install")));
+});
+
+test("SHA256SUMS publicado coincide con install.sh (no se desincroniza)", () => {
+  const resumen = path.join(RAIZ, "SHA256SUMS");
+  assert.ok(fs.existsSync(resumen), "falta SHA256SUMS: genéralo con `npm run firma`");
+
+  const declarado = fs.readFileSync(resumen, "utf8").split("\n").find((l) => l.endsWith("  install.sh"));
+  assert.ok(declarado, "SHA256SUMS no menciona install.sh");
+
+  const real = crypto.createHash("sha256").update(fs.readFileSync(INSTALADOR)).digest("hex");
+  assert.equal(declarado.split(/\s+/)[0], real,
+    "install.sh cambió y SHA256SUMS no: ejecuta `npm run firma` antes de publicar");
+});
+
+test("el flujo de release verifica la huella antes de ejecutar", () => {
+  const raiz = temporal("shin-release");
+  const descarga = path.join(raiz, "install.sh");
+  const sumas = path.join(raiz, "SHA256SUMS");
+  fs.copyFileSync(INSTALADOR, descarga);
+  fs.copyFileSync(path.join(RAIZ, "SHA256SUMS"), sumas);
+
+  // 1. La huella coincide: `sha256sum -c` sale bien.
+  const bueno = spawnSync("sha256sum", ["-c", "SHA256SUMS"], { cwd: raiz, encoding: "utf8" });
+  assert.equal(bueno.status, 0, bueno.stdout + bueno.stderr);
+  assert.match(bueno.stdout, /install\.sh: OK/);
+
+  // 2. Un byte distinto (un instalador manipulado) y la comprobación falla.
+  fs.appendFileSync(descarga, "# línea añadida por un atacante\n");
+  const malo = spawnSync("sha256sum", ["-c", "SHA256SUMS"], { cwd: raiz, encoding: "utf8" });
+  assert.notEqual(malo.status, 0);
+  assert.match(`${malo.stdout}${malo.stderr}`, /FAILED/);
+});
+
+test("la suite no altera el repositorio desde el que se ejecuta", () => {
+  const ahora = firmaDelRepo();
+  assert.deepEqual(ahora.entradas, REPO_AL_EMPEZAR.entradas,
+    "apareció o desapareció algo en la raíz del repositorio durante las pruebas");
+  assert.equal(ahora.pkg, REPO_AL_EMPEZAR.pkg, "el package.json cambió durante las pruebas");
+  assert.equal(ahora.tests, REPO_AL_EMPEZAR.tests, "cambió el número de archivos de prueba");
 });
