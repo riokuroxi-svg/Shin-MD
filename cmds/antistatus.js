@@ -29,7 +29,8 @@ export async function before({ msg, sock, groupMetadata, participants, isAdmins,
     // con un LID producía un JID imposible (`123@lid@s.whatsapp.net`): el
     // borrado fallaba y el aviso se quedaba en el chat.
     const participanteDe = (clave) =>
-      normalizeJid(clave?.participant || clave?.participantPn || "") || msg.sender;
+      normalizeJid(clave?.participant || clave?.participantAlt || clave?.participantPn || "") ||
+      msg.sender;
     if (msg.quoted && (msg.quoted.groupStatusMentionMessage || msg.quoted.type === 'groupStatusMentionMessage')) {
       const quotedKey = msg.quoted.key;
       participantToUse = participanteDe(quotedKey);

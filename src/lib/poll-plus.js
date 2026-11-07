@@ -31,7 +31,7 @@
 //  Votar "¿cuál portada?" o "¿qué waifu?" viendo las imágenes, no
 //  leyendo nombres.
 //
-//  Todo con baileys 6.7.24 oficial.
+//  Todo con Baileys oficial.
 // ═══════════════════════════════════════════════════════════════════
 
 import { randomBytes } from "node:crypto";

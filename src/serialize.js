@@ -106,19 +106,18 @@ export function serializeMessage(msg, sock) {
   );
 
   // WhatsApp direcciona muchos mensajes (sobre todo de grupo) con el LID
-  // en vez del número. Baileys 6.7.24 adjunta el identificador alternativo
-  // en la propia clave:
-  //   grupos:   key.participant (puede ser @lid) + key.participantPn
-  //   privados: key.remoteJid  (puede ser @lid) + key.senderPn
-  // La pareja se guarda para siempre (#lib/lid) y la llave que ve el bot
-  // es el TELÉFONO cuando se conoce: así la economía y los permisos no se
-  // parten en dos cuentas. Si aún no se conoce, la llave es el LID.
-  const identidad = lid.resolver(
-    crudo,
-    isLidJid(crudo)
-      ? (key.participantPn || key.senderPn || "")
-      : (key.participantLid || key.senderLid || "")
-  );
+  // en vez del número. El identificador alternativo viene en la propia
+  // clave, con nombres distintos según la versión del conector:
+  //   6.x  grupos:   key.participant (puede ser @lid) + key.participantPn
+  //        privados: key.remoteJid  (puede ser @lid) + key.senderPn
+  //   7.x  grupos:   key.participant + key.participantAlt
+  //        privados: key.remoteJid  + key.remoteJidAlt
+  // #lib/lid acepta las dos formas; la pareja se guarda para siempre y la
+  // llave que ve el bot es el TELÉFONO cuando se conoce: así la economía y
+  // los permisos no se parten en dos cuentas. Si aún no se conoce, la llave
+  // es el LID.
+  const pareja = lid.parejaDeClave(key);
+  const identidad = lid.resolver(crudo, isLidJid(crudo) ? pareja.pn : pareja.lid);
   const senderId = identidad.key || crudo;
   const isGroup = isJidGroup(chatId);
   const pushName = msg.pushName || "";

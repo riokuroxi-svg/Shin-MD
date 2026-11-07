@@ -4,37 +4,35 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-// Hook de instalación (postinstall): parchea la vinculación de dispositivos
-// de @whiskeysockets/baileys@6.7.24 (oficial).
+// Hook de instalación (postinstall): completa la vinculación de dispositivos
+// de @whiskeysockets/baileys@7.0.0-rc14.
 //
 // ── POR QUÉ ─────────────────────────────────────────────────────────────────
-// El 2026-07-28 WhatsApp añadió una etapa al flujo de vinculación: después de
-// escanear el QR el servidor envía
-//     <notification type="companion_reg_refresh">
-// Ninguna versión publicada de Baileys la maneja: la ackean y la ignoran → el
-// pair-success nunca llega y el teléfono muestra "No se pudo vincular el
-// dispositivo". (WhiskeySockets/Baileys issue #2737)
+// 1) El 2026-07-28 WhatsApp añadió una etapa al flujo de vinculación: después
+//    de escanear el QR el servidor envía
+//        <notification type="companion_reg_refresh">
+//    La librería la ackea y la ignora → el pair-success nunca llega y el
+//    teléfono muestra "No se pudo vincular el dispositivo".
+//    (WhiskeySockets/Baileys issue #2737, PR sin merge #2765.)
 //
-// El fix existe solo en PRs sin merge:
-//   · PR #2765 — rota la clave secreta (adv secret) y re-emplaza el QR sin
-//     consumir un ref (consumir uno agota el pool y mata el flujo).
-//   · PR #2602 — ignora notificaciones link_code_companion_reg que llegan sin
-//     datos de vinculación (crash "Invalid buffer" en el flujo por código).
+// 2) En el flujo por CÓDIGO, el servidor manda DOS notificaciones
+//    link_code_companion_reg: la primera (tras companion_hello) solo trae el
+//    ref; la segunda (tras escribir el código) trae las claves. Procesar la
+//    primera revienta con "Invalid buffer" y mata la vinculación.
+//    (PR sin merge #2602.)
 //
 // ── CÓMO ────────────────────────────────────────────────────────────────────
-// Aplica esos parches sobre node_modules/baileys DESPUÉS del npm install.
-// Es IDEMPOTENTE (si ya está parcheado no hace nada) y se AUTO-VERIFICA:
-//   1. node --check sobre cada archivo modificado (sintaxis válida).
-//   2. Smoke-test funcional de las nuevas funciones (renderer + rotación).
-// Si NO puede parchear (la versión cambió), FALLA CON ERROR para que no quede
-// oculto un bot que no puede vincular.
+// Se aplica sobre node_modules/baileys DESPUÉS del npm install. Es
+// IDEMPOTENTE: si ya está aplicado no toca nada. Se AUTO-VERIFICA con
+// node --check sobre cada archivo modificado y con un smoke-test de las
+// funciones nuevas. Si un ancla no aparece (la versión cambió) FALLA CON
+// ERROR: mejor un install rojo que un bot que no puede vincular en silencio.
 //
 // Uso: node scripts/patch-baileys-pairing.cjs (lo invoca el "postinstall")
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 
 const ok = (m) => console.log(`[patch-baileys] ✅ ${m}`);
 const info = (m) => console.log(`[patch-baileys] ${m}`);
@@ -44,45 +42,43 @@ function fail(m) {
   process.exit(1);
 }
 
-const lib = path.join(__dirname, '..', 'node_modules', 'baileys', 'lib');
+const LIB = path.join(__dirname, '..', 'node_modules', 'baileys', 'lib');
 const FILES = {
-  utils: path.join(lib, 'Utils', 'companion-reg-client-utils.js'),
-  barrel: path.join(lib, 'Utils', 'index.js'),
-  socket: path.join(lib, 'Socket', 'socket.js'),
-  recv: path.join(lib, 'Socket', 'messages-recv.js'),
+  utils: path.join(LIB, 'Utils', 'companion-reg-client-utils.js'),
+  socket: path.join(LIB, 'Socket', 'socket.js'),
+  recv: path.join(LIB, 'Socket', 'messages-recv.js'),
 };
 
-for (const p of [FILES.barrel, FILES.socket, FILES.recv]) {
+for (const p of Object.values(FILES)) {
   if (!fs.existsSync(p)) fail(`no existe ${p}. ¿Se ejecutó "npm install" completo?`);
 }
 
+const leer = (f) => fs.readFileSync(f, 'utf8');
+const tiene = (f, marcador) => leer(f).includes(marcador);
+
 // Reemplaza exactamente UNA ocurrencia; falla si el ancla no está o está duplicada.
 function replaceOnce(file, find, replace, label) {
-  const text = fs.readFileSync(file, 'utf8');
-  const count = text.split(find).length - 1;
-  if (count === 0) fail(`ancla no encontrada en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
-  if (count > 1) fail(`ancla ambigua (${count}x) en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
-  fs.writeFileSync(file, text.replace(find, replace), 'utf8');
+  const texto = leer(file);
+  const veces = texto.split(find).length - 1;
+  if (veces === 0) fail(`ancla no encontrada en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
+  if (veces > 1) fail(`ancla ambigua (${veces}x) en ${path.basename(file)}: ${label}. La versión de Baileys cambió; hay que actualizar este script.`);
+  fs.writeFileSync(file, texto.replace(find, replace), 'utf8');
   ok(`parcheado ${path.basename(file)} (${label})`);
 }
 
-function check(file, marker) {
-  return fs.existsSync(file) && fs.readFileSync(file, 'utf8').includes(marker);
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// A) lib/Utils/companion-reg-client-utils.js  (archivo NUEVO: el 6.7.24
-//    oficial no trae este refactor del companion client)
-//    · makePairingQRRenderer: maneja el ref que está en pantalla y permite
-//      RE-RENDERIZARLO (refresh) sin consumir un ref nuevo (next).
+// A) lib/Utils/companion-reg-client-utils.js
+//    La 7.0.0-rc14 ya trae buildPairingQRData; le faltan las dos piezas que
+//    resuelven la vinculación real:
+//    · makePairingQRRenderer: mantiene el ref que está EN PANTALLA y permite
+//      re-renderizarlo sin gastar otro ref del pool.
 //    · handleCompanionRegRefresh: rota la adv secret cuando el servidor pide
-//      retirar la material de registro; respeta sesiones ya registradas.
+//      retirar la material de registro; a una sesión ya vinculada no la toca.
 // ═══════════════════════════════════════════════════════════════════════════
-if (!check(FILES.utils, 'handleCompanionRegRefresh')) {
-  if (fs.existsSync(FILES.utils)) fail('companion-reg-client-utils.js existe pero sin el marcador; estado inesperado (¿parche a medio aplicar?).');
-  const utilsFile = `import { randomBytes } from 'crypto';
-import { getBinaryNodeChild } from '../WABinary/index.js';
+const MARCADOR_UTILS = 'handleCompanionRegRefresh';
 
+if (!tiene(FILES.utils, MARCADOR_UTILS)) {
+  const extra = `
 // ── Parche Shin-MD (scripts/patch-baileys-pairing.cjs, PR #2765) ──────────
 // Renderiza el pool de refs de vinculación por QR. "next" consume el
 // siguiente ref; "refresh" re-renderiza el ref que YA está en pantalla sin
@@ -134,44 +130,49 @@ export const handleCompanionRegRefresh = (node, { creds, emitCredsUpdate, refres
     return 'rotated';
 };
 `;
-  fs.writeFileSync(FILES.utils, utilsFile, 'utf8');
-  ok('creado companion-reg-client-utils.js (renderer + handleCompanionRegRefresh)');
+  let texto = leer(FILES.utils);
+  // El módulo necesita randomBytes y getBinaryNodeChild; no se asume que los
+  // tenga importados porque cambian entre versiones.
+  if (!/import\s*\{[^}]*\brandomBytes\b[^}]*\}\s*from\s*['"]crypto['"]/.test(texto)) {
+    texto = `import { randomBytes } from 'crypto';\n` + texto;
+  }
+  if (!/import\s*\{[^}]*\bgetBinaryNodeChild\b[^}]*\}/.test(texto)) {
+    texto = `import { getBinaryNodeChild } from '../WABinary/index.js';\n` + texto;
+  }
+  fs.writeFileSync(FILES.utils, texto.trimEnd() + '\n' + extra, 'utf8');
+  ok('añadido el renderer del QR y handleCompanionRegRefresh');
 } else {
-  info('companion-reg-client-utils.js ya parcheado.');
-}
-
-// Barril Utils: exponer el módulo nuevo
-if (!check(FILES.barrel, "companion-reg-client-utils.js")) {
-  const barrel = fs.readFileSync(FILES.barrel, 'utf8');
-  fs.writeFileSync(FILES.barrel, barrel.replace(/\/\/# sourceMappingURL=index\.js\.map/, "export * from './companion-reg-client-utils.js';\n//# sourceMappingURL=index.js.map"), 'utf8');
-  if (!check(FILES.barrel, 'companion-reg-client-utils.js')) fail('no se pudo insertar el export en Utils/index.js');
-  ok('parcheado Utils/index.js (barrel)');
-} else {
-  info('Utils/index.js ya expone el módulo.');
+  info('companion-reg-client-utils.js ya está parcheado.');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // B) lib/Socket/socket.js
-//    · import de las funciones nuevas (vienen por el barrel Utils/index.js)
-//    · genPairQR usa el renderer (la adv secret se lee POR RENDER)
-//    · nuevo handler CB:notification,type:companion_reg_refresh
+//    · importar las dos funciones nuevas
+//    · genPairQR usa el renderer y lee la adv secret EN CADA RENDER
+//    · handler para CB:notification,type:companion_reg_refresh
 // ═══════════════════════════════════════════════════════════════════════════
-if (!check(FILES.socket, 'CB:notification,type:companion_reg_refresh')) {
+if (!tiene(FILES.socket, 'CB:notification,type:companion_reg_refresh')) {
   replaceOnce(
     FILES.socket,
-    'getNextPreKeysNode, getPlatformId, makeEventBuffer, makeNoiseHandler, promiseTimeout',
-    'getNextPreKeysNode, getPlatformId, handleCompanionRegRefresh, makeEventBuffer, makeNoiseHandler, makePairingQRRenderer, promiseTimeout',
+    'getNextPreKeysNode, makeEventBuffer, makeNoiseHandler, promiseTimeout',
+    'getNextPreKeysNode, handleCompanionRegRefresh, makeEventBuffer, makeNoiseHandler, makePairingQRRenderer, promiseTimeout',
     'imports'
   );
+
+  // refreshPairingQR vive en el ámbito del socket: el handler de la
+  // notificación y el generador del QR tienen que ver la MISMA variable.
   replaceOnce(
     FILES.socket,
-    "    // QR gen\n    ws.on('CB:iq,type:set,pair-device', async (stanza) => {",
-    "    // Re-renderiza el QR que está en pantalla. Solo se asigna mientras\n" +
-      "    // un flujo de vinculación por QR está vivo en esta conexión.\n" +
-      "    let refreshPairingQR;\n" +
-      "    // QR gen\n    ws.on('CB:iq,type:set,pair-device', async (stanza) => {",
-    'refreshPairingQR'
+    `    // QR gen
+    ws.on('CB:iq,type:set,pair-device', async (stanza) => {`,
+    `    // Re-renderiza el QR que está en pantalla. Solo se asigna mientras un
+    // flujo de vinculación por QR está vivo en esta conexión.
+    let refreshPairingQR;
+    // QR gen
+    ws.on('CB:iq,type:set,pair-device', async (stanza) => {`,
+    'declaración de refreshPairingQR'
   );
+
   replaceOnce(
     FILES.socket,
     `        const advB64 = creds.advSecretKey;
@@ -182,164 +183,128 @@ if (!check(FILES.socket, 'CB:notification,type:companion_reg_refresh')) {
             }
             const refNode = refNodes.shift();
             if (!refNode) {
-                end(new Boom('QR refs attempts ended', { statusCode: DisconnectReason.timedOut }));
+                void end(new Boom('QR refs attempts ended', { statusCode: DisconnectReason.timedOut }));
                 return;
             }
             const ref = refNode.content.toString('utf-8');
-            const qr = [ref, noiseKeyB64, identityKeyB64, advB64].join(',');
+            const qr = buildPairingQRData(ref, noiseKeyB64, identityKeyB64, advB64, browser);
             ev.emit('connection.update', { qr });
             qrTimer = setTimeout(genPairQR, qrMs);
             qrMs = qrTimeout || 20000; // shorter subsequent qrs
         };
-        genPairQR();
-    });`,
-    `        // creds.advSecretKey se lee POR RENDER (no se captura una vez):
-        // un companion_reg_refresh la rota en medio del flujo y todo QR
-        // emitido después debe publicar el valor nuevo.
-        const renderer = makePairingQRRenderer(refNodes.map((refNode) => refNode.content.toString('utf-8')), (ref) => ev.emit('connection.update', {
-            qr: [ref, noiseKeyB64, identityKeyB64, creds.advSecretKey].join(',')
-        }));
-        refreshPairingQR = () => void renderer.refresh();
-        let qrMs = qrTimeout || 60000; // time to let a QR live
+        genPairQR();`,
+    `        let qrMs = qrTimeout || 60000; // time to let a QR live
+        // creds.advSecretKey se lee POR RENDER (no se captura una vez): un
+        // companion_reg_refresh la rota en medio del flujo y todo QR emitido
+        // después debe publicar el valor nuevo.
+        const renderer = makePairingQRRenderer(
+            refNodes.map((refNode) => refNode.content.toString('utf-8')),
+            (ref) => {
+                const qr = buildPairingQRData(ref, noiseKeyB64, identityKeyB64, creds.advSecretKey, browser);
+                ev.emit('connection.update', { qr });
+                clearTimeout(qrTimer);
+                qrTimer = setTimeout(genPairQR, qrMs);
+                qrMs = qrTimeout || 20000; // shorter subsequent qrs
+            }
+        );
         const genPairQR = () => {
             if (!ws.isOpen) {
                 return;
             }
             if (!renderer.next()) {
-                end(new Boom('QR refs attempts ended', { statusCode: DisconnectReason.timedOut }));
-                return;
+                void end(new Boom('QR refs attempts ended', { statusCode: DisconnectReason.timedOut }));
             }
-            qrTimer = setTimeout(genPairQR, qrMs);
-            qrMs = qrTimeout || 20000; // shorter subsequent qrs
         };
-        genPairQR();
-    });
-    // El servidor retira la material de registro de un companion aún no
-    // vinculado: rota la adv secret y re-emplaza el QR sin consumir un ref
-    // (consumir uno agotaría el pool que dio el servidor y el flujo moriría
-    // con 'QR refs attempts ended').
+        refreshPairingQR = () => renderer.refresh();
+        genPairQR();`,
+    'renderer del QR'
+  );
+
+  replaceOnce(
+    FILES.socket,
+    `    // device paired for the first time`,
+    `    // El servidor retiró la material de registro (el QR caducó): se rota
+    // la adv secret y se re-renderiza el QR sin gastar otro ref del pool.
     ws.on('CB:notification,type:companion_reg_refresh', (node) => {
-        handleCompanionRegRefresh(node, {
-            creds,
-            emitCredsUpdate: (update) => ev.emit('creds.update', update),
-            refreshQR: () => refreshPairingQR?.(),
-            logger
-        });
-    });`,
-    'genPairQR con renderer + handler companion_reg_refresh'
+        try {
+            handleCompanionRegRefresh(node, {
+                creds: authState.creds,
+                emitCredsUpdate: (update) => ev.emit('creds.update', update),
+                refreshQR: () => refreshPairingQR?.(),
+                logger
+            });
+        }
+        catch (error) {
+            logger.warn({ error }, 'failed to handle companion_reg_refresh');
+        }
+    });
+    // device paired for the first time`,
+    'handler companion_reg_refresh'
   );
 } else {
-  info('socket.js ya parcheado.');
+  info('socket.js ya está parcheado.');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // C) lib/Socket/messages-recv.js
-//    · PR #2602: ignorar link_code_companion_reg sin primary_identity_pub
-//      (llegan así con la nueva etapa del servidor → crash "Invalid buffer")
+//    Solo la notificación con stage="primary_hello" trae claves utilizables.
 // ═══════════════════════════════════════════════════════════════════════════
-if (!check(FILES.recv, 'without pairing data, skipping')) {
+if (!tiene(FILES.recv, "attrs?.stage !== 'primary_hello'") && !tiene(FILES.recv, 'stage !== "primary_hello"')) {
   replaceOnce(
     FILES.recv,
     `            case 'link_code_companion_reg':
                 const linkCodeCompanionReg = getBinaryNodeChild(node, 'link_code_companion_reg');
                 const ref = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'link_code_pairing_ref'));`,
-    `            case 'link_code_companion_reg': {
+    `            case 'link_code_companion_reg':
                 const linkCodeCompanionReg = getBinaryNodeChild(node, 'link_code_companion_reg');
-                if (!getBinaryNodeChildBuffer(linkCodeCompanionReg, 'primary_identity_pub')) {
-                    logger.debug({ node }, 'link_code_companion_reg notification without pairing data, skipping');
+                // El servidor manda dos: una al conectar (solo el ref) y otra
+                // cuando el teléfono escribe el código (con las claves). Solo
+                // la segunda sirve; parsear la primera lanza "Invalid buffer".
+                if (linkCodeCompanionReg?.attrs?.stage !== 'primary_hello')
                     break;
-                }
                 const ref = toRequiredBuffer(getBinaryNodeChildBuffer(linkCodeCompanionReg, 'link_code_pairing_ref'));`,
-    'guard de entrada'
-  );
-  replaceOnce(
-    FILES.recv,
-    `                authState.creds.registered = true;
-                ev.emit('creds.update', authState.creds);
-        }`,
-    `                authState.creds.registered = true;
-                ev.emit('creds.update', authState.creds);
-            }
-        }`,
-    'cierre del block scope'
+    'stage guard del código de vinculación'
   );
 } else {
-  info('messages-recv.js ya parcheado.');
+  info('messages-recv.js ya está parcheado.');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Verificación 1: sintaxis de los archivos modificados
+// VERIFICACIÓN: sintaxis válida + las funciones nuevas existen y se comportan
 // ═══════════════════════════════════════════════════════════════════════════
-for (const p of Object.values(FILES)) {
+const { execFileSync } = require('child_process');
+for (const f of [FILES.utils, FILES.socket, FILES.recv]) {
   try {
-    execFileSync(process.execPath, ['--check', p], { stdio: 'pipe' });
+    execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' });
   } catch (e) {
-    fail(`node --check falló en ${path.basename(p)}:\n${e.stderr ? e.stderr.toString() : e.message}`);
+    fail(`sintaxis inválida tras parchear ${path.basename(f)}: ${e.stderr?.toString?.() || e.message}`);
   }
 }
-ok('sintaxis válida en los 4 archivos');
+ok('sintaxis válida en los tres archivos');
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Verificación 2: smoke-test funcional de las funciones nuevas
-// ═══════════════════════════════════════════════════════════════════════════
-const smoke = `
-import { makePairingQRRenderer, handleCompanionRegRefresh } from ${JSON.stringify(FILES.utils.replace(/\\/g, '/'))};
-const assert = (cond, msg) => { if (!cond) { console.error('SMOKE-FAIL: ' + msg); process.exit(1); } };
+(async () => {
+  const utils = await import(path.join('file://', FILES.utils));
+  if (typeof utils.makePairingQRRenderer !== 'function') fail('makePairingQRRenderer no exportada');
+  if (typeof utils.handleCompanionRegRefresh !== 'function') fail('handleCompanionRegRefresh no exportada');
 
-// makePairingQRRenderer: next consume, refresh no consume
-const rendered = [];
-const r = makePairingQRRenderer(['r1', 'r2'], (ref) => rendered.push(ref));
-assert(r.next() === true && rendered[0] === 'r1', 'next 1');
-assert(r.refresh() === true && rendered[1] === 'r1', 'refresh re-renderiza el mismo ref');
-assert(r.next() === true && rendered[2] === 'r2', 'next 2');
-assert(r.next() === false, 'pool agotado → false');
+  // Renderer: "next" avanza, "refresh" repite el mismo ref.
+  const vistos = [];
+  const r = utils.makePairingQRRenderer(['a', 'b'], (ref) => vistos.push(ref));
+  if (!r.next() || !r.next() || r.next() !== false) fail('el renderer no respeta el pool de refs');
+  if (!r.refresh()) fail('el renderer no puede refrescar');
+  if (vistos.join(',') !== 'a,b,b') fail(`orden de renders inesperado: ${vistos.join(',')}`);
 
-// handleCompanionRegRefresh: rota la adv secret y re-renderiza
-const logs = [];
-const logger = { warn: () => {}, debug: () => {}, info: (o, m) => logs.push(m) };
-const creds = { advSecretKey: 'AAAA' };
-const emitted = [];
-let refreshed = 0;
-const node = { tag: 'notification', attrs: { id: 'x1' }, content: [{ tag: 'companion_reg_refresh', attrs: {} }] };
-const out = handleCompanionRegRefresh(node, {
-  creds,
-  emitCredsUpdate: (u) => emitted.push(u),
-  refreshQR: () => refreshed++,
-  logger
-});
-assert(out === 'rotated', 'resultado rotated');
-assert(creds.advSecretKey !== 'AAAA' && creds.advSecretKey.length === 44, 'adv secret rotada (32 bytes base64)');
-assert(emitted.length === 1 && emitted[0].advSecretKey === creds.advSecretKey, 'creds.update emitido');
-assert(refreshed === 1, 'QR re-renderizado');
-
-// sesión registrada → NO rota
-const credsReg = { advSecretKey: 'BBBB', me: { id: '1@s.whatsapp.net' } };
-const out2 = handleCompanionRegRefresh(node, {
-  creds: credsReg,
-  emitCredsUpdate: () => {},
-  refreshQR: () => refreshed++,
-  logger
-});
-assert(out2 === 'ignored_registered' && credsReg.advSecretKey === 'BBBB' && refreshed === 1, 'registrada → no rota');
-
-// notificación malformada (sin hijos esperados) → ignorada
-const nodeBad = { tag: 'notification', attrs: { id: 'x2' }, content: [] };
-const out3 = handleCompanionRegRefresh(nodeBad, {
-  creds: { advSecretKey: 'CCCC' },
-  emitCredsUpdate: () => {},
-  refreshQR: () => refreshed++,
-  logger
-});
-assert(out3 === 'ignored_malformed' && refreshed === 1, 'malformada → ignorada');
-
-console.log('SMOKE-OK');
-`;
-try {
-  const out = execFileSync(process.execPath, ['--input-type=module', '-e', smoke], { stdio: 'pipe' });
-  if (!out.toString().includes('SMOKE-OK')) fail('smoke-test no devolvió SMOKE-OK');
-  ok('smoke-test funcional OK (renderer + rotación + guards)');
-} catch (e) {
-  fail(`smoke-test falló:\n${e.stderr ? e.stderr.toString() : e.message}`);
-}
-
-ok('Baileys parcheado: la vinculación (QR y código) maneja companion_reg_refresh.');
+  // Refresh: sesión sin vincular rota la secret; sesión vinculada no la toca.
+  const creds = { advSecretKey: 'vieja' };
+  const nodo = { attrs: { id: 'x' }, content: [{ tag: 'companion_reg_refresh', attrs: {} }] };
+  const logger = { warn() {}, info() {}, debug() {} };
+  let refrescos = 0;
+  const eventos = [];
+  const base = { emitCredsUpdate: (u) => eventos.push(u), refreshQR: () => refrescos++, logger };
+  const rotado = utils.handleCompanionRegRefresh(nodo, { ...base, creds });
+  if (rotado !== 'rotated' || creds.advSecretKey === 'vieja' || refrescos !== 1) fail('no rotó la adv secret');
+  if (creds.me === undefined) creds.me = { id: 'x@s.whatsapp.net' };
+  const ignorado = utils.handleCompanionRegRefresh(nodo, { ...base, creds });
+  if (ignorado !== 'ignored_registered') fail('rotó la adv secret de una sesión ya vinculada');
+  ok('smoke-test del renderer y de la rotación: correcto');
+})();

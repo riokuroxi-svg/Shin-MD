@@ -26,7 +26,7 @@
 //     Baileys solo lo rellena para estados (options.backgroundColor
 //     con ptt), nunca para un chat normal. Aquí se pone a mano.
 //
-//  Todo con baileys 6.7.24 oficial: se arma el contenido y se manda
+//  Todo con Baileys oficial: se arma el contenido y se manda
 //  por relayMessage, igual que las tarjetas interactivas.
 // ═══════════════════════════════════════════════════════════════════
 

@@ -28,7 +28,11 @@
 //   · Regla 2: si solo hay LID y no se conoce el teléfono, la llave es el
 //     LID. Se prefiere una llave fea a perder el mensaje; en cuanto se
 //     aprenda la pareja, las dos cuentas se fusionan.
-//   · Regla 3: nunca se consulta la red para resolver un LID.
+//   · Regla 3: la pareja se pregunta primero al CONECTOR. Desde Baileys 7
+//     la librería guarda los pares LID ↔ teléfono en el propio auth state,
+//     así que "¿de quién es este LID?" se contesta en local, sin red. La
+//     consulta que sí sale a internet es la contraria (teléfono → LID) y
+//     solo se usa cuando alguien la pide a propósito.
 //
 //  Este archivo no toca la base: quien quiera persistencia llama a
 //  conectarBackend() (lo hace boot/index.js con #storage/identities).
@@ -47,6 +51,14 @@ const lidPorPn = new Map();
 
 /** Backend opcional de persistencia (ver src/storage/identities.js). */
 let backend = null;
+
+/**
+ * Conector vivo (el socket de Baileys). Se usa para preguntarle las parejas
+ * que ya conoce: la 7.x las persiste en el auth state, así que esa consulta
+ * es local. Sin socket todo sigue funcionando con lo que haya en memoria y
+ * en la base; simplemente se sabe menos.
+ */
+let sesion = null;
 
 // Los metadatos de un grupo se cachean y se reutilizan: no hace falta
 // recorrer los participantes dos veces para lo mismo.
@@ -91,11 +103,26 @@ export function conectarBackend(nuevo) {
   return api;
 }
 
+/**
+ * Engancha el socket para poder preguntarle las parejas al conector.
+ * Se llama al crear la sesión (src/core/socket.js).
+ */
+export function conectarSesion(sock) {
+  sesion = sock || null;
+  return api;
+}
+
+/** ¿Hay conector al cual preguntar? (lo muestra .lid y /health) */
+export function conectorActivo() {
+  return !!sesion?.signalRepository?.lidMapping;
+}
+
 /** Solo para pruebas: deja el módulo como recién importado. */
 export function reiniciar() {
   pnPorLid.clear();
   lidPorPn.clear();
   backend = null;
+  sesion = null;
   contador.aprendidas = 0;
   contador.fusiones = 0;
   contador.fallos = 0;
@@ -232,24 +259,103 @@ export function mismaPersona(a, b) {
 }
 
 /**
+ * Las dos caras de quien manda, venga la clave como venga.
+ *
+ * Baileys 6.x colgaba el identificador alternativo en campos propios:
+ *   key.participant   + key.participantPn / key.participantLid   (grupos)
+ *   key.remoteJid     + key.senderPn     / key.senderLid         (privados)
+ *
+ * La 7.x adoptó el esquema de WhatsApp Web: `addressingMode` dice con qué
+ * cara se direccionó el chat y el "otro" identificador viaja en `*Alt`:
+ *   grupos:   key.participant   + key.participantAlt
+ *   privados: key.remoteJid     + key.remoteJidAlt
+ *
+ * Aquí se aceptan las dos formas, así una sesión vieja y una nueva conviven
+ * sin migrar nada: se recogen todos los JID de la clave, el primero que sea
+ * LID y el primero que sea teléfono son, por definición, la misma persona.
+ *
+ * @param {object} key  clave del mensaje (WAMessage.key)
+ * @returns {{lid: string, pn: string}} una cara puede venir vacía
+ */
+export function parejaDeClave(key) {
+  if (!key || typeof key !== "object") return { lid: "", pn: "" };
+  const formas = [
+    key.participant,
+    key.participantAlt,
+    key.participantLid,
+    key.participantPn,
+    key.remoteJid,
+    key.remoteJidAlt,
+    key.senderLid,
+    key.senderPn,
+  ]
+    .map((x) => normalizeJid(x || ""))
+    .filter(Boolean);
+  return {
+    lid: formas.find((x) => esLid(x)) || "",
+    pn: formas.find((x) => esTelefono(x)) || "",
+  };
+}
+
+/**
+ * Pregunta la pareja al conector.
+ *
+ * LID → teléfono es LOCAL (el mapa vive en el auth state): sirve en
+ * cualquier mensaje, sin red y sin riesgo para el número.
+ * Teléfono → LID puede salir a internet (usync), así que solo se hace
+ * cuando `red` es true: el comando .lid, nunca el camino caliente.
+ *
+ * @param {string} jid
+ * @param {{red?: boolean}} [opciones]
+ * @returns {Promise<string>} la cara contraria, "" si no se conoce
+ */
+export async function resolverConector(jid, opciones = {}) {
+  const limpio = normalizeJid(jid || "");
+  const store = sesion?.signalRepository?.lidMapping;
+  if (!limpio || !store) return "";
+
+  try {
+    if (esLid(limpio)) {
+      const pn = normalizeJid((await store.getPNForLID(limpio)) || "");
+      if (esTelefono(pn)) {
+        aprender(limpio, pn);
+        return pn;
+      }
+      return "";
+    }
+    if (esTelefono(limpio) && opciones.red) {
+      const lidJid = normalizeJid((await store.getLIDForPN(limpio)) || "");
+      if (esLid(lidJid)) {
+        aprender(lidJid, limpio);
+        return lidJid;
+      }
+    }
+  } catch (err) {
+    avisarFallo("consultar al conector", err);
+  }
+  return "";
+}
+
+/**
+ * Si el mensaje solo trae una cara, se le pregunta al conector en segundo
+ * plano. Nunca bloquea ni rompe el procesado: si falla, se cuenta y ya.
+ */
+export function refrescarDesdeConector(key) {
+  const { lid: lidJid, pn } = parejaDeClave(key);
+  if (!lidJid || pn || !conectorActivo()) return;
+  void resolverConector(lidJid).catch(() => {});
+}
+
+/**
  * Aprende la pareja que viaja en la clave de un mensaje. Se llama en cada
  * mensaje entrante (es barato: casi siempre son dos búsquedas en memoria).
  *
- * Baileys 6.7.24 rellena estos campos desde los atributos del stanza:
- *   key.participant / key.participantPn / key.participantLid  (grupos)
- *   key.remoteJid  / key.senderPn      / key.senderLid        (privados)
+ * @returns {{lid: string, pn: string}} lo que traía la clave
  */
 export function aprenderDeMensaje(key) {
-  if (!key) return;
-  const participante = normalizeJid(key.participant || "");
-  const remoto = normalizeJid(key.remoteJid || "");
-  const pn = normalizeJid(key.participantPn || key.senderPn || "");
-  const lid = normalizeJid(key.participantLid || key.senderLid || "");
-
-  if (esLid(participante) && esTelefono(pn)) aprender(participante, pn);
-  if (esTelefono(participante) && esLid(lid)) aprender(lid, participante);
-  if (esLid(remoto) && esTelefono(pn)) aprender(remoto, pn);
-  if (esTelefono(remoto) && esLid(lid)) aprender(lid, remoto);
+  const pareja = parejaDeClave(key);
+  if (pareja.lid && pareja.pn) aprender(pareja.lid, pareja.pn);
+  return pareja;
 }
 
 /**
@@ -303,11 +409,17 @@ export function estadisticas() {
     fusiones: contador.fusiones,
     fallos: contador.fallos,
     persistencia: !!backend,
+    conector: conectorActivo(),
   };
 }
 
 const api = {
   conectarBackend,
+  conectarSesion,
+  conectorActivo,
+  resolverConector,
+  refrescarDesdeConector,
+  parejaDeClave,
   reiniciar,
   aprender,
   pnDeLid,

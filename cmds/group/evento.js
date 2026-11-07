@@ -10,7 +10,7 @@
 //  Los demás bots escriben "el sábado a las 8" en texto y se pierde
 //  entre 200 mensajes. WhatsApp tiene su propia tarjeta de evento: se
 //  agenda en el teléfono de cada quien, con su botón de asistir y su
-//  recordatorio. Está en el protocolo de baileys 6.7.24:
+//  recordatorio. Está en el protocolo de Baileys:
 //
 //    proto.Message.EventMessage
 //      → isCanceled | name | description | location | joinLink

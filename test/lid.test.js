@@ -363,3 +363,114 @@ test("la economía guarda al usuario con una sola llave (LID = teléfono)", asyn
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ─── Conector (Baileys 7) ───────────────────────────────────────────
+//
+// La 7.x cambió los nombres de los campos de la clave y, sobre todo, guarda
+// las parejas en su propio auth state. Estas pruebas fijan las dos cosas:
+// que el bot entiende la clave nueva y que sabe preguntarle al conector.
+
+test("parejaDeClave entiende la clave de la 7.x y la de la 6.x", () => {
+  // 7.x: el chat de grupo va direccionado por LID; el teléfono viene en Alt.
+  assert.deepEqual(
+    lid.parejaDeClave({ remoteJid: "120363000000000000@g.us", participant: LID, participantAlt: PN }),
+    { lid: LID, pn: PN }
+  );
+  // 7.x privado: el propio chat es el LID y el Alt trae el teléfono.
+  assert.deepEqual(lid.parejaDeClave({ remoteJid: LID, remoteJidAlt: PN }), { lid: LID, pn: PN });
+  // 6.x: los nombres viejos siguen entendiéndose.
+  assert.deepEqual(lid.parejaDeClave({ remoteJid: LID, senderPn: PN }), { lid: LID, pn: PN });
+  // Nada que aprender: un grupo normal, sin caras alternativas.
+  assert.deepEqual(lid.parejaDeClave({ remoteJid: "120363000000000000@g.us" }), { lid: "", pn: "" });
+});
+
+test("serializeMessage aprende la pareja desde participantAlt", () => {
+  lid.reiniciar();
+  const grupo = serializeMessage(
+    mensaje(".ping", { remoteJid: "120363000000000000@g.us", participant: LID, participantAlt: PN }),
+    sockFalso()
+  );
+  assert.equal(grupo.senderId, PN);
+  assert.equal(lid.pnDeLid(LID), PN);
+
+  const privado = serializeMessage(mensaje("hola", { remoteJid: LID, remoteJidAlt: PN }), sockFalso());
+  assert.equal(privado.senderId, PN);
+});
+
+/** Conector falso con el mismo contrato que signalRepository.lidMapping. */
+function conectorFalso(almacen = {}) {
+  const consultas = { pn: 0, lid: 0 };
+  return {
+    consultas,
+    signalRepository: {
+      lidMapping: {
+        async getPNForLID(jid) {
+          consultas.pn++;
+          return almacen[jid] || null;
+        },
+        async getLIDForPN(jid) {
+          consultas.lid++;
+          return almacen[jid] || null;
+        },
+      },
+    },
+  };
+}
+
+test("el conector contesta el teléfono de un LID (consulta local, sin red)", async () => {
+  lid.reiniciar();
+  const conector = conectorFalso({ [LID]: "5215574370309:12@s.whatsapp.net" });
+  lid.conectarSesion(conector);
+
+  const pn = await lid.resolverConector(LID);
+  assert.equal(pn, PN, "normaliza el sufijo de dispositivo que devuelve Baileys");
+  assert.equal(lid.clave(LID), PN, "y la llave del usuario ya es el teléfono");
+
+  // La dirección que sale a internet no se toca en el camino normal.
+  assert.equal(await lid.resolverConector(PN), "");
+  assert.equal(conector.consultas.lid, 0);
+  assert.equal(lid.estadisticas().conector, true);
+});
+
+test("teléfono → LID solo se pregunta cuando se pide a propósito", async () => {
+  lid.reiniciar();
+  const conector = conectorFalso({ [PN]: "123456789012345:3@lid" });
+  lid.conectarSesion(conector);
+
+  const lidJid = await lid.resolverConector(PN, { red: true });
+  assert.equal(lidJid, LID);
+  assert.equal(conector.consultas.lid, 1);
+});
+
+test("sin conector no se rompe nada y el bot sigue con lo aprendido", async () => {
+  lid.reiniciar();
+  assert.equal(await lid.resolverConector(LID), "");
+  assert.doesNotThrow(() => lid.refrescarDesdeConector({ remoteJid: LID }));
+  assert.equal(lid.estadisticas().conector, false);
+
+  lid.aprender(LID, PN);
+  assert.equal(lid.clave(LID), PN);
+});
+
+test("refrescarDesdeConector completa lo que el mensaje no trajo", async () => {
+  lid.reiniciar();
+  const conector = conectorFalso({ [LID]: PN });
+  lid.conectarSesion(conector);
+
+  // El mensaje solo trae el LID: se pregunta en segundo plano...
+  lid.refrescarDesdeConector({ remoteJid: LID });
+  assert.equal(lid.clave(LID), LID, "todavía no: la consulta es asíncrona");
+
+  // ...y en cuanto contesta, la llave cambia sola.
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(lid.clave(LID), PN);
+  assert.equal(conector.consultas.pn, 1);
+});
+
+test("reiniciar() también suelta el conector", async () => {
+  lid.reiniciar();
+  lid.conectarSesion(conectorFalso({ [LID]: PN }));
+  assert.equal(lid.estadisticas().conector, true);
+  lid.reiniciar();
+  assert.equal(lid.estadisticas().conector, false);
+});

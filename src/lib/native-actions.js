@@ -9,7 +9,7 @@
  * puede fabricar y que casi nadie usa.
  *
  * Todo lo de aquí está comprobado con ida y vuelta por el proto de
- * baileys 6.7.24: fijar un mensaje para todo el grupo, guardar uno de
+ * Baileys: fijar un mensaje para todo el grupo, guardar uno de
  * los que desaparecen, programar una llamada, mandar ubicación en
  * vivo, pedir un pago con fondo de color, un pedido, una factura y
  * las etiquetas accesibles de los medios.

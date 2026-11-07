@@ -14,7 +14,7 @@
 //  cuántas fotos vienen, y luego cada foto apuntando a él. El cliente
 //  las junta en una cuadrícula.
 //
-//  La pieza que lo une existe en baileys 6.7.24 y nadie la usa:
+//  La pieza que lo une existe en Baileys y nadie la usa:
 //
 //    proto.Message.albumMessage        → { expectedImageCount,
 //                                          expectedVideoCount }
@@ -34,7 +34,7 @@
 export const MAX_ALBUM = 10;
 export const MIN_ALBUM = 2;
 
-/** MessageAssociation.AssociationType.MEDIA_ALBUM en el proto 6.7.24. */
+/** MessageAssociation.AssociationType.MEDIA_ALBUM en el proto actual. */
 export const TIPO_ALBUM = 1;
 /** ...EVENT_COVER_IMAGE, para la portada de los eventos. */
 export const TIPO_PORTADA_EVENTO = 3;

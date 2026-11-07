@@ -178,13 +178,17 @@ export function connectSocket(engine, opts) {
 
     sock = s;
     patchGroupMetadata(s);
+    // El conector guarda las parejas LID ↔ teléfono en el auth state: desde
+    // aquí la capa LID puede preguntárselas (local, sin red) en vez de
+    // esperar a que aparezcan en un mensaje.
+    lid.conectarSesion(s);
     s.msgRetryCounterCache = msgRetryCounterCache;
     s.ev.on("creds.update", saveCreds);
     s.ev.on("group-participants.update", ({ id }) => { deleteCachedMeta(id); });
-    // WhatsApp avisa aquí cuando alguien comparte su número desde un chat
-    // LID: es la única ocasión en que la pareja llega "gratis" fuera de
-    // un mensaje. Se guarda igual que las demás.
-    s.ev.on("chats.phoneNumberShare", ({ lid: lidJid, jid: pnJid } = {}) => {
+    // La 7.x emite cada pareja que descubre (mensaje, app-state, usync).
+    // Se guarda en nuestra tabla para que sobreviva incluso a un cambio de
+    // conector, y para unificar la economía en el acto.
+    s.ev.on("lid-mapping.update", ({ lid: lidJid, pn: pnJid } = {}) => {
       if (!lidJid || !pnJid) return;
       lid.aprender(lidJid, pnJid);
     });
@@ -208,7 +212,7 @@ export function connectSocket(engine, opts) {
     const origSM = s.sendMessage.bind(s);
     const sendQueue = engine.getSendQueue();
     s.sendMessage = async (j, c, o) => {
-      // Baileys 6.7.24 hace `me.lid.split(...)` al enviar a un JID @lid. Si
+      // Baileys hace `me.lid.split(...)` al enviar a un JID @lid. Si
       // la sesión es anterior al despliegue de LID y nunca guardó ese dato,
       // esa línea lanza TypeError y el envío se pierde (el usuario ve
       // "error interno" en cualquier comando). El teléfono es la misma
@@ -332,6 +336,10 @@ export function connectSocket(engine, opts) {
           // mensaje es un comando: un "hola", un sticker o un mensaje sin
           // texto también sirven para no partir la cuenta del usuario.
           lid.aprenderDeMensaje(msg.key);
+          // Si el mensaje solo trajo una cara (típico: chat direccionado
+          // por LID), el conector suele saber la otra. Se pregunta sin
+          // bloquear: LID → teléfono es una consulta local.
+          lid.refrescarDesdeConector(msg.key);
 
           if (msg?.key?.id) {
             msgStore.set(msg.key.remoteJid + ":" + msg.key.id, msg.message);

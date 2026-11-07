@@ -1,13 +1,13 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 177 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 184 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="177/177 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="184/184 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
-<img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 6.7.24" height="52">
+<img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
 <img src="docs/assets/pastel/insignia-licencia.svg" alt="Licencia AGPL-3.0-only" height="52">
 <img src="docs/assets/pastel/insignia-termux.svg" alt="Compatible con Termux" height="52">
 
@@ -153,20 +153,23 @@ Este bot los une:
 
 - La llave de la economía es el **teléfono** siempre que se conozca, así los
   datos que ya estaban guardados siguen cuadrando.
-- La pareja LID ↔ teléfono se aprende del propio tráfico (mensajes, metadatos
-  del grupo, aviso de número compartido) y se guarda en SQLite: **sobrevive a
-  reinicios y cambios de sesión**.
+- La pareja LID ↔ teléfono se aprende de donde venga (mensajes, metadatos del
+  grupo, avisos del conector) y se guarda en SQLite: **sobrevive a reinicios y
+  cambios de sesión**.
+- El conector (Baileys 7) también guarda esas parejas en su propia sesión, así
+  que «¿de quién es este LID?» se contesta **sin salir a internet**.
 - Si alguien escribió cuando solo se conocía su LID, sus monedas se **fusionan**
   con la cuenta del teléfono en cuanto la pareja se aprende.
 - Los permisos (dueño, admins) comparan las dos caras y la regla mexicana
   `521 = 52`, no cadenas de texto.
 
-Lo que **no** se puede hacer, y conviene decirlo: la red solo resuelve
-teléfono → LID. Para saber el teléfono de un LID que nunca se vio no existe
-consulta; únicamente se contesta con lo ya aprendido.
+Lo que **no** se puede hacer, y conviene decirlo: saber el teléfono de un LID
+que nadie vio nunca. Se contesta con lo aprendido por el conector y por el
+tráfico; la consulta inversa (teléfono → LID) sí existe, pero sale a internet y
+solo se usa cuando se pide a propósito con `.lid`.
 
-Pruébalo en el teléfono con `.lid`: muestra tu llave, tu teléfono, tu LID y si
-el bot ya conoce la pareja. En un grupo y en privado debes ver **la misma
+Pruébalo en el teléfono con `.lid`: muestra tu llave, tu teléfono, tu LID, lo
+que sabe el conector y si el bot ya conoce la pareja. En un grupo y en privado debes ver **la misma
 llave**. Detalle técnico en **[docs/LID.md](docs/LID.md)**.
 
 <h2 id="el-laboratorio">El laboratorio</h2>

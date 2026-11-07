@@ -12,7 +12,7 @@
 //  Cuando Meta AI está trabajando enseña un panel con pasos que se
 //  van tachando («Buscando…», «Leyendo 3 fuentes…», «Escribiendo»),
 //  cada uno con su estado y sus fuentes con favicon. Ese panel no es
-//  texto: es un trozo del protocolo que baileys 6.7.24 ya define y
+//  texto: es un trozo del protocolo que Baileys ya define y
 //  ninguna librería de bots toca:
 //
 //    messageContextInfo.botMetadata.progressIndicatorMetadata

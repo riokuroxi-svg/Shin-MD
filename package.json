@@ -1,6 +1,6 @@
 {
   "name": "shin-md",
-  "version": "3.0.3",
+  "version": "3.1.0",
   "license": "AGPL-3.0-only",
   "author": "riokuroxi-svg (github.com/riokuroxi-svg/Shin-MD)",
   "description": "反魂 Shin-MD — Bot WhatsApp Multi-Device Superior. Anti-ban nativo, auto-healing, eficiente en recursos.",
@@ -11,7 +11,6 @@
     "start:code": "node index.js --code",
     "start:qr": "node index.js --qr",
     "test": "node scripts/run-tests.mjs",
-    "postinstall": "node scripts/patch-baileys-pairing.cjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,mjs,cjs,json,yml,yaml}\"",
@@ -19,7 +18,8 @@
     "typecheck": "tsc",
     "test:pairing": "node scripts/verificar-pairing.js",
     "docs:web": "node scripts/actualizar-web.mjs",
-    "docs:pastel": "python3 tools/build_pastel.py"
+    "docs:pastel": "python3 tools/build_pastel.py",
+    "postinstall": "node scripts/patch-baileys-pairing.cjs"
   },
   "imports": {
     "#engine": "./src/core/engine.js",
@@ -57,7 +57,7 @@
     "aptoide-scraper": "^1.0.1",
     "awesome-phonenumber": "^7.8.0",
     "axios": "^1.20.0",
-    "baileys": "npm:@whiskeysockets/baileys@6.7.24",
+    "baileys": "npm:@whiskeysockets/baileys@7.0.0-rc14",
     "cfonts": "^3.3.1",
     "chalk": "4.1.2",
     "cheerio": "^1.2.0",

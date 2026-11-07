@@ -8,7 +8,7 @@
 //  pin.js — Fijar y desfijar mensajes en el grupo
 //
 //  Hueco #2 del sistema de diseño: `pinInChatMessage` está soportado
-//  NATIVAMENTE por baileys 6.7.24 (Utils/messages.js, rama 'pin' in
+//  NATIVAMENTE por Baileys (Utils/messages.js, rama 'pin' in
 //  message) y prácticamente ningún bot MD lo usa.
 //
 //    sendMessage(jid, { pin: <key>, type: 1, time: <segundos> })

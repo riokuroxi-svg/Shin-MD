@@ -9,7 +9,7 @@
 //
 //  Hueco #3 del sistema de diseño: además de la tarjeta con botones
 //  nativos, se manda un vCard REAL (`contacts`, soportado por baileys
-//  6.7.24). WhatsApp lo dibuja como tarjeta de contacto de verdad, con
+//  Baileys). WhatsApp lo dibuja como tarjeta de contacto de verdad, con
 //  sus botones nativos "Mensaje" y "Guardar": un toque y te agendan.
 //
 //  ⚖️ El texto "Basado en Shin-MD por riokuroxi-svg" es OBLIGATORIO en

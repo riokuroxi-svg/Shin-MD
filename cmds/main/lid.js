@@ -34,7 +34,12 @@ export default {
   category: "main",
   description: "Muestra cómo ve el bot tu identidad (teléfono y LID).",
   run: async ({ msg, sock, isAdmins, isBotAdmins }) => {
-    const identidad = lid.resolver(msg.sender, msg.senderLid || "");
+    // El conector guarda las parejas en el auth state. Se le pregunta ANTES
+    // de resolver: si contesta, la llave y el teléfono salen ya unidos y el
+    // resto del diagnóstico no depende de haber visto ese mensaje.
+    const delConector = await lid.resolverConector(msg.sender, { red: true });
+
+    const identidad = lid.resolver(msg.sender, msg.senderLid || delConector || "");
     const parejaConocida = !!(identidad.pn && identidad.lid);
 
     const telefono = identidad.pn ? "+" + userPart(identidad.pn) : "";
@@ -53,6 +58,12 @@ export default {
         : "pendiente: en cuanto llegue el identificador alternativo se une sola"
     );
 
+    if (delConector) {
+      texto += fila("🔌", "Conector", "`" + delConector + "` (lo tenía guardado Baileys)");
+    } else {
+      texto += fila("🔌", "Conector", "_sin dato nuevo: sigue con lo visto en el tráfico_");
+    }
+
     if (msg.isGroup) {
       texto += fila("👤", "Aquí", isAdmins ? "administrador" : "miembro");
       texto += fila("🤖", "El bot", isBotAdmins ? "administrador" : "no es administrador");
@@ -69,7 +80,8 @@ export default {
       numeros.enMemoria + " en memoria" +
         (numeros.guardadas !== null && numeros.guardadas !== undefined
           ? " · " + numeros.guardadas + " en la base"
-          : " · sin persistencia activa")
+          : " · sin persistencia activa") +
+        (numeros.conector ? " · conector activo" : "")
     );
     texto += pie;
 

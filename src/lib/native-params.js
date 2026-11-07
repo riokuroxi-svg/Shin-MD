@@ -10,7 +10,7 @@
 //  Dentro de un mensaje con botones (nativeFlowMessage) hay un campo de
 //  texto libre, `messageParamsJson`, que WhatsApp lee para dibujar
 //  adornos extra. Está vacío en el 99% de los bots. Confirmado en el
-//  proto de baileys 6.7.24:
+//  proto de Baileys:
 //      proto.Message.InteractiveMessage.NativeFlowMessage
 //        → buttons | messageParamsJson | messageVersion
 //
