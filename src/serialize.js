@@ -10,34 +10,21 @@
 //  tipo de contenido. Es el puente entre Baileys y el router.
 // ═══════════════════════════════════════════════════════════════════
 
-import { getContentType, jidDecode } from "baileys";
+import { getContentType } from "baileys";
 import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "#metaCache";
+import {
+  esGrupo as isJidGroup,
+  normalizeJid,
+  mxCanon,
+  userPart,
+  esLid as isLidJid,
+} from "./lib/jid.js";
+import * as lid from "./lib/lid.js";
 
-export function isJidGroup(jid) {
-  if (!jid || typeof jid !== "string") return false;
-  return jid.endsWith("@g.us");
-}
-
-export function normalizeJid(jid) {
-  if (!jid) return "";
-  const s = typeof jid === "number" ? String(jid) : String(jid).trim();
-  if (!s) return "";
-  if (s.endsWith("@g.us")) return s;
-  if (s.endsWith("@newsletter")) return s;
-  if (s.endsWith("@broadcast")) return s;
-  if (s.endsWith("@lid")) return s;
-  if (/:\d+@/i.test(s)) {
-    const decoded = jidDecode(s);
-    if (decoded?.user && decoded?.server) return `${decoded.user}@${decoded.server}`;
-  }
-  if (s.endsWith("@s.whatsapp.net")) {
-    const user = s.split("@")[0].split(":")[0];
-    return `${user}@s.whatsapp.net`;
-  }
-  const digits = s.replace(/\D/g, "");
-  if (digits && digits.length >= 4 && digits.length <= 15) return `${digits}@s.whatsapp.net`;
-  return s;
-}
+// Las utilidades viven en #lib/jid para que la capa LID pueda usarlas sin
+// crear un ciclo de imports. Se re-exportan con los mismos nombres de
+// siempre: los comandos y las pruebas siguen importando de aquí.
+export { isJidGroup, normalizeJid, mxCanon, userPart };
 
 /**
  * JID del propio bot a partir del socket, sin el sufijo de dispositivo.
@@ -53,31 +40,6 @@ export function normalizeJid(jid) {
  */
 export function botJid(sock) {
   return normalizeJid(sock?.user?.id || "");
-}
-
-/**
- * México: WhatsApp conserva en muchos JID el formato móvil viejo
- * 52 + 1 + 10 dígitos (13 dígitos), mientras la numeración vigente es
- * 52 + 10 (12 dígitos). Para COMPARAR se reduce todo a 12 dígitos, así
- * "5215574370309" y "525574370309" cuentan como la misma persona.
- *
- * Solo se usa para comparar (dueño, admins, menciones). Los JID con los
- * que se envían mensajes NO se tocan: WhatsApp espera la forma original.
- * @param {string|number} digits
- * @returns {string}
- */
-export function mxCanon(digits) {
-  const d = String(digits || "").replace(/\D/g, "");
-  return d.length === 13 && d.startsWith("521") ? "52" + d.slice(3) : d;
-}
-
-/**
- * Parte de usuario de un JID: sin servidor (@...) ni sufijo de dispositivo
- * (:0, :1...), con la forma mexicana 521… unificada a 52… (ver mxCanon).
- */
-export function userPart(jid) {
-  if (!jid) return "";
-  return mxCanon(String(jid).split("@")[0].split(":")[0]);
 }
 
 /**
@@ -139,16 +101,25 @@ export function getText(msg) {
 export function serializeMessage(msg, sock) {
   const key = msg.key || {};
   const chatId = key.remoteJid || "";
-  const crudo = isJidGroup(chatId) ? (key.participant || key.remoteJid || "") : (key.remoteJid || "");
-  // WhatsApp ya direcciona muchos mensajes (sobre todo de grupo) con IDs
-  // @lid en vez del número real. Baileys adjunta el número en el propio
-  // mensaje (key.participantPn / key.senderPn): si el remitente salió
-  // como @lid y el número viaja pegado, usamos el número. Si no viaja,
-  // caemos al @lid (nadie podrá suplantar al dueño solo por salir @lid).
-  const numeroPegado = normalizeJid(key.participantPn || key.senderPn || "");
-  const senderId = (crudo.endsWith("@lid") && numeroPegado.endsWith("@s.whatsapp.net"))
-    ? numeroPegado
-    : crudo;
+  const crudo = normalizeJid(
+    isJidGroup(chatId) ? (key.participant || key.remoteJid || "") : (key.remoteJid || "")
+  );
+
+  // WhatsApp direcciona muchos mensajes (sobre todo de grupo) con el LID
+  // en vez del número. Baileys 6.7.24 adjunta el identificador alternativo
+  // en la propia clave:
+  //   grupos:   key.participant (puede ser @lid) + key.participantPn
+  //   privados: key.remoteJid  (puede ser @lid) + key.senderPn
+  // La pareja se guarda para siempre (#lib/lid) y la llave que ve el bot
+  // es el TELÉFONO cuando se conoce: así la economía y los permisos no se
+  // parten en dos cuentas. Si aún no se conoce, la llave es el LID.
+  const identidad = lid.resolver(
+    crudo,
+    isLidJid(crudo)
+      ? (key.participantPn || key.senderPn || "")
+      : (key.participantLid || key.senderLid || "")
+  );
+  const senderId = identidad.key || crudo;
   const isGroup = isJidGroup(chatId);
   const pushName = msg.pushName || "";
   const text = getText(msg);
@@ -178,7 +149,9 @@ export function serializeMessage(msg, sock) {
     replyMsg = {
       key: {
         remoteJid: chatId,
-        fromMe: contextInfo.participant ? contextInfo.participant === sock?.user?.id : false,
+        fromMe: contextInfo.participant
+          ? lid.mismaPersona(contextInfo.participant, sock?.user?.id)
+          : false,
         id: contextInfo.stanzaId || "",
         participant: contextInfo.participant || "",
       },
@@ -188,12 +161,19 @@ export function serializeMessage(msg, sock) {
     };
   }
 
+  // Dueño: se compara por número (con la regla mexicana 521 = 52) y por la
+  // pareja LID ↔ teléfono. Antes, si el dueño escribía desde un chat LID y
+  // solo se conocía ese identificador, el bot le contestaba «solo el dueño».
   const isOwner = (ownerJid) => {
     const sUser = userPart(senderId);
     if (!sUser) return false;
     if (ownerJid && userPart(ownerJid) === sUser) return true;
     if (Array.isArray(globalThis.owner)) {
-      return globalThis.owner.some(num => userPart(num) === sUser);
+      if (globalThis.owner.some(num => userPart(num) === sUser)) return true;
+    }
+    if (ownerJid && lid.mismaPersona(senderId, ownerJid)) return true;
+    if (Array.isArray(globalThis.owner)) {
+      return globalThis.owner.some(num => lid.mismaPersona(senderId, String(num)));
     }
     return normalizeJid(senderId) === normalizeJid(ownerJid);
   };
@@ -207,6 +187,9 @@ export function serializeMessage(msg, sock) {
     key,
     chatId,
     senderId,
+    // Cara LID y cara teléfono del remitente (una puede venir vacía).
+    senderPn: identidad.pn,
+    senderLid: identidad.lid,
     isGroup,
     pushName,
     text,
@@ -232,6 +215,18 @@ export function getReplyTarget(jid, isGroup) {
   return normalizeJid(jid);
 }
 
+/**
+ * ¿El remitente es administrador del grupo?
+ *
+ * Baileys entrega cada participante como `{ id, jid, lid, admin }`:
+ *   · en un grupo con direccionamiento por teléfono, `id` es el PN;
+ *   · en un grupo con direccionamiento por LID (los nuevos), `id` es el
+ *     LID y el teléfono viene en `jid`.
+ * Comparar solo `id` (o buscar un `phoneNumber` que no existe) daba el
+ * fallo simétrico: el admin real no era admin, y a veces otro heredaba
+ * el permiso. Aquí se comparan las CUATRO formas y, además, la pareja
+ * LID ↔ teléfono que ya se conozca.
+ */
 export async function isAdmin(sock, chatId, senderId) {
   try {
     const target = userPart(senderId);
@@ -244,13 +239,16 @@ export async function isAdmin(sock, chatId, senderId) {
     }
     if (!meta || !Array.isArray(meta.participants)) return false;
 
-    const participant = meta.participants.find(p => {
-      const pId = userPart(p.id);
-      const pLid = userPart(p.lid);
-      const pPhone = userPart(p.phoneNumber);
-      return pId === target || pLid === target || pPhone === target;
+    // Aprender la pareja de cada participante antes de comparar: el grupo
+    // trae las dos caras juntas, es la fuente más barata que hay.
+    lid.aprenderDeGrupo(meta);
+
+    const participant = meta.participants.find((p) => {
+      const formas = [p.id, p.jid, p.phoneNumber, p.lid].filter(Boolean);
+      return formas.some((f) => userPart(f) === target || lid.mismaPersona(f, senderId));
     });
-    return participant ? (participant.admin === "admin" || participant.admin === "superadmin") : false;
+    if (!participant) return false;
+    return participant.admin === "admin" || participant.admin === "superadmin";
   } catch {
     return false;
   }
@@ -287,7 +285,12 @@ export function patchGroupMetadata(sock) {
         const cached = getCachedMeta(jid);
         if (cached) return cached;
         const meta = await orig(jid);
-        if (meta?.participants) setCachedMeta(jid, meta);
+        if (meta?.participants) {
+          setCachedMeta(jid, meta);
+          // El grupo trae, por cada participante, el LID y el teléfono
+          // juntos: cada vez que se piden metadatos se aprende gratis.
+          lid.aprenderDeGrupo(meta);
+        }
         return meta;
       } catch {
         deleteCachedMeta(jid);

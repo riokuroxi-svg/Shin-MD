@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import log from "#logger";
-import { botJid } from "#serialize";
+import { botJid, normalizeJid } from "#serialize";
 import db from '../src/services/ginko-db.js';
 export async function before({ msg, sock, groupMetadata, participants, isAdmins, isBotAdmins }) {
   if (!msg.isGroup) return;
@@ -23,23 +23,30 @@ export async function before({ msg, sock, groupMetadata, participants, isAdmins,
   try {
     let deleteObj = null;
     let participantToUse = null;
+    // Para borrar un mensaje hay que devolver el participante TAL COMO vino
+    // (puede ser un LID: WhatsApp lo acepta y es el mismo que usó el grupo).
+    // Antes se armaba `participant.split(':')[0] + '@s.whatsapp.net'`, que
+    // con un LID producía un JID imposible (`123@lid@s.whatsapp.net`): el
+    // borrado fallaba y el aviso se quedaba en el chat.
+    const participanteDe = (clave) =>
+      normalizeJid(clave?.participant || clave?.participantPn || "") || msg.sender;
     if (msg.quoted && (msg.quoted.groupStatusMentionMessage || msg.quoted.type === 'groupStatusMentionMessage')) {
       const quotedKey = msg.quoted.key;
-      participantToUse = quotedKey.participantAlt || (quotedKey.participant ? quotedKey.participant.split(':')[0] + '@s.whatsapp.net' : msg.sender);
+      participantToUse = participanteDe(quotedKey);
       deleteObj = { remoteJid: msg.chat, fromMe: false, id: quotedKey.id, participant: participantToUse };
     } else if (msg.message?.groupStatusMentionMessage) {
-      participantToUse = msg.key.participantAlt || (msg.key.participant ? msg.key.participant.split(':')[0] + '@s.whatsapp.net' : msg.sender);
+      participantToUse = participanteDe(msg.key);
       deleteObj = { remoteJid: msg.chat, fromMe: false, id: msg.key.id, participant: participantToUse };
     } else if (msg.message?.extendedTextMessage?.contextInfo) {
       const contextInfo = msg.message.extendedTextMessage.contextInfo;
       if (contextInfo.quotedMessage?.groupStatusMentionMessage || contextInfo.stanzaId) {
-        participantToUse = (contextInfo.participant ? contextInfo.participant.split(':')[0] + '@s.whatsapp.net' : null) || msg.sender;
+        participantToUse = normalizeJid(contextInfo.participant || "") || msg.sender;
         deleteObj = { remoteJid: msg.chat, fromMe: false, id: contextInfo.stanzaId, participant: participantToUse };
       }
     }
     if (deleteObj) {
       await sock.sendMessage(msg.chat, { delete: deleteObj }).catch(err => log.error('Error al borrar status:', err));
-      const currentParticipant = msg.key.participantAlt || (msg.key.participant ? msg.key.participant.split(':')[0] + '@s.whatsapp.net' : msg.sender);
+      const currentParticipant = participanteDe(msg.key);
       const currentDeleteObj = { remoteJid: msg.chat, fromMe: false, id: msg.key.id, participant: currentParticipant };
       if (currentDeleteObj.id !== deleteObj.id) {
         await sock.sendMessage(msg.chat, { delete: currentDeleteObj }).catch(err => log.error('Error al borrar comando actual:', err));

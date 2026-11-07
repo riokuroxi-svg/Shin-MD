@@ -1,0 +1,324 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+// ═══════════════════════════════════════════════════════════════════
+//  lid.js — Una sola persona, dos identificadores
+//
+//  WhatsApp dejó de mandar siempre el teléfono. El mismo usuario puede
+//  llegar como:
+//
+//      5215512345678@s.whatsapp.net   ← PN  (el número de siempre)
+//      123456789012345@lid            ← LID (identificador interno)
+//
+//  No son dos usuarios. Si el bot los trata como dos, pasan tres cosas:
+//  monedas duplicadas, el dueño deja de ser dueño y el admin del grupo
+//  deja de ser admin ("no coincide el número").
+//
+//  La red SOLO resuelve teléfono → LID. Para saber el teléfono de un LID
+//  no existe consulta: únicamente se puede contestar con lo que ya se vio
+//  antes en el tráfico. Por eso este módulo, más que "resolver", sirve
+//  para ACORDARSE: guarda cada pareja que aparece y la devuelve después.
+//
+//  Qué hace y qué no:
+//   · Regla 1: la llave de la base es el TELÉFONO siempre que se conozca,
+//     para que la economía siga cuadrando con los datos ya guardados.
+//   · Regla 2: si solo hay LID y no se conoce el teléfono, la llave es el
+//     LID. Se prefiere una llave fea a perder el mensaje; en cuanto se
+//     aprenda la pareja, las dos cuentas se fusionan.
+//   · Regla 3: nunca se consulta la red para resolver un LID.
+//
+//  Este archivo no toca la base: quien quiera persistencia llama a
+//  conectarBackend() (lo hace boot/index.js con #storage/identities).
+//  Así las pruebas y los comandos sueltos funcionan sin abrir nada.
+// ═══════════════════════════════════════════════════════════════════
+
+import log from "#logger";
+import { normalizeJid, esLid, esTelefono, usuarioDe, mismoNumero } from "./jid.js";
+
+// Tope de la caché en memoria. Cada entrada son dos strings: 4096 parejas
+// son unos cientos de KB, suficiente para un bot de grupos y vecindarios.
+const MAX_MEMORIA = 4096;
+
+const pnPorLid = new Map();
+const lidPorPn = new Map();
+
+/** Backend opcional de persistencia (ver src/storage/identities.js). */
+let backend = null;
+
+// Los metadatos de un grupo se cachean y se reutilizan: no hace falta
+// recorrer los participantes dos veces para lo mismo.
+let metasVistas = new WeakSet();
+
+const contador = { aprendidas: 0, fusiones: 0, fallos: 0, olvidadas: 0 };
+
+function recortar(mapa) {
+  while (mapa.size > MAX_MEMORIA) {
+    const primera = mapa.keys().next().value;
+    mapa.delete(primera);
+    contador.olvidadas++;
+  }
+}
+
+function recordar(lidJid, pnJid) {
+  if (!lidJid || !pnJid) return;
+  // Reinsertar mueve la pareja al final: lo viejo cae primero.
+  pnPorLid.delete(lidJid);
+  pnPorLid.set(lidJid, pnJid);
+  recortar(pnPorLid);
+  lidPorPn.delete(pnJid);
+  lidPorPn.set(pnJid, lidJid);
+  recortar(lidPorPn);
+}
+
+/** Un fallo de base no puede tumbar el procesado de mensajes: se cuenta. */
+function avisarFallo(que, err) {
+  contador.fallos++;
+  if (contador.fallos === 1 || contador.fallos % 500 === 0) {
+    log.warn("[lid] " + que + ": " + (err?.message || err) + " (fallos: " + contador.fallos + ")");
+  }
+}
+
+/**
+ * Conecta la persistencia. `backend` debe traer:
+ *   pnPorLid(lid), lidPorPn(pn), guardar(lid, pn) y, si puede, fusionar(lid, pn)
+ * y contar(). Los métodos son síncronos (node:sqlite lo es).
+ */
+export function conectarBackend(nuevo) {
+  backend = nuevo || null;
+  return api;
+}
+
+/** Solo para pruebas: deja el módulo como recién importado. */
+export function reiniciar() {
+  pnPorLid.clear();
+  lidPorPn.clear();
+  backend = null;
+  contador.aprendidas = 0;
+  contador.fusiones = 0;
+  contador.fallos = 0;
+  contador.olvidadas = 0;
+  metasVistas = new WeakSet();
+}
+
+/**
+ * Guarda una pareja LID ↔ teléfono. Idempotente.
+ *
+ * @param {string} lidJid  JID `@lid` (o `@hosted.lid`)
+ * @param {string} pnJid   JID `@s.whatsapp.net`
+ * @param {{fusionar?: boolean}} [opciones] fusionar: false evita tocar la base
+ * @returns {boolean} true si era nueva
+ */
+export function aprender(lidJid, pnJid, opciones = {}) {
+  const lid = normalizeJid(lidJid);
+  const pn = normalizeJid(pnJid);
+  if (!esLid(lid) || !esTelefono(pn)) return false;
+  if (usuarioDe(lid) === usuarioDe(pn)) return false;
+
+  const yaEstaba = pnPorLid.get(lid) === pn && lidPorPn.get(pn) === lid;
+  recordar(lid, pn);
+  if (yaEstaba) return false;
+
+  contador.aprendidas++;
+
+  if (backend) {
+    try {
+      backend.guardar(lid, pn);
+    } catch (err) {
+      avisarFallo("guardar pareja", err);
+    }
+    if (opciones.fusionar !== false && typeof backend.fusionar === "function") {
+      try {
+        if (backend.fusionar(lid, pn)) contador.fusiones++;
+      } catch (err) {
+        avisarFallo("fusionar cuentas", err);
+      }
+    }
+  }
+  return true;
+}
+
+/** Teléfono de un LID ("" si todavía no se conoce). */
+export function pnDeLid(lidJid) {
+  const lid = normalizeJid(lidJid);
+  if (!esLid(lid)) return "";
+  const enMemoria = pnPorLid.get(lid);
+  if (enMemoria) return enMemoria;
+  if (!backend) return "";
+  try {
+    const pn = normalizeJid(backend.pnPorLid(lid) || "");
+    if (esTelefono(pn)) {
+      recordar(lid, pn);
+      return pn;
+    }
+  } catch (err) {
+    avisarFallo("leer LID→teléfono", err);
+  }
+  return "";
+}
+
+/** LID de un teléfono ("" si todavía no se conoce). */
+export function lidDePn(pnJid) {
+  const pn = normalizeJid(pnJid);
+  if (!esTelefono(pn)) return esLid(pn) ? pn : "";
+  const enMemoria = lidPorPn.get(pn);
+  if (enMemoria) return enMemoria;
+  if (!backend) return "";
+  try {
+    const lid = normalizeJid(backend.lidPorPn(pn) || "");
+    if (esLid(lid)) {
+      recordar(lid, pn);
+      return lid;
+    }
+  } catch (err) {
+    avisarFallo("leer teléfono→LID", err);
+  }
+  return "";
+}
+
+/**
+ * Resuelve quién es un JID. `alt` es el identificador alternativo que
+ * WhatsApp manda en el propio mensaje (participantPn / senderPn /
+ * participantLid / senderLid): cuando viene, es gratis y fiable.
+ *
+ * @param {string} jid
+ * @param {string} [alt]
+ * @returns {{key: string, pn: string, lid: string}}
+ */
+export function resolver(jid, alt = "") {
+  const base = normalizeJid(jid);
+  const alterno = normalizeJid(alt);
+  if (!base) return { key: "", pn: "", lid: "" };
+
+  if (esLid(base)) {
+    const lid = base;
+    const pn = esTelefono(alterno) ? alterno : pnDeLid(lid);
+    if (pn) aprender(lid, pn);
+    return { key: pn || lid, pn, lid };
+  }
+
+  if (esTelefono(base)) {
+    const pn = base;
+    const lid = esLid(alterno) ? alterno : lidDePn(pn);
+    if (lid) aprender(lid, pn);
+    return { key: pn, pn, lid };
+  }
+
+  // Grupo, canal, estado: no son una persona.
+  return { key: base, pn: "", lid: "" };
+}
+
+/** Llave estable para la base: el teléfono si se conoce, si no el LID. */
+export function clave(jid) {
+  return resolver(jid).key;
+}
+
+/**
+ * ¿Los dos JID son la misma persona? Compara la llave, el teléfono (con la
+ * regla mexicana 521 = 52) y el LID. Es lo que usan los permisos en vez de
+ * comparar cadenas a pelo.
+ */
+export function mismaPersona(a, b) {
+  if (!a || !b) return false;
+  const ia = resolver(a);
+  const ib = resolver(b);
+  if (!ia.key || !ib.key) return false;
+  if (ia.key === ib.key) return true;
+  if (ia.pn && ib.pn && mismoNumero(ia.pn, ib.pn)) return true;
+  if (ia.lid && ib.lid && usuarioDe(ia.lid) === usuarioDe(ib.lid)) return true;
+  return false;
+}
+
+/**
+ * Aprende la pareja que viaja en la clave de un mensaje. Se llama en cada
+ * mensaje entrante (es barato: casi siempre son dos búsquedas en memoria).
+ *
+ * Baileys 6.7.24 rellena estos campos desde los atributos del stanza:
+ *   key.participant / key.participantPn / key.participantLid  (grupos)
+ *   key.remoteJid  / key.senderPn      / key.senderLid        (privados)
+ */
+export function aprenderDeMensaje(key) {
+  if (!key) return;
+  const participante = normalizeJid(key.participant || "");
+  const remoto = normalizeJid(key.remoteJid || "");
+  const pn = normalizeJid(key.participantPn || key.senderPn || "");
+  const lid = normalizeJid(key.participantLid || key.senderLid || "");
+
+  if (esLid(participante) && esTelefono(pn)) aprender(participante, pn);
+  if (esTelefono(participante) && esLid(lid)) aprender(lid, participante);
+  if (esLid(remoto) && esTelefono(pn)) aprender(remoto, pn);
+  if (esTelefono(remoto) && esLid(lid)) aprender(lid, remoto);
+}
+
+/**
+ * Aprende de una lista de participantes de grupo. Baileys entrega
+ * `{ id, jid, lid, admin }`: si `id` es el LID, `jid` trae el teléfono.
+ */
+export function aprenderDeParticipantes(participantes) {
+  if (!Array.isArray(participantes)) return 0;
+  let nuevas = 0;
+  for (const p of participantes) {
+    if (!p) continue;
+    const formas = [p.id, p.jid, p.phoneNumber, p.lid]
+      .map((x) => normalizeJid(x || ""))
+      .filter(Boolean);
+    const elLid = formas.find((x) => esLid(x));
+    const elPn = formas.find((x) => esTelefono(x));
+    if (elLid && elPn && aprender(elLid, elPn)) nuevas++;
+  }
+  return nuevas;
+}
+
+/** Igual que arriba, pero desde los metadatos completos del grupo. */
+export function aprenderDeGrupo(meta) {
+  if (!meta || typeof meta !== "object") return 0;
+  if (metasVistas.has(meta)) return 0;
+  metasVistas.add(meta);
+  let nuevas = aprenderDeParticipantes(meta.participants);
+  const formas = [meta.owner, meta.ownerJid, meta.subjectOwnerJid]
+    .map((x) => normalizeJid(x || ""))
+    .filter(Boolean);
+  const elLid = formas.find((x) => esLid(x));
+  const elPn = formas.find((x) => esTelefono(x));
+  if (elLid && elPn && aprender(elLid, elPn)) nuevas++;
+  return nuevas;
+}
+
+/** Números para el diagnóstico (.lid) y /health. */
+export function estadisticas() {
+  let guardadas = null;
+  if (backend && typeof backend.contar === "function") {
+    try {
+      guardadas = backend.contar();
+    } catch (err) {
+      avisarFallo("contar parejas", err);
+    }
+  }
+  return {
+    enMemoria: pnPorLid.size,
+    guardadas,
+    aprendidas: contador.aprendidas,
+    fusiones: contador.fusiones,
+    fallos: contador.fallos,
+    persistencia: !!backend,
+  };
+}
+
+const api = {
+  conectarBackend,
+  reiniciar,
+  aprender,
+  pnDeLid,
+  lidDePn,
+  resolver,
+  clave,
+  mismaPersona,
+  aprenderDeMensaje,
+  aprenderDeParticipantes,
+  aprenderDeGrupo,
+  estadisticas,
+};
+
+export default api;

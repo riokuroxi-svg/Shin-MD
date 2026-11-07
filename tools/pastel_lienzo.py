@@ -65,8 +65,8 @@ MASCOTA = uri_imagen(os.path.join(SALIDA, "mascota.png"))
 import json  # noqa: E402
 
 DATOS_DE_RESPALDO = dict(
-    comandos=211, nombres=747, alias=536, categorias=15,
-    pruebas=161, pruebas_total=161, version="3.0.3",
+    comandos=212, nombres=750, alias=538, categorias=15,
+    pruebas=177, pruebas_total=177, archivos=29, version="3.0.3",
     node="22.5", baileys="6.7.24", licencia="AGPL-3.0-only",
 )
 
@@ -91,6 +91,7 @@ def cargar_datos():
 D = cargar_datos()
 C, N, A = D["comandos"], D["nombres"], D["alias"]
 PR, CAT, V = D["pruebas"], D["categorias"], D["version"]
+AR = D.get("archivos", 0)
 
 
 # --------------------------------------------------------------------------

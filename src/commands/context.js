@@ -26,6 +26,7 @@ import { downloadContentFromMessage } from "baileys";
 import { isAdmin, userPart, getCachedMeta } from "#serialize";
 import { readMore } from "../lib/formatter.js";
 import { getVerifiedQuoted, getChannelContext } from "../lib/contextBuilder.js";
+import * as lid from "../lib/lid.js";
 
 const MEDIA_KEY_RE = /imageMessage|videoMessage|stickerMessage|audioMessage|documentMessage/i;
 
@@ -83,12 +84,17 @@ export async function resolveGroupFacts(sock, ctx, engine) {
   let isOwner = false;
   let groupMetadata = null;
 
+  // El dueño se resuelve SIEMPRE, también en privado: antes solo se
+  // calculaba dentro de un grupo y `msg.isOwner` salía falso en el chat
+  // privado, con lo que los comandos que lo consultan decían "solo el
+  // dueño" a quien sí lo era.
+  const ownerJid = engine?.getOwnerJid?.();
+  if (ownerJid) isOwner = !!ctx.isOwner?.(ownerJid) || lid.mismaPersona(ctx.senderId, ownerJid);
+
   if (ctx.isGroup) {
     isAdmins = await isAdmin(sock, ctx.chatId, ctx.senderId);
     const botJid = sock?.user?.id;
     if (botJid) isBotAdmins = await isAdmin(sock, ctx.chatId, botJid);
-    const ownerJid = engine?.getOwnerJid?.();
-    if (ownerJid) isOwner = userPart(ctx.senderId) === userPart(ownerJid);
     groupMetadata =
       getCachedMeta(ctx.chatId) ||
       (await sock?.groupMetadata?.(ctx.chatId).catch(() => null)) ||
@@ -123,6 +129,10 @@ export function buildEnrichedMessage(sock, ctx, extra = {}) {
     // ── Identidad ────────────────────────────────────────────────
     chat: ctx.chatId,
     sender: ctx.senderId,
+    // Las dos caras del remitente. `sender` es la llave estable (teléfono
+    // cuando se conoce); estas dos permiten mostrar o comparar la otra.
+    senderPn: ctx.senderPn || "",
+    senderLid: ctx.senderLid || "",
     isGroup: ctx.isGroup,
     key: full.key || {},
     id: full.key?.id,
@@ -212,7 +222,10 @@ export function buildEnrichedMessage(sock, ctx, extra = {}) {
         "",
       key: {
         remoteJid: ctx.chatId,
-        fromMe: ci.participant ? ci.participant === sock?.user?.id : false,
+        fromMe: ci.participant
+          ? lid.mismaPersona(ci.participant, sock?.user?.id) ||
+            lid.mismaPersona(ci.participant, sock?.user?.lid)
+          : false,
         id: ci.stanzaId || "",
         participant: ci.participant || "",
       },

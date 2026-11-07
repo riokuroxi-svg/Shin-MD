@@ -19,7 +19,7 @@ sys.path.insert(0, AQUI)
 
 from pastel_lienzo import (  # noqa: E402
     banner, quicksand_suave, subbanner,
-    A, ANCHO, C, CAT, D, MASCOTA, N, P, PAD, PR, RADIO, SALIDA, V, adorno, baloo, baloo_med, bloque,
+    A, ANCHO, AR, C, CAT, D, MASCOTA, N, P, PAD, PR, RADIO, SALIDA, V, adorno, baloo, baloo_med, bloque,
     chip, cjk, corazon, esc, estrella, formato, guardar, icono, lienzo, mono, nunito, nunito_med,
     nunito_suave, quicksand, quicksand_suave, subbanner, tabla, tarjeta_lista, texto,
     texto_centrado, Lienzo,
@@ -498,7 +498,7 @@ def main():
 SECCIONES = [
     (1, "Lo que lo hace distinto", "seis razones medibles", "rayo", P["rosa"], "lo-que-lo-hace-distinto"),
     (2, "El anti-ban por dentro", "jitter, calentamiento y monitor", "escudo", P["menta"], "el-anti-ban-por-dentro"),
-    (3, "Los 211 comandos", "15 categorías, carga dinámica", "rayo", P["ambar"], "los-211-comandos"),
+    (3, "Los %d comandos" % C, "15 categorías, carga dinámica", "rayo", P["ambar"], "los-%d-comandos" % C),
     (4, "Panel local", "127.0.0.1:3000 · /health y /metrics", "engrane", P["menta"], "panel-local"),
     (5, "Instalación en 5 minutos", "Termux o VPS, sin misterios", "casa", P["rosa"], "instalación-en-5-minutos"),
     (6, "Cómo está hecho", "capas separadas y comprobables", "casa", P["ambar"], "cómo-está-hecho"),
@@ -583,7 +583,7 @@ def estructura():
         ("docs/", 1, P["menta"]),
         ("web/              → página del proyecto (npm run docs:web)", 2, P["tinta_suave"]),
         ("assets/pastel/    → gráficos del README (SVG propio)", 2, P["tinta_suave"]),
-        ("test/                 → %d pruebas en 28 archivos (runner propio)" % PR, 1, P["tinta_suave"]),
+        ("test/                 → %d pruebas en %d archivos (runner propio)" % (PR, AR), 1, P["tinta_suave"]),
         ("src/", 1, P["menta"]),
         ("core/             → ciclo de vida, conexión, auth SQLite, anti-ban", 2, P["tinta_suave"]),
         ("network/          → cola de envío con prioridad, monitor de riesgo", 2, P["tinta_suave"]),

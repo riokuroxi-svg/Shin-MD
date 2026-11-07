@@ -16,6 +16,8 @@ import makeWASocket, {
 import { useSQLiteAuthState } from "./auth.js";
 import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "./metaCache.js";
 import { patchGroupMetadata } from "#serialize";
+import * as lid from "../lib/lid.js";
+import { esLid as esJidLid } from "../lib/jid.js";
 import { resolveChannel } from "../lib/channel.js";
 import db from "../services/ginko-db.js";
 import qrcode from "qrcode-terminal";
@@ -179,6 +181,13 @@ export function connectSocket(engine, opts) {
     s.msgRetryCounterCache = msgRetryCounterCache;
     s.ev.on("creds.update", saveCreds);
     s.ev.on("group-participants.update", ({ id }) => { deleteCachedMeta(id); });
+    // WhatsApp avisa aquí cuando alguien comparte su número desde un chat
+    // LID: es la única ocasión en que la pareja llega "gratis" fuera de
+    // un mensaje. Se guarda igual que las demás.
+    s.ev.on("chats.phoneNumberShare", ({ lid: lidJid, jid: pnJid } = {}) => {
+      if (!lidJid || !pnJid) return;
+      lid.aprender(lidJid, pnJid);
+    });
     s.ev.on("groups.update", (updates) => { for (const u of (updates || [])) deleteCachedMeta(u.id); });
     s.sendText = (j, t, q, o) => s.sendMessage(j, { text: t, ...o }, { quoted: q });
     s.reply = (j, t, q, o) => {
@@ -199,6 +208,20 @@ export function connectSocket(engine, opts) {
     const origSM = s.sendMessage.bind(s);
     const sendQueue = engine.getSendQueue();
     s.sendMessage = async (j, c, o) => {
+      // Baileys 6.7.24 hace `me.lid.split(...)` al enviar a un JID @lid. Si
+      // la sesión es anterior al despliegue de LID y nunca guardó ese dato,
+      // esa línea lanza TypeError y el envío se pierde (el usuario ve
+      // "error interno" en cualquier comando). El teléfono es la misma
+      // persona: se envía por ahí.
+      if (esJidLid(j) && !s.user?.lid) {
+        const pn = lid.pnDeLid(j);
+        if (pn) {
+          if (process.env.LOG_LEVEL === "debug") {
+            log.gray(`[lid] la sesión no tiene me.lid: se envía a ${pn} en vez de ${j}`);
+          }
+          j = pn;
+        }
+      }
       // B2.2: reacciones, borrados y ediciones NO son mensajes nuevos para
       // WhatsApp (no generan notificación ni cuentan como "envío masivo"),
       // así que NO deben gastar la cuota diaria del warm-up. Siguen pasando
@@ -242,6 +265,12 @@ export function connectSocket(engine, opts) {
     // closure relayMessage, no esta propiedad, así no hay recursión.
     const origRelay = s.relayMessage.bind(s);
     s.relayMessage = async (j, m, o) => {
+      // Misma guarda que en sendMessage: las tarjetas interactivas también
+      // pueden ir a un chat @lid y tropezar con la misma línea de Baileys.
+      if (esJidLid(j) && !s.user?.lid) {
+        const pn = lid.pnDeLid(j);
+        if (pn) j = pn;
+      }
       const text = m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || "";
       return sendQueue.enqueue(() => origRelay(j, m, o), {
         messageLength: String(text).length,
@@ -298,6 +327,11 @@ export function connectSocket(engine, opts) {
               inner.editedMessage?.message;
           }
           msg.message = inner;
+
+          // La pareja LID ↔ teléfono se aprende ANTES de decidir si el
+          // mensaje es un comando: un "hola", un sticker o un mensaje sin
+          // texto también sirven para no partir la cuenta del usuario.
+          lid.aprenderDeMensaje(msg.key);
 
           if (msg?.key?.id) {
             msgStore.set(msg.key.remoteJid + ":" + msg.key.id, msg.message);

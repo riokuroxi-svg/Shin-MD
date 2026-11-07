@@ -12,6 +12,7 @@
 // el mismo archivo data/shin.db.
 import { getDatabase } from "#db";
 import { ejecutarSqlOpcional } from "#lib/db-opcional";
+import { clave as claveDeIdentidad } from "#lib/lid";
 
 let _d = null;
 function db() {
@@ -89,6 +90,23 @@ function init(d) {
 
 }
 
+/**
+ * Llave con la que se guarda una persona: su teléfono si el bot lo conoce,
+ * si no el JID que haya llegado. Así un mismo usuario no tiene dos filas
+ * (una por teléfono y otra por LID) según cómo venga el mensaje.
+ *
+ * Va aquí, en el único sitio por el que pasan todas las lecturas y
+ * escrituras de usuarios, para no tener que repetirlo en cada comando.
+ */
+function claveUsuario(id) {
+  if (!id) return id;
+  try {
+    return claveDeIdentidad(id) || id;
+  } catch {
+    return id;
+  }
+}
+
 const mem = new Map();
 function ck(t, i) { return t + ':' + i; }
 function gC(k) { const e = mem.get(k); if (!e) return undefined; if (Date.now() - e.ts > e.ttl) { mem.delete(k); return undefined; } return e.d; }
@@ -108,14 +126,15 @@ const gdb = {
         return u;
       });
     }
-    const key = ck('u', id); const ca = gC(key); if (ca !== undefined) return ca;
-    let u = q('SELECT * FROM g_users WHERE id = ?', id);
-    if (!u) { r('INSERT OR IGNORE INTO g_users (id) VALUES (?)', id); u = q('SELECT * FROM g_users WHERE id = ?', id); }
+    const uid = claveUsuario(id);
+    const key = ck('u', uid); const ca = gC(key); if (ca !== undefined) return ca;
+    let u = q('SELECT * FROM g_users WHERE id = ?', uid);
+    if (!u) { r('INSERT OR IGNORE INTO g_users (id) VALUES (?)', uid); u = q('SELECT * FROM g_users WHERE id = ?', uid); }
     if (u && u.metadatos && typeof u.metadatos === 'string') try { u.metadatos = JSON.parse(u.metadatos); } catch {}
     if (u && u.metadatos2 && typeof u.metadatos2 === 'string') try { u.metadatos2 = JSON.parse(u.metadatos2); } catch {}
     sC(key, u); return u;
   },
-  setUser(id, field, val) { dC(ck('u', id)); r('INSERT OR IGNORE INTO g_users (id) VALUES (?)', id); return r('UPDATE g_users SET ' + field + ' = ? WHERE id = ?', sv(val), id); },
+  setUser(id, field, val) { const uid = claveUsuario(id); dC(ck('u', uid)); r('INSERT OR IGNORE INTO g_users (id) VALUES (?)', uid); return r('UPDATE g_users SET ' + field + ' = ? WHERE id = ?', sv(val), uid); },
   getChat(id) {
     if (!id) {
       return db().prepare('SELECT * FROM g_chats').all().map(c => {
@@ -132,14 +151,15 @@ const gdb = {
   setChat(id, field, val) { dC(ck('c', id)); r('INSERT OR IGNORE INTO g_chats (id) VALUES (?)', id); return r('UPDATE g_chats SET ' + field + ' = ? WHERE id = ?', sv(val), id); },
   getChatUser(chatId, userId) {
     if (!chatId || !userId) return null;
-    const key = ck('cu', chatId + ':' + userId); const ca = gC(key); if (ca !== undefined) return ca;
-    let cu = q('SELECT * FROM g_chat_users WHERE chat_id = ? AND user_id = ?', chatId, userId);
-    if (!cu) { r('INSERT OR IGNORE INTO g_chat_users (chat_id, user_id) VALUES (?, ?)', chatId, userId); cu = q('SELECT * FROM g_chat_users WHERE chat_id = ? AND user_id = ?', chatId, userId); }
+    const uid = claveUsuario(userId);
+    const key = ck('cu', chatId + ':' + uid); const ca = gC(key); if (ca !== undefined) return ca;
+    let cu = q('SELECT * FROM g_chat_users WHERE chat_id = ? AND user_id = ?', chatId, uid);
+    if (!cu) { r('INSERT OR IGNORE INTO g_chat_users (chat_id, user_id) VALUES (?, ?)', chatId, uid); cu = q('SELECT * FROM g_chat_users WHERE chat_id = ? AND user_id = ?', chatId, uid); }
     if (cu && cu.g_characters && typeof cu.g_characters === 'string') try { cu.g_characters = pj(cu.g_characters, []); } catch {}
     if (cu && cu.stats && typeof cu.stats === 'string') try { cu.stats = pj(cu.stats, {}); } catch {}
     sC(key, cu); return cu;
   },
-  setChatUser(chatId, userId, field, val) { dC(ck('cu', chatId + ':' + userId)); r('INSERT OR IGNORE INTO g_chat_users (chat_id, user_id) VALUES (?, ?)', chatId, userId); return r('UPDATE g_chat_users SET ' + field + ' = ? WHERE chat_id = ? AND user_id = ?', sv(val), chatId, userId); },
+  setChatUser(chatId, userId, field, val) { const uid = claveUsuario(userId); dC(ck('cu', chatId + ':' + uid)); r('INSERT OR IGNORE INTO g_chat_users (chat_id, user_id) VALUES (?, ?)', chatId, uid); return r('UPDATE g_chat_users SET ' + field + ' = ? WHERE chat_id = ? AND user_id = ?', sv(val), chatId, uid); },
   getSettings(id) {
     if (!id) {
       return db().prepare('SELECT * FROM g_settings').all().map(s => {
@@ -187,6 +207,10 @@ const gdb = {
     r('INSERT OR IGNORE INTO g_sticker_packs (id) VALUES (?)', id);
     return r('UPDATE g_sticker_packs SET packs = ? WHERE id = ?', sv(packs), id);
   },
+  // La caché es de filas completas: si una cuenta se fusiona con otra
+  // (LID -> teléfono) hay que vaciarla o se seguiría sirviendo la copia
+  // vieja. La llama #storage/identities al terminar una fusión.
+  limpiarCache() { mem.clear(); },
 };
 
 export default gdb;

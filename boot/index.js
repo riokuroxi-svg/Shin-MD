@@ -23,6 +23,8 @@ import { connectSocket } from "#socket";
 import { createWatchdog } from "#watchdog";
 import { createWebServer } from "#server";
 import { getDatabase } from "#db";
+import { crearBackendIdentidades } from "../src/storage/identities.js";
+import { conectarBackend } from "../src/lib/lid.js";
 import { createRouter } from "#router";
 import log from "#logger";
 import { fileURLToPath } from "node:url";
@@ -228,6 +230,22 @@ async function main() {
   let db;
   try { db = getDatabase(); }
   catch (err) { log.fatal("DB: " + err.message); process.exit(1); }
+
+  // ── Identidades LID ↔ teléfono ──────────────────────────────────
+  //  La red solo resuelve teléfono → LID; el sentido contrario vive en
+  //  esta tabla. Se conecta ANTES de recibir el primer mensaje: si no,
+  //  la primera pareja que llegue se perdería y el usuario tendría dos
+  //  cuentas (una por cada forma de su JID).
+  try {
+    const backend = crearBackendIdentidades(db.db);
+    conectarBackend(backend);
+    const conocidas = backend.contar();
+    if (conocidas > 0) log.gray("Identidades: " + conocidas + " parejas LID ↔ teléfono recordadas.");
+  } catch (err) {
+    // Sin esta capa el bot sigue funcionando: peor (cuentas partidas),
+    // pero funcionando. Se avisa una vez y se sigue.
+    log.warn("Identidades: no se pudo activar la persistencia: " + (err.message || err));
+  }
 
   // ── B2.1: perfil del número (nuevo vs aclimatado) ──────────────
   // Número nuevo:    delay base 1500ms + warm-up de 7 días (20→500 msg/día)
