@@ -92,8 +92,8 @@ distintos. Ahora:
 
 ```bash
 # descargar del release, no de main
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.2/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.2/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.3/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.3/SHA256SUMS -o SHA256SUMS
 
 # comprobar la huella ANTES de ejecutar
 sha256sum -c SHA256SUMS
