@@ -1444,3 +1444,55 @@ test("--purge avisa de que también se lleva los respaldos", () => {
   assert.equal(hecho.status, 0, hecho.salida);
   assert.ok(!fs.existsSync(proyecto));
 });
+
+test("en Termux deja instalar en su home, que vive dentro de /data/data", () => {
+  // Este caso se escapó: en Android todo está bajo /data/data, y el veto
+  // genérico a esa ruta impedía instalar en la única carpeta posible.
+  const fuente = fs.readFileSync(INSTALADOR, "utf8");
+  const desde = fuente.indexOf("ruta_intocable() {");
+  const hasta = fuente.indexOf("\ndestino_instalable() {");
+  assert.ok(desde > 0 && hasta > desde, "no encuentro ruta_intocable en install.sh");
+  const trozo = fuente.slice(desde, hasta);
+
+  const evalRuta = (ruta, prefix) => {
+    const guion = `
+      morir() { exit 9; }
+      dato() { :; }
+      bien() { :; }
+      C_NEG=""; C_RESET=""; C_ROJO=""; C_GRIS=""
+      HOME=/data/data/com.termux/files/home
+      export PREFIX=${JSON.stringify(prefix)}
+      ${trozo}
+      ruta_intocable ${JSON.stringify(ruta)}
+    `;
+    const r = spawnSync("bash", ["-c", guion], { encoding: "utf8" });
+    return { bloquea: r.status === 0, motivo: (r.stdout || "").trim() };
+  };
+
+  const PREFIX = "/data/data/com.termux/files/usr";
+  const home = "/data/data/com.termux/files/home";
+
+  // Se permite la instalación dentro del home de Termux (y por debajo).
+  for (const ruta of [`${home}/Shin-MD`, `${home}/proyectos/Shin-MD`]) {
+    const r = evalRuta(ruta, PREFIX);
+    assert.equal(r.bloquea, false, `debería permitir ${ruta} (${r.motivo})`);
+  }
+
+  // Se sigue bloqueando todo lo demás.
+  const prohibidas = [
+    home,                                   // el home en sí
+    "/data/data/com.termux/files/usr",      // el prefijo
+    "/data/data/com.termux",
+    "/data/data/com.otra.app/files/home/Shin-MD", // otra app
+    "/data/data",
+    "/data",
+  ];
+  for (const ruta of prohibidas) {
+    const r = evalRuta(ruta, PREFIX);
+    assert.equal(r.bloquea, true, `no debería permitir ${ruta}`);
+  }
+
+  // Y sin PREFIX de Termux, /data/data sigue cerrado del todo.
+  const fuera = evalRuta(`${home}/Shin-MD`, "/usr");
+  assert.equal(fuera.bloquea, true, "en Linux normal /data/data no se toca");
+});

@@ -106,12 +106,29 @@ resolver_real() {
 # ¿La ruta es intocable? Devuelve 0 (sí) si es el sistema, $HOME o
 # algo que contiene al propio instalador.
 ruta_intocable() {
-  local real="$1" propio p rp
+  local real="$1" propio p rp base_termux=""
+  # En Android TODO vive bajo /data/data, incluida la carpeta personal de
+  # Termux (/data/data/com.termux/files/home). Si se veta /data/data a secas,
+  # el instalador se niega a instalar en la única carpeta donde puede.
+  case "${PREFIX:-}" in
+    */com.termux/*) base_termux="${PREFIX%/files/*}/files" ;;
+  esac
+
   case "$real" in
     ""|"/")     echo "es la raíz del sistema"; return 0 ;;
     "/home"|"/Users"|"/root"|"/storage"|"/storage/emulated") echo "es una carpeta de usuarios"; return 0 ;;
     "/usr"|"/usr/"*|"/etc"|"/etc/"*|"/bin"|"/sbin"|"/lib"|"/lib64"|"/boot"|"/dev"|"/proc"|"/sys"|"/var"|"/opt"|"/system"|"/vendor"|"/data"|"/data/data"|"/data/data/"*)
-      echo "es una ruta del sistema"; return 0 ;;
+      # Dentro de /data/data solo se deja pasar la carpeta de trabajo de
+      # Termux: su home (y por debajo), nunca la raíz del home ni el prefijo.
+      if [ -n "$base_termux" ]; then
+        case "$real" in
+          "$base_termux/home/"?*) : ;;
+          *) echo "es una ruta del sistema"; return 0 ;;
+        esac
+      else
+        echo "es una ruta del sistema"; return 0
+      fi
+      ;;
   esac
   if [ "$real" = "$HOME" ]; then echo "es tu carpeta personal"; return 0; fi
   if [ "${#real}" -lt 4 ]; then echo "es una ruta demasiado corta"; return 0; fi

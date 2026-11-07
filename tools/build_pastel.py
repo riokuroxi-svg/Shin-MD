@@ -152,19 +152,24 @@ def hero():
         texto(c, nunito_suave, nota, 15, x + 34 + ancho_v, cy0 + 74, P["tinta_suave"], 0.2)
         c.agrega(icono(ic, x + cw - 32, cy0 + 32, 13, color, grosor=2.2))
 
-    # La figura. Es una ilustración pintada, no una pegatina: sin plato ni
-    # aro detrás, solo un resplandor suave para que no flote en el vacío.
-    alto_m = 468
-    ancho_m = alto_m * 329 / 1145
-    c.gradiente_radial("plato", [("0", "#FFFFFF", "0.85"), ("0.6", "#F3ECFB", "0.55"), ("1", "#E7DCF6", "0")])
-    c.circulo(620, 268, 150, "url(#plato)")
-    adorno(c, 470, 150, 13, P["ambar"], giro=12)
-    adorno(c, 752, 132, 10, P["lila"], giro=30, opacidad=0.9)
-    c.agrega(corazon(768, 236, 8, P["lila"], opacidad=0.9))
-    c.agrega(corazon(474, 300, 7, P["lila"], opacidad=0.7))
-    c.imagen(MASCOTA, 620 - ancho_m / 2, 22, ancho_m, alto_m)
-    adorno(c, 486, 452, 9, P["verde"], giro=8)
-    adorno(c, 748, 448, 11, P["ambar"], giro=20)
+    # La figura: una captura de anime de los 2000, con su grano y su fondo
+    # de fotograma. Va enmarcada en vez de recortada, porque recortarla le
+    # quitaría justo la textura que hace que no parezca un render.
+    alto_m = 440
+    ancho_m = alto_m * 526 / 1264
+    x_m = 616 - ancho_m / 2
+    y_m = 26
+    # Borde doble: uno ancho lila debajo y otro fino blanco encima. Dibujar un
+    # rect del mismo tamaño que la imagen deja asomar las esquinas.
+    c.rect(x_m - 4, y_m - 4, ancho_m + 8, alto_m + 8, RADIO - 8, P["lila_claro"], opacidad=0.55)
+    c.rect(x_m - 1.5, y_m - 1.5, ancho_m + 3, alto_m + 3, RADIO - 10, P["blanco"])
+    c.imagen(MASCOTA, x_m, y_m, ancho_m, alto_m)
+    adorno(c, 486, 148, 12, P["ambar"], giro=12)
+    adorno(c, 742, 128, 9, P["lila"], giro=30, opacidad=0.9)
+    c.agrega(corazon(748, 230, 7, P["lila"], opacidad=0.9))
+    c.agrega(corazon(492, 298, 6, P["lila"], opacidad=0.7))
+    adorno(c, 492, 448, 8, P["verde"], giro=8)
+    adorno(c, 742, 442, 10, P["ambar"], giro=20)
     guardar(c, "hero.svg")
 
 
