@@ -1,0 +1,24 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+
+import { state } from '#lib/theme';
+export default {
+  command: ['link'],
+  category: 'group',
+  description: 'Obtener el enlace del grupo.',
+  botAdmin: true,
+  run: async ({ msg, sock, usedPrefix, command }) => {
+    try {
+      const code = await sock.groupInviteCode(msg.chat);
+      const link = `https://chat.whatsapp.com/${code}`;
+      const teks = `﹒⌗﹒🌿 .ৎ˚₊‧  Aquí tienes el link del grupo:\n\n𐚁 ֹ ִ \`GROUP LINK\` ! ୧ ֹ ִ🔗\n☘️ \`Solicitado por :\` @${msg.sender.split('@')[0]}\n\n🌱 \`Enlace :\` ${link}`;
+      await sock.reply(msg.chat, teks, msg, { mentions: [msg.sender] });
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  },
+};

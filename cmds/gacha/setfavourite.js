@@ -1,0 +1,48 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import { promises as fs } from 'fs';
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
+export default {
+  command: ['setfav', 'setfavourite'],
+  category: 'gacha',
+  description: 'Establecer tu claim favorito.',
+  run: async ({ msg, args, usedPrefix, command }) => {
+    const chat = db.getChat(msg.chat);
+    if (chat.adminonly || !chat.gacha) {
+      return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
+    }
+    if (!args.length) {
+      return msg.reply(`❀ Debes especificar un personaje.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
+    }
+    db.setCreate('chat_users', [msg.chat, msg.sender], 'favorite', '');
+    db.setCreate('users', msg.sender, 'favorite', '');
+    let user = db.getChatUser(msg.chat, msg.sender);
+    if (!Array.isArray(user.characters)) user.characters = [];
+    try {
+      const structure = await loadCharacters();
+      const allCharacters = flattenCharacters(structure);
+      const name = args.join(' ').toLowerCase().trim();
+      const character = allCharacters.find(c => String(c.name).toLowerCase() === name) || allCharacters.find(c => String(c.name).toLowerCase().includes(name) || (Array.isArray(c.tags) && c.tags.some(tag => tag.toLowerCase().includes(name)))) || allCharacters.find(c => name.split(' ').some(q => String(c.name).toLowerCase().includes(q) || (Array.isArray(c.tags) && c.tags.some(tag => tag.toLowerCase().includes(q)))));
+      if (!character) return msg.reply(`ꕥ No se encontró el personaje *${name}*.`);
+      const isClaimed = user.characters.includes(character.id);
+      if (!isClaimed) return msg.reply(`ꕥ El personaje *${character.name}* no está reclamado por ti.`);
+      const previousId = user.favorite;
+      db.setChatUser(msg.chat, msg.sender, 'favorite', character.id);
+      db.setUser(msg.sender, 'favorite', character.id);
+      if (previousId && previousId !== character.id) {
+        const prevChar = db.getCharacter(previousId);
+        const prevName = prevChar?.name || 'personaje anterior';
+        return msg.reply(`❀ Se ha reemplazado tu favorito *${prevName}* por *${character.name}*!`);
+      }
+      return msg.reply(`❀ Ahora *${character.name}* es tu personaje favorito!`);
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  },
+};

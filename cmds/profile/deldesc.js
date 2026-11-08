@@ -1,0 +1,20 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import db from '../../src/services/ginko-db.js';
+export default {
+  command: ['deldescription', 'deldesc'],
+  category: 'profile',
+  description: 'Eliminar tu descripción de perfil.',
+  run: async ({ msg }) => {
+    const user = db.getUser(msg.sender);
+    if (!user.description) {
+      return msg.reply(`《✧》 No tienes una descripción establecida.`);
+    }
+    db.setUser(msg.sender, 'description', '');
+    return msg.reply(`✎ Tu descripción ha sido eliminada.`);
+  },
+};

@@ -1,0 +1,36 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+export default {
+  command: ['delpack'],
+  category: 'stickers',
+  description: 'Eliminar un paquete de stickers.',
+  run: async ({ msg, args, usedPrefix, command }) => {
+    try {
+      if (!args.length) {
+        return msg.reply('《✧》Especifica el nombre del paquete de stickers.')
+      }
+      const packName = args.join(' ').trim()
+      const stickerPackData = db.getStickersPack(msg.sender)
+      const packs = stickerPackData.packs || []
+      if (!packs || packs.length === 0) {
+        return msg.reply('《✧》No tienes paquetes creados.')
+      }
+      const packIndex = packs.findIndex(p => p.name.toLowerCase() === packName.toLowerCase())
+      if (packIndex === -1) {
+        return msg.reply(`《✧》No se encontró el paquete de stickers \`${packName}\`.`)
+      }
+      const deletedPack = packs[packIndex]
+      packs.splice(packIndex, 1)
+      db.setStickersPack(msg.sender, 'packs', packs);
+      await msg.reply(`❀ El paquete de stickers \`${deletedPack.name}\` ha sido eliminado.`)
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  }
+}

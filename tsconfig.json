@@ -1,0 +1,27 @@
+{
+  // Shin-MD — chequeo de tipos SIN reescribir nada a TypeScript.
+  // El código sigue siendo JS: `checkJs` deja que TypeScript lo lea y
+  // avise de errores, usando los JSDoc que ya existen.
+  //
+  // Adopción gradual y deliberada: `include` empieza por los archivos
+  // del núcleo modernizado y crece archivo por archivo. No se incluye
+  // todo de golpe porque un muro de 800 errores no se arregla, se ignora.
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": ["src/commands/context.js", "src/commands/router.js", "src/commands/loader.js"],
+  "exclude": ["node_modules", "session", "logs", "media", "assets"]
+}

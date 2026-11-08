@@ -1,0 +1,23 @@
+{
+  "migrations": {
+    "1": {
+      "version": 1,
+      "name": "core-tables",
+      "applied_at": 1790744451934
+    },
+    "2": {
+      "version": 2,
+      "name": "economy-gacha-profiles",
+      "applied_at": 1790744451935
+    }
+  },
+  "settings": {},
+  "users": {},
+  "groups_data": {},
+  "message_log": {},
+  "economy_timers": {},
+  "characters": {},
+  "user_characters": {},
+  "group_warns": {},
+  "group_config": {}
+}

@@ -1,0 +1,26 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+export default {
+  command: ['delmeta', 'delstickermeta'],
+  category: 'stickers',
+  description: 'Restablecer el pack y autor por defecto para tus stickers.',
+  run: async ({ msg, sock, usedPrefix, command, text }) => {
+    try {
+      const userData = db.getUser(msg.sender);
+      if ((!userData.metadatos || userData.metadatos === '') && (!userData.metadatos2 || userData.metadatos2 === '')) {
+        return msg.reply('《✧》No tienes metadatos asignados.');
+      }
+      db.setUser(msg.sender, 'metadatos', '');
+      db.setUser(msg.sender, 'metadatos2', '');
+      await sock.sendMessage(msg.chat, { text: `✎ Los metadatos de tus stickers se han eliminado correctamente.` }, { quoted: msg });
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  },
+};

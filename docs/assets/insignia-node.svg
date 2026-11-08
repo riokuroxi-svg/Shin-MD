@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 147 34" width="147" height="34" role="img" aria-label="Node ≥ 22.5">
+  <rect x="0.5" y="0.5" width="146" height="33" rx="10" fill="#0E161E" stroke="#22303D"/>
+  <g><circle cx="17.0" cy="17.0" r="4" fill="#5FA04E"/><circle cx="17.0" cy="17.0" r="8" fill="#5FA04E" fill-opacity="0.16"/></g>
+  <text x="32" y="21.9" font-family="Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="13.5" font-weight="600" fill="#CBD8E3">Node ≥ 22.5</text>
+</svg>

@@ -1,0 +1,57 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import { promises as fs } from 'fs';
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
+export default {
+  command: ['delchar', 'deletewaifu', 'delwaifu'],
+  category: 'gacha',
+  description: 'Eliminar un personaje reclamado.',
+  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+    try {
+      const chat = db.getChat(msg.chat);
+      if (chat.adminonly || !chat.gacha) {
+        return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
+      }
+      db.setCreate('chat_users', [msg.chat, msg.sender], 'favorite', '');
+      let user = db.getChatUser(msg.chat, msg.sender);
+      if (!Array.isArray(user.characters) || !user.characters.length) {
+        return msg.reply(`❀ No tienes personajes reclamados en tu harem.`);
+      }
+      if (!args.length) {
+        return msg.reply(`❀ Debes especificar un personaje para eliminar.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
+      }
+      const inputName = args.join(' ').toLowerCase().trim();
+      const structure = await loadCharacters();
+      const allCharacters = flattenCharacters(structure);
+      const character = allCharacters.find(c => c.name.toLowerCase() === inputName);
+      if (!character) {
+        return msg.reply(`ꕥ No se ha encontrado ningún personaje con el nombre *${inputName}*\n> Puedes sugerirlo usando *${usedPrefix}suggest personaje ${inputName}*`);
+      }
+      if (!user.characters.includes(character.id)) {
+        return msg.reply(`ꕥ *${character.name}* no está reclamado por ti.`);
+      }
+      const charKey = msg.chat + '__' + character.id;
+      let characterData = db.getCharacter(charKey);
+      if (characterData && characterData.user === msg.sender) {
+        delete characterData.user;
+        delete characterData.claimedAt;
+        db.setCharacter(charKey, characterData);
+      }
+      user.characters = user.characters.filter(id => id !== character.id);
+      db.setChatUser(msg.chat, msg.sender, 'characters', user.characters);
+      if (user.favorite === character.id) {
+        db.setChatUser(msg.chat, msg.sender, 'favorite', '');
+        db.setUser(msg.sender, 'favorite', '');
+      }
+      await sock.sendMessage(msg.chat, { text: `❀ *${character.name}* ha sido eliminado de tu lista de reclamados.` }, { quoted: msg });
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  },
+};
