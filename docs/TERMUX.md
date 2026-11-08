@@ -31,10 +31,10 @@ congelados: con ella, `pkg install` falla o instala Node viejo.
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS
-bash install.sh --version v3.2.9
+bash install.sh --version v3.3.0
 ```
 
 Los tres primeros comandos descargan una versión concreta y **comprueban su
@@ -116,6 +116,10 @@ mirar el log:
 ```bash
 tail -f ~/Shin-MD/logs/*.log
 ```
+
+Si arrancaste con `npm start` y escribes `.restart`, el bot se releva solo:
+deja el vigía arrancado en esa misma terminal y se aparta. Desde ahí ya es el
+vigía el que manda. Ojo: si cierras esa terminal, se va con ella.
 
 El vigía no esquiva a Android. Si el sistema mata el proceso entero, se mueren
 los dos. Para eso sirven los ajustes del punto 3.

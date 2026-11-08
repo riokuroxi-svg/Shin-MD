@@ -100,10 +100,10 @@ las comprobaciones, vuelve a la etiqueta de la que venías.
 `main` cambia. Una release, no:
 
 ```bash
-curl -fsSL .../raw/v3.2.9/install.sh -o install.sh
-curl -fsSL .../raw/v3.2.9/SHA256SUMS -o SHA256SUMS
+curl -fsSL .../raw/v3.3.0/install.sh -o install.sh
+curl -fsSL .../raw/v3.3.0/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS        # → install.sh: OK
-bash install.sh --version v3.2.9
+bash install.sh --version v3.3.0
 ```
 
 Si alguien modificara el archivo en el camino, `sha256sum` dice `FAILED` y ahí

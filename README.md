@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 272 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 279 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="272/272 pruebas" height="52">
-<img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="279/279 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
 <img src="docs/assets/pastel/insignia-licencia.svg" alt="Licencia AGPL-3.0-only" height="52">
@@ -20,7 +20,7 @@
 **El bot de WhatsApp que sobrevive a los cortes de red, no pierde tu sesión
 y reduce el riesgo de bloqueo.**
 
-212 comandos · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
+213 comandos · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
 
 _Reducir el riesgo no es eliminarlo: eso lo decide WhatsApp, no el bot. Lo que sí está en nuestra mano está contado en [el anti-ban por dentro](#el-anti-ban-por-dentro)._
 
@@ -77,18 +77,18 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 
 </details>
 
-<h2 id="los-212-comandos">Los 212 comandos</h2>
+<h2 id="los-212-comandos">Los 213 comandos</h2>
 
-<img src="docs/assets/pastel/banner-03.svg" alt="03 · Los 212 comandos" width="100%">
+<img src="docs/assets/pastel/banner-03.svg" alt="03 · Los 213 comandos" width="100%">
 
 Escribe `.menu` dentro de WhatsApp y verás la tarjeta con botones y la lista
 desplegable por categorías.
 
-<img src="docs/assets/pastel/comandos.svg" alt="Los 212 comandos repartidos en 15 categorías" width="100%">
+<img src="docs/assets/pastel/comandos.svg" alt="Los 213 comandos repartidos en 15 categorías" width="100%">
 
 <img src="docs/assets/pastel/categorias.svg" alt="Las 15 categorías con sus comandos" width="100%">
 
-**212 comandos únicos · 750 nombres en total (538 alias) · 15 categorías.** Nombres de
+**213 comandos únicos · 752 nombres en total (538 alias) · 15 categorías.** Nombres de
 ejemplo: `.play` (y sus alias `yt`, `mp3`, `musica`), `.sticker` (`s`),
 `.daily` (`diario`, `recompensa`), `.w` (`work`, `trabajar`), `.x` para Twitter,
 `.ig` para Instagram y `.menu` (`ayuda`, `h`).
@@ -126,9 +126,9 @@ npm run docs:web
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.2.9
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.3.0
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -162,6 +162,15 @@ Si escribes `.restart`, revive. Si se cae, revive (esperando 1, 2, 4, 8 y 15 s
 entre intentos). Si se cae cinco veces en dos minutos, se rinde y lo explica en
 la terminal, porque eso ya no lo arregla un reinicio.
 
+`.restart` también funciona con el `npm start` de siempre: al no encontrar a
+nadie vigilándolo, deja el vigía arrancado en la misma terminal y se aparta.
+
+**Cuando un mensaje sale como «no compatible con tu versión».** Ese cartel no
+lo pone el bot: lo pone tu WhatsApp cuando no entiende un tipo de mensaje. Como
+el envío sí funciona, no da ningún error y quedas a ciegas. Hay un comando que
+lo mide: `.compat`, en privado, manda cuatro mensajes numerados —texto, botones,
+hoja inferior y álbum— y el que salga mal es el culpable.
+
 **Ver el estado sin abrir WhatsApp.** `npm run panel` dibuja dos cajas: una con
 el bot (memoria, cola, grupos, riesgo, versión) y otra con el teléfono donde
 corre (batería, memoria del sistema, disco, modelo). `npm run panel:vivir` lo
@@ -171,9 +180,9 @@ hacia fuera y solo habla con `127.0.0.1`.
 **Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.2.9
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.3.0
 cd ~/Shin-MD && npm start
 ```
 

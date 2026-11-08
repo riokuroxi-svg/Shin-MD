@@ -16,6 +16,13 @@ import { withLimit } from '#lib/limits';
 import { sendAlbum } from '#lib/album';
 import { state } from '#lib/theme';
 
+/**
+ * ¿Las fotos van en álbum? Solo si se pide en el .env.
+ * El álbum es lo último de WhatsApp y los clientes viejos lo pintan como
+ * «mensaje no compatible», sin que el envío dé ningún error aquí.
+ */
+export const usaAlbum = (env = process.env) => env.SHIN_ALBUM === "1";
+
 export default {
   command: ['imagen', 'img', 'image'],
   category: 'downloads',
@@ -40,16 +47,21 @@ export default {
         return sock.reply(msg.chat, `《✧》 No se encontraron imágenes para "${text}".`, msg);
       }
       const validResults = await filterValidImages(results.slice(0, 15));
-      if (validResults.length < 2) {
-        return sock.reply(msg.chat, `《✧》 Se requieren al menos 2 imágenes válidas para mostrar un álbum.`, msg);
+      if (validResults.length < 1) {
+        return sock.reply(msg.chat, `《✧》 Las imágenes encontradas no se pudieron abrir. Prueba con otro término.`, msg);
       }
       const medias = validResults.slice(0, 10).map(r => ({ image: { url: r.url }, caption: `ㅤ۟∩　ׅ　★　ׅ　🅖oogle 🅘mage 🅢earch　ׄᰙ　\n\n${r.title ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Título* › ${r.title}\n` : ''}` + `${r.domain ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Fuente* › ${r.domain}\n` : ''}` + `${r.resolution ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Resolución* › ${r.resolution}\n` : ''}` + `𖣣ֶㅤ֯⌗ ☆  ⬭ *Búsqueda* › ${text}` }));
-      const album = await sendAlbum(sock, msg.chat, medias, { quoted: msg.full || msg });
-      if (!album.sent) {
-        // Sin álbum, pero con imágenes: mejor sueltas que nada.
-        for (const medio of medias.slice(0, 5)) {
-          await sock.sendMessage(msg.chat, { image: medio.image, caption: medio.caption }, { quoted: msg.full || msg });
-        }
+      // El álbum se manda SOLO si se pide (SHIN_ALBUM=1). Es la función
+      // más nueva de WhatsApp y los clientes sin soporte la pintan como
+      // «Recibiste un mensaje que no es compatible con tu versión», sin
+      // dar ningún error aquí: el envío figure como bueno. Sueltas se
+      // ven siempre, así que ese es el camino por defecto.
+      if (usaAlbum() && medias.length >= 2) {
+        const album = await sendAlbum(sock, msg.chat, medias, { quoted: msg.full || msg });
+        if (album.sent) return;
+      }
+      for (const medio of medias.slice(0, 5)) {
+        await sock.sendMessage(msg.chat, { image: medio.image, caption: medio.caption }, { quoted: msg.full || msg });
       }
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
