@@ -63,3 +63,34 @@ Shin-MD cuenta con **197 comandos únicos** (673 entradas contando alias). Para 
    Cualquier distribución o fork del repositorio debe mantener el código fuente abierto y respetar los headers SPDX y el archivo `NOTICE`.
 2. **Capa Comercial Limpia:**  
    Los comandos derivados de Ginko (MIT) quedan dentro del núcleo libre. Las extensiones comerciales de pago se desarrollarán **exclusivamente como plugins desacoplados** que interactúan mediante la API del Plugin Store (aislados en Sandbox VM con hash SHA-256), evitando la contaminación viral de licencias.
+
+---
+
+## 3. Lo que se tomó de Shin-pruebas-en-caliente (Kuroxi)
+
+`Shin-pruebas-en-caliente` aloja **Kuroxi**, un proyecto distinto: entrega
+durable e idempotente para mensajería. De ahí se adoptó **una sola idea**, la
+que resuelve un defecto real de este bot, no la infraestructura entera.
+
+### Estado incierto de un envío
+
+| | |
+|---|---|
+| **Qué era** | `src/network/queue.js` reintentaba a ciegas cualquier fallo, incluido un **timeout** de 120 s. |
+| **Qué pasaba** | Un envío que tardaba más de 120 s se repetía. Pero la promesa huérfana seguía viva: el mensaje podía haber llegado. El contacto lo veía dos veces. |
+| **Por qué importa** | El doble mensaje es una de las señales que más se reportan como spam. Va directo contra el motivo de ser de este bot. |
+| **Qué se adoptó** | La distinción `fallo seguro` / `incierto`. Un fallo seguro (el socket dijo que no) se reintenta igual que antes. Un incierto **no se repite**: se anota, se cuenta y se muestra. |
+| **Dónde quedó** | `src/network/queue.js` (`CODIGO_INCIERTO`), `/health` campo `uncertain`, y el panel de la consola (`sin acuse N`). |
+| **Prueba** | `test/cola-incierta.test.js` — cuenta las llamadas reales: un timeout produce **una** llamada, no dos. |
+
+Lo demás de Kuroxi que **no** se trajo, y por qué: el almacén con WAL, el cifrado
+en reposo y el decodificador aislado resuelven problemas que aquí ya están
+cubiertos de otra forma (la sesión va sobre SQLite atómico en
+`src/lib/sqliteAuth.js`, y el watchdog de `src/services/watchdog.js` ya detecta
+conexión zombi). Copiarlos habría duplicado mecanismos que funcionan.
+
+## 4. Lo que se tomó de Shin-Lab
+
+Ya migrados con anterioridad y con su prueba en este repo: el clasificador
+anti-spam (`src/lib/brain.js`, experimento 01), el filtro de texto
+(`src/lib/filtro-texto.js`) y el cooldown (`src/commands/middleware/cooldown.js`).

@@ -31,10 +31,10 @@ congelados: con ella, `pkg install` falla o instala Node viejo.
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.2/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.2/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.4.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.4.0/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS
-bash install.sh --version v3.3.2
+bash install.sh --version v3.4.0
 ```
 
 Los tres primeros comandos descargan una versión concreta y **comprueban su

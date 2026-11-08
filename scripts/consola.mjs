@@ -207,6 +207,9 @@ export function construirCabecera({ estado = "detenido", reinicios = 0, pid = 0,
     metricas.push(`${GRIS}cola${RESET} ${salud.queue ?? 0}`);
     const riesgo = Number(salud.risk?.score ?? salud.risk ?? 0);
     metricas.push(`${GRIS}riesgo${RESET} ${riesgo}`);
+    // Solo si hay: un cero permanente no informa de nada.
+    const inciertos = Number(salud.uncertain ?? 0);
+    if (inciertos > 0) metricas.push(`${AMBAR}sin acuse${RESET} ${inciertos}`);
   }
   // Compacto a propósito: en un móvil cada columna cuenta.
   if (equipo?.disco) metricas.push(`${GRIS}disco${RESET} ${gb(equipo.disco.libre).replace(" GB", "G")}`);
