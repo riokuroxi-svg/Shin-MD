@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 269 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 212 comandos, 750 nombres y 272 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="269/269 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="272/272 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -126,9 +126,9 @@ npm run docs:web
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.2.8
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.2.9
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -162,16 +162,18 @@ Si escribes `.restart`, revive. Si se cae, revive (esperando 1, 2, 4, 8 y 15 s
 entre intentos). Si se cae cinco veces en dos minutos, se rinde y lo explica en
 la terminal, porque eso ya no lo arregla un reinicio.
 
-**Ver el estado sin abrir WhatsApp.** `npm run panel` dibuja en la terminal la
-memoria, la cola, los grupos y la versión; `npm run panel:vivir` lo refresca
-cada dos segundos.
+**Ver el estado sin abrir WhatsApp.** `npm run panel` dibuja dos cajas: una con
+el bot (memoria, cola, grupos, riesgo, versión) y otra con el teléfono donde
+corre (batería, memoria del sistema, disco, modelo). `npm run panel:vivir` lo
+refresca cada dos segundos. Es de solo lectura: no manda nada, no expone nada
+hacia fuera y solo habla con `127.0.0.1`.
 
 **Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.2.8
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.2.9
 cd ~/Shin-MD && npm start
 ```
 

@@ -31,10 +31,10 @@ congelados: con ella, `pkg install` falla o instala Node viejo.
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.9/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS
-bash install.sh --version v3.2.8
+bash install.sh --version v3.2.9
 ```
 
 Los tres primeros comandos descargan una versión concreta y **comprueban su
@@ -126,13 +126,16 @@ los dos. Para eso sirven los ajustes del punto 3.
 npm run panel
 ```
 
-Dibuja en la terminal lo que el bot ya sabe de sí mismo: si está activo, cuánto
-lleva encendido, memoria, cola de envíos, riesgo, grupos y versión. Con
-`npm run panel:vivir` se refresca cada dos segundos hasta que pulses `Ctrl+C`.
+Dibuja dos cajas. La primera es el bot: si está activo, cuánto lleva encendido,
+memoria, cola de envíos, riesgo, grupos y versión; esa sale del panel local
+(`127.0.0.1:3000`), así que necesita el bot arrancado. La segunda es el
+teléfono: modelo, versión de Android, batería con su temperatura, memoria del
+sistema y disco libre; esa se lee del propio Android ( `/sys`, `/proc`,
+`/system/build.prop` ) y sale aunque el bot esté parado.
 
-Es de solo lectura: no manda mensajes, no toca la sesión, no expone nada hacia
-fuera. Lee del panel local (`127.0.0.1:3000`), así que el bot tiene que estar
-arrancado para que enseñe algo.
+Con `npm run panel:vivir` se refresca cada dos segundos hasta que pulses
+`Ctrl+C`. Es de solo lectura: no manda mensajes, no toca la sesión, no expone
+nada hacia fuera. Todo lo que enseña es de la máquina donde lo ejecutas.
 
 ## 5. Actualizar, reparar, desinstalar
 

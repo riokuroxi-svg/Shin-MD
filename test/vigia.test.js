@@ -173,3 +173,65 @@ test("el panel, si el bot no responde, lo dice y no revienta", () => {
   assert.match(limpio, /no responde/);
   assert.match(limpio, /npm run vigia/, "y sugiere cómo arrancarlo");
 });
+
+/** Ejecuta el panel y devuelve la salida sin colores. */
+function panel(env) {
+  const r = spawnSync(process.execPath, [path.join(RAIZ, "scripts", "panel.mjs")], {
+    encoding: "utf8",
+    env: { ...process.env, SHIN_PANEL_URL: "http://127.0.0.1:1", ...env },
+  });
+  return { status: r.status, texto: (r.stdout || "").replace(/\x1b\[[0-9;]*m/g, "") };
+}
+
+test("el panel enseña el teléfono aunque el bot esté parado", () => {
+  // Si el bot no contesta, la caja del teléfono sigue siendo útil.
+  const r = panel({ SHIN_PANEL_RAIZ: path.join(os.tmpdir(), "no-existe-" + Date.now()) });
+  assert.equal(r.status, 0);
+  assert.match(r.texto, /SIN SEÑAL/);
+  assert.match(r.texto, /TU TELÉFONO/);
+  assert.match(r.texto, /equipo/);
+  // El disco no depende de la raíz: se lee del sistema de archivos real.
+  assert.match(r.texto, /disco/);
+});
+
+test("el panel lee modelo, Android y batería como lo haría en Termux", () => {
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), "shin-android-"));
+  fs.mkdirSync(path.join(raiz, "system"), { recursive: true });
+  fs.mkdirSync(path.join(raiz, "proc"), { recursive: true });
+  const bat = path.join(raiz, "sys", "class", "power_supply", "battery");
+  fs.mkdirSync(bat, { recursive: true });
+
+  fs.writeFileSync(
+    path.join(raiz, "system", "build.prop"),
+    "ro.product.brand=TECNO\nro.product.model=TECNO KJ5\nro.build.version.release=13\n",
+  );
+  fs.writeFileSync(
+    path.join(raiz, "proc", "meminfo"),
+    "MemTotal:        3901004 kB\nMemAvailable:    1642000 kB\n",
+  );
+  fs.writeFileSync(path.join(bat, "capacity"), "39\n");
+  fs.writeFileSync(path.join(bat, "status"), "Charging\n");
+  fs.writeFileSync(path.join(bat, "temp"), "343\n");
+
+  const r = panel({ SHIN_PANEL_RAIZ: raiz });
+  assert.equal(r.status, 0);
+
+  assert.match(r.texto, /TECNO/, "el modelo sale de build.prop");
+  assert.match(r.texto, /Android 13/, "la versión sale de build.prop");
+  assert.match(r.texto, /39%/, "el porcentaje sale de capacity");
+  assert.match(r.texto, /cargando/, "el estado sale de status");
+  assert.match(r.texto, /34\.3°C/, "la temperatura viene en décimas y se divide");
+  // 3901004 kB ≈ 3810 MB; tiene que enseñar el total del teléfono, no otra cosa.
+  assert.match(r.texto, /3810 MB/);
+  // Con datos de Android no debe aparecer el nombre del sistema de escritorio.
+  assert.doesNotMatch(r.texto, /Linux[\d .]*·/);
+});
+
+test("el panel no se descuadra en una pantalla estrecha", () => {
+  const r = panel({ SHIN_PANEL_ANCHO: "46" });
+  assert.equal(r.status, 0);
+  const cajas = r.texto.split("\n").filter((l) => /^[│╭╰]/.test(l));
+  const anchos = new Set(cajas.map((l) => [...l].length));
+  assert.equal(anchos.size, 1, `anchos distintos: ${[...anchos].join(", ")}`);
+  assert.ok(cajas.every((l) => [...l].length === 46), "cada línea mide 46");
+});
