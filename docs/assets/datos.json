@@ -1,13 +1,13 @@
 {
-  "comandos": 212,
-  "nombres": 750,
-  "alias": 538,
+  "comandos": 213,
+  "nombres": 752,
+  "alias": 539,
   "categorias": 15,
-  "pruebas": 292,
-  "pruebasTotal": 292,
-  "archivos": 31,
-  "version": "3.4.0",
+  "pruebas": 296,
+  "pruebasTotal": 296,
+  "archivos": 37,
+  "version": "3.5.0",
   "node": "22.5",
-  "baileys": "6.7.24",
+  "baileys": "7.0.0-rc14",
   "licencia": "AGPL-3.0-only"
 }

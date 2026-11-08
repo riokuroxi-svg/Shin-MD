@@ -101,11 +101,11 @@ def hero():
     texto(c, mono, "shin-md v%s — npm start" % V, 15, tx + 108, ty + 36, P["terminal_suave"], 0.2)
     c.linea(tx + 24, ty + 52, tx + tw - 24, ty + 52, P["terminal_linea"], 1.5)
     renglones = [
-        ("sesión", "SQLite WAL · sin corrupción", P["verde"]),
+        ("sesión", "WAL · nunca se corrompe", P["verde"]),
         ("comandos", "%d cargados · 0 errores" % C, P["terminal_texto"]),
         ("anti-ban", "jitter σ 0.25 · warm-up", P["lila"]),
         ("panel", "127.0.0.1:3000/health", P["terminal_texto"]),
-        ("riesgo", "0-100 · pausa sola si sube", P["ambar"]),
+        ("riesgo", "0-100 · pausa si sube", P["ambar"]),
     ]
     yy = ty + 80
     for etq, val, color in renglones:
@@ -135,7 +135,7 @@ def hero():
 
     # tarjetas de datos
     tarjetas = [
-        ("PRUEBAS", "%d" % PR, "28 archivos", "escudo", P["verde"]),
+        ("PRUEBAS", "%d" % PR, "%d archivos" % AR, "escudo", P["verde"]),
         ("COMANDOS", "%d" % C, "%d categorías" % CAT, "rayo", P["ambar"]),
         ("NOMBRES", "%d" % N, "%d alias" % A, "chat", P["lila"]),
         ("JITTER", "σ 0.25", "gaussiano", "campana", P["verde"]),
@@ -500,7 +500,6 @@ def main():
     licencia()
     reglas()
     creditos()
-    instalacion()
     estructura()
     categorias_tabla()
     laboratorio()
@@ -550,54 +549,6 @@ def subbanners():
     ], start=1):
         c = subbanner(titulo, sub, ic, color)
         guardar(c, "subbanner-%d.svg" % n)
-
-
-# --------------------------------------------------------------------------
-# TARJETAS DE TERMINAL (instalación)
-# --------------------------------------------------------------------------
-def terminal(nombre, titulo, pasos, nota=None):
-    """pasos: [(comentario, comando)] — se dibuja una ventana con el prompt."""
-    alto_lin = 27
-    alto = 74 + len(pasos) * (alto_lin * 1.85) + (34 if nota else 0) + 26
-    c = Lienzo(ANCHO, alto, titulo)
-    c.rect(0, 0, ANCHO, alto, 22, P["terminal"])
-    c.rect(1.5, 1.5, ANCHO - 3, alto - 3, 21, "none", trazo=P["terminal_linea"], grosor=1.5)
-    for i, color in enumerate([P["lila"], P["ambar"], P["verde"]]):
-        c.circulo(PAD + 8 + i * 20, 34, 7, color)
-    texto(c, mono, titulo, 16, PAD + 84, 40, P["terminal_suave"], 0.2)
-    c.linea(PAD, 58, ANCHO - PAD, 58, P["terminal_linea"], 1.4)
-    y = 86
-    for comentario, comando in pasos:
-        if comentario:
-            texto(c, mono, comentario, 15, PAD + 4, y, P["terminal_suave"], 0.2)
-            y += alto_lin
-        texto(c, mono, "$ ", 16, PAD + 4, y, P["verde"], 0.2)
-        texto(c, mono, comando, 16, PAD + 30, y, P["terminal_texto"], 0.2)
-        y += alto_lin * 1.35
-    if nota:
-        c.linea(PAD, y - 6, ANCHO - PAD, y - 6, P["terminal_linea"], 1.2)
-        texto(c, mono, nota, 15, PAD + 4, y + 16, P["ambar"], 0.2)
-    guardar(c, nombre)
-
-
-def instalacion():
-    terminal("terminal-termux.svg", "Termux (Android) — qué escribir, en orden", [
-        ("# 1. prepara el teléfono", "pkg update && pkg upgrade -y"),
-        ("", "pkg install -y git nodejs python ffmpeg"),
-        ("# 2. baja el bot e instala dependencias", "git clone https://github.com/riokuroxi-svg/Shin-MD"),
-        ("", "cd Shin-MD && npm install"),
-        ("# 3. configura tu número", "cp .env.example .env && nano .env"),
-        ("# 4. enciende", "npm start -- --code"),
-    ], nota="→ el bot muestra un código de 8 caracteres (ej. 7QK4-2ZP9)")
-
-    terminal("terminal-vps.svg", "Servidor o VPS — y que siga vivo al cerrar la terminal", [
-        ("# Node 22 en Debian/Ubuntu", "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -"),
-        ("", "sudo apt-get install -y nodejs ffmpeg git"),
-        ("# bot + dependencias + configuración", "git clone https://github.com/riokuroxi-svg/Shin-MD && cd Shin-MD"),
-        ("", "npm install && cp .env.example .env && nano .env"),
-        ("# que no se muera al cerrar la sesión", "npm install -g pm2"),
-        ("", "pm2 start index.js --name shin-md -- --code && pm2 save"),
-    ], nota="→ sin terminal interactiva el bot toma el número del .env solo")
 
 
 # --------------------------------------------------------------------------

@@ -50,11 +50,16 @@ export const MIGRATIONS = [
     version: 2,
     name: "economy-gacha-profiles",
     up(db) {
-      // Safe column adds (SQLite doesn't support IF NOT EXISTS for columns)
+      // Safe column adds (SQLite doesn't support IF NOT EXISTS for columns).
+      // Ojo: las numéricas NO van en esta lista. Antes iban, se creaban como
+      // TEXT y las líneas de abajo (que las querían INTEGER) no hacían nada
+      // porque la columna ya existía: el saldo acababa guardado como "250.0"
+      // y cualquier suma devolvía NaN. La migración 3 arregla las bases que
+      // ya nacieron así.
       const columns = [
-        'coins', 'bank', 'exp', 'health', 'stamina', 'magic',
+        'magic',
         'birth', 'genre', 'description', 'pasatiempo', 'marry',
-        'inventory', 'tools', 'weapons', 'streak', 'last_daily_global'
+        'inventory', 'tools', 'weapons'
       ];
       for (const col of columns) {
                   ejecutarSqlOpcional(db, `ALTER TABLE users ADD COLUMN ${col} TEXT DEFAULT ''`);
@@ -126,6 +131,84 @@ export const MIGRATIONS = [
           welcome_type     TEXT DEFAULT 'text'
         );
       `);
+    },
+  },
+  {
+    version: 3,
+    name: "users-numerico",
+    // Hasta la 2, `coins`, `bank`, `exp`, `health`, `stamina`, `streak` y
+    // `last_daily_global` se creaban como TEXT. Un saldo "250.0" (texto) más
+    // -50 daba NaN y se guardaba NULL: la economía se rompía sola.
+    //
+    // SQLite no sabe cambiar el tipo de una columna, así que la tabla se
+    // recrea: se copia con CAST a entero, se tira la vieja y se renombra.
+    up(db) {
+      const actuales = db.prepare("PRAGMA table_info(users)").all();
+      const tipo = (col) => String(actuales.find((c) => c.name === col)?.type || "").toUpperCase();
+      if (tipo("coins").includes("INT")) return; // ya está bien (instalación nueva)
+
+      const destino = [
+        ["jid", "TEXT PRIMARY KEY"],
+        ["name", "TEXT"],
+        ["banned", "INTEGER NOT NULL DEFAULT 0"],
+        ["warned", "INTEGER NOT NULL DEFAULT 0"],
+        ["first_seen", "INTEGER NOT NULL DEFAULT 0"],
+        ["last_seen", "INTEGER NOT NULL DEFAULT 0"],
+        ["coins", "INTEGER NOT NULL DEFAULT 0"],
+        ["bank", "INTEGER NOT NULL DEFAULT 0"],
+        ["exp", "INTEGER NOT NULL DEFAULT 0"],
+        ["health", "INTEGER NOT NULL DEFAULT 100"],
+        ["stamina", "INTEGER NOT NULL DEFAULT 100"],
+        ["streak", "INTEGER NOT NULL DEFAULT 0"],
+        ["last_daily_global", "INTEGER NOT NULL DEFAULT 0"],
+        ["magic", "TEXT DEFAULT ''"],
+        ["birth", "TEXT DEFAULT ''"],
+        ["genre", "TEXT DEFAULT ''"],
+        ["description", "TEXT DEFAULT ''"],
+        ["pasatiempo", "TEXT DEFAULT ''"],
+        ["marry", "TEXT DEFAULT ''"],
+        ["inventory", "TEXT DEFAULT ''"],
+        ["tools", "TEXT DEFAULT ''"],
+        ["weapons", "TEXT DEFAULT ''"],
+      ];
+      const enteros = new Set([
+        "banned", "warned", "first_seen", "last_seen", "coins", "bank",
+        "exp", "health", "stamina", "streak", "last_daily_global",
+      ]);
+      const respaldo = (col) =>
+        enteros.has(col) && (col === "health" || col === "stamina") ? "100" : "0";
+
+      // Columnas que la tabla tenga y no estén en el destino: se conservan
+      // al final como TEXT, para no perder datos de nadie.
+      const conocidas = new Set(destino.map(([c]) => c));
+      const extra = actuales.map((c) => c.name).filter((n) => !conocidas.has(n));
+      for (const col of extra) destino.push([col, "TEXT"]);
+
+      const leer = destino.map(([col]) => {
+        if (!actuales.some((c) => c.name === col)) return `'${respaldo(col)}' AS ${col}`;
+        if (enteros.has(col)) {
+          return `CAST(COALESCE(NULLIF(TRIM(${col}), ''), '${respaldo(col)}') AS INTEGER) AS ${col}`;
+        }
+        return col;
+      });
+
+      const antes = db.prepare("SELECT jid FROM users").all().length;
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        db.exec("DROP TABLE IF EXISTS users_nuevo");
+        db.exec(`CREATE TABLE users_nuevo (${destino.map(([c, t]) => `${c} ${t}`).join(", ")})`);
+        db.exec(`INSERT INTO users_nuevo (${destino.map(([c]) => c).join(", ")})
+                 SELECT ${leer.join(", ")} FROM users`);
+        db.exec("DROP TABLE users");
+        db.exec("ALTER TABLE users_nuevo RENAME TO users");
+        db.exec("CREATE INDEX IF NOT EXISTS idx_users_banned ON users(banned)");
+        db.exec("COMMIT");
+      } catch (err) {
+        db.exec("ROLLBACK");
+        throw err;
+      }
+      const despues = db.prepare("SELECT jid FROM users").all().length;
+      if (despues !== antes) throw new Error(`users-numerico: ${antes} filas antes, ${despues} después`);
     },
   },
 ];

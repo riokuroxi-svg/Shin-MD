@@ -1,166 +1,265 @@
-# El instalador: qué hace, qué no toca y cómo se recupera
+# Cómo instalar Shin-MD, paso a paso
 
-`install.sh` es el único punto de entrada. Sirve para instalar, actualizar,
-reparar, verificar y desinstalar, y funciona igual en Termux que en un servidor
-Linux. No necesita nada del repositorio para empezar: se descarga, se lee y se
-ejecuta.
+Esta guía es para instalar **desde cero**, sin saber nada de Linux. Se lee de
+arriba a abajo. Cada comando va en un bloque que puedes **copiar tal cual**: no
+hay nada dentro de una imagen.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/main/install.sh -o install.sh
-bash install.sh
-```
+> **Antes de empezar.** Usa un número de WhatsApp que **no sea el tuyo**. Un bot
+> que responde solo desde tu número personal es la forma más rápida de que te
+> bloqueen la cuenta que usas todos los días. Consigue un chip secundario o un
+> número virtual.
 
-## Las cinco acciones
+---
 
-| Comando | Qué hace | Qué toca |
-|---|---|---|
-| `bash install.sh` | instala; si ya hay una, **actualiza** | proyecto y dependencias |
-| `--update` | trae los commits nuevos y reinstala dependencias | código; tus datos quedan donde están |
-| `--update --version vX` | pasa a esa versión concreta | código |
-| `--update --branch main` | deja de estar fijada y sigue la rama | código |
-| `--repair` | borra `node_modules` y lo reconstruye desde el lockfile | solo dependencias |
-| `--verify` | comprueba archivos, módulos y los ocho parches | nada (solo lee) |
-| `--uninstall` | quita el proyecto y **mueve** tus datos a un lado | proyecto |
+## Índice
 
-Opciones: `--dir RUTA` (otra carpeta), `--yes` (sin preguntas), `--shallow`
-(clon sin historial: más rápido, pero impide volver a una versión anterior),
-`--no-boost` (no pedir el wakelock en Termux).
+1. [Instalar en Android (Termux)](#1-instalar-en-android-termux)
+2. [Instalar en una computadora o servidor](#2-instalar-en-una-computadora-o-servidor)
+3. [Arrancar y vincular WhatsApp](#3-arrancar-y-vincular-whatsapp)
+4. [Que Android no lo mate](#4-que-android-no-lo-mate)
+5. [Comprobar que todo está bien](#5-comprobar-que-todo-está-bien)
+6. [Actualizar, reparar, desinstalar](#6-actualizar-reparar-desinstalar)
+7. [Cuando algo sale mal](#7-cuando-algo-sale-mal)
 
-## Dónde queda cada cosa
+---
 
-```
-~/Shin-MD/
-├── .env              ← tu configuración      (nunca se sobrescribe)
-├── Sessions/Owner/   ← la sesión de WhatsApp (nunca se toca)
-│   └── auth.db
-├── data/shin.db      ← tu base de datos      (nunca se toca)
-├── backups/          ← copias hechas antes de actualizar o reparar
-└── .shin-install     ← marca de "instalación completa"
-```
+## 1. Instalar en Android (Termux)
 
-Esa marca es la que evita el error más caro: una instalación a medias
-(`Ctrl+C`, corte de luz, npm que falla) **no** parece una instalación buena.
-Se escribe al final, con un renombrado atómico.
+Termux es una terminal de Linux dentro del teléfono. No necesita root.
 
-## Cómo se recupera de cada desastre
+### 1.1 Instala Termux
 
-| Situación | Qué pasó | Cómo se arregla |
-|---|---|---|
-| Falló `npm ci` | no hay dependencias | vuelve a ejecutar el instalador; continúa donde estaba |
-| Falló el postinstall | el conector quedó incompleto | el instalador lo detecta y no marca la instalación como buena; `--repair` |
-| `Ctrl+C` a mitad | clon descargado, sin dependencias | otra pasada reutiliza el clon y termina |
-| La versión nueva no arranca | `--update` trae algo roto | el instalador **vuelve solo** al commit anterior y te avisa |
-| El bot dejó de funcionar | dependencias corruptas | `--repair` (tus datos no están en `node_modules`) |
-| Quieres empezar de cero | — | `--uninstall` guarda tus datos al lado; luego reinstalas |
+Descárgalo de **F-Droid**, no de la Play Store:
 
-## Antes de borrar algo
+<https://f-droid.org/packages/com.termux/>
 
-Todo lo que elimina pasa por una sola función, y no hay ningún `rm -rf` fuera
-de ella. Antes de tocar el disco:
+La versión de Play Store está abandonada desde hace años y sus paquetes no son
+compatibles. Si ya la tienes instalada, desinstálala primero.
 
-1. Resuelve la ruta real (enlaces simbólicos y `..` incluidos).
-2. Rechaza `/`, `/home`, `/usr`, `/etc`, `/bin`, `/var`, `/opt`, `/system`,
-   `/data`, `/storage` y compañía.
-3. Rechaza tu carpeta personal entera.
-4. Rechaza borrar un directorio que contenga al propio instalador — pero sí
-   puede borrarse a sí mismo desde dentro, que es para lo que existe.
-5. Se niega si **cualquier tramo** del camino es un enlace simbólico, no solo
-   el último.
-6. Rechaza cualquier ruta que contenga algo de `SHIN_NO_BORRAR`.
-7. **Te enseña la ruta absoluta, el remoto y el commit antes de borrar.**
+### 1.2 Abre Termux y actualiza
 
-Para llegar a ese punto, una acción destructiva exige saber sobre qué
-instalación actúa (la carpeta desde la que ejecutas o la que indiques con
-`--dir`, nunca una supuesta), que el `package.json` diga `shin-md` y que la
-carpeta sea un clon con `.git`.
-
-`--purge` no se conforma con `--yes`: hay que escribir **borrar todo**. Es la
-única acción irreversible de todo el instalador.
-
-## Instalaciones fijadas a una versión
-
-`--version vX` clona la etiqueta, y git deja la cabeza desprendida (no estás en
-ninguna rama). Eso es a propósito: esa instalación es **exactamente** esa
-versión.
-
-Por eso `--update` a secas **se niega** en una instalación fijada, en vez de
-arrastrarla en silencio a la punta de `main` y perder la referencia:
-
-```
-✗ Esta instalación está fijada a la versión v3.2.1, no a la rama main.
-  bash install.sh --update --version vNUEVA   cambiar a otra versión
-  bash install.sh --update --branch main     seguir la rama
-```
-
-Las tres rutas están probadas, rollback incluido: si la versión nueva no pasa
-las comprobaciones, vuelve a la etiqueta de la que venías.
-
-## Integridad: la versión que instalas es la que se publicó
-
-`main` cambia. Una release, no:
+Toca la pantalla, escribe esto y pulsa Enter. Tarda un rato: es normal.
 
 ```bash
-curl -fsSL .../raw/v3.4.0/install.sh -o install.sh
-curl -fsSL .../raw/v3.4.0/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS        # → install.sh: OK
-bash install.sh --version v3.4.0
+pkg update -y && pkg upgrade -y
 ```
 
-Si alguien modificara el archivo en el camino, `sha256sum` dice `FAILED` y ahí
-se acaba. La huella se regenera con `npm run firma` y se comprueba con
-`npm run firma:check`; una prueba falla si se olvida regenerarla.
+Si en algún momento pregunta algo, deja la opción por defecto (pulsa Enter).
 
-## Lo que el instalador no hace, nunca
+### 1.3 Instala Shin-MD
 
-- No ejecuta `git reset --hard` ni `git clean -fdx`.
-- No borra `.env`, `Sessions/`, `session/` ni `data/` en `--update` ni en `--repair`.
-- No toca un archivo del usuario: si hay cambios propios en archivos del
-  proyecto, `--update` se niega y te dice cómo mirarlos.
-- No actúa sobre una carpeta que no sea Shin-MD. Antes de actualizar,
-  reparar o desinstalar comprueba el `name` de `package.json`; y si no sabe
-  desde dónde se ejecuta, se detiene en vez de suponer `~/Shin-MD`.
-- No pide contraseñas ni tokens, y no escribe credenciales en pantalla.
-- No sigue un enlace al borrar: ni si el destino es un enlace, ni si lo es
-  cualquier tramo de la ruta, ni si un tramo cambia de ser carpeta a enlace
-  entre la comprobación y el borrado (se vuelve a mirar justo antes).
-- No deja respaldos a medias: si no puede copiar bien una base, se detiene en
-  vez de dejarte con una copia incompleta.
+Copia el bloque entero, pégalo en Termux y pulsa Enter:
 
-`--uninstall` guarda `.env`, `Sessions/`, `data/` **y `backups/`** en una
-carpeta al lado antes de borrar la instalación: un respaldo válido no se va con
-la carpeta a la que respaldaba.
+```bash
+d=$(mktemp -d) && cd "$d" && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/install.sh -o install.sh && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/SHA256SUMS -o SHA256SUMS && sha256sum -c SHA256SUMS && bash install.sh --version v3.5.0
+```
 
-`--uninstall --purge` sí borra los datos y también los respaldos, pero es la
-única forma de hacerlo: hay que escribir `borrar todo`, y si hay respaldos el
-aviso dice cuántos se van y que con `--uninstall` se conservarían.
+**Qué hace, en orden:**
 
-## Variables de entorno
-
-Tres, todas opcionales:
-
-| Variable | Para qué |
+| Paso | Qué es |
 |---|---|
-| `SHIN_REPO_URL` | clonar desde otro repositorio o un espejo (lo usan las pruebas) |
-| `SHIN_INSTALL_DIR` | carpeta exacta del proyecto |
-| `SHIN_INSTALL_ROOT` | carpeta base; el proyecto va en `$SHIN_INSTALL_ROOT/Shin-MD` |
+| `d=$(mktemp -d)` | Crea una carpeta temporal y entra en ella. No ensucia tu casa. |
+| `curl ... install.sh` | Descarga el instalador **de esa versión concreta**, no de lo último que haya. |
+| `curl ... SHA256SUMS` | Descarga la huella del archivo. |
+| `sha256sum -c` | Comprueba que el instalador es **exactamente** el que se publicó. Si no coincide, se para aquí. |
+| `bash install.sh` | Ejecuta la instalación. |
 
-## Cómo se prueba
+Ese `&&` no es decoración: si cualquier paso falla, los siguientes **no** se
+ejecutan. No vas a instalar un archivo a medio descargar.
 
-`test/instalador.test.js` ejecuta el instalador real cuarenta y tres veces en carpetas
-temporales, con bash, git y npm de verdad. Lo que no se puede tener aquí se
-simula por el mismo camino que usaría el sistema:
+### 1.4 Qué esperar
 
-- **Termux**: `PREFIX` y `TERMUX_VERSION` con un `pkg` de mentira que apunta lo
-  que se le pide instalar.
-- **npm que falla**: un `npm` de dos líneas en el `PATH`.
-- **Ctrl+C**: `SIGINT` al grupo de procesos, igual que lo manda una terminal.
+Verás algo así, y al final un resumen:
 
-Cubre, además de lo anterior: protección de rutas (`/`, `$HOME`, `/usr`, `/etc`), enlaces simbólicos, carpetas que se hacen pasar por Shin-MD, `SHIN_NO_BORRAR`, disco lleno, permisos, `--version`, y que `SHA256SUMS` no se desincronice. Y en general: detección de Termux y de arquitectura, rechazo de Node y npm viejos,
-instalación limpia, no duplicar instalaciones, no pisar una carpeta ajena,
-fallo de npm, fallo del postinstall, actualización conservando los datos,
-respeto a los cambios propios, reparación, desinstalación con y sin `--purge`,
-protección contra borrar proyectos ajenos e interrupción con `Ctrl+C`.
+```
+  ✓ Node 26.4.0   npm 11.20.0
+  ✓ git listo
+  ▸ descargando Shin-MD v3.5.0
+  ✓ dependencias instaladas
+  ✓ 8 parches del conector verificados
+  ✓ wakelock activo
 
-Cada prueba comprueba antes de arrancar que trabaja dentro de `os.tmpdir()`, y
-ejecuta siempre el `install.sh` de la instalación bajo prueba, nunca el del
-repositorio desde el que corre.
+╭──────────────────────────────────────────────╮
+│  Shin-MD 3.5.0 instalado                     │
+╰──────────────────────────────────────────────╯
+```
+
+Tarda entre 2 y 10 minutos según el teléfono. Al terminar te dice **la ruta**
+donde quedó y el comando exacto para arrancarlo.
+
+---
+
+## 2. Instalar en una computadora o servidor
+
+Sirve para Linux y macOS. Hace falta **Node 22.5 o superior**:
+
+```bash
+node -v
+```
+
+Si dice menos de 22.5 (o dice "command not found"), instálalo desde
+<https://nodejs.org> — versión LTS. Después, el mismo bloque de arriba:
+
+```bash
+d=$(mktemp -d) && cd "$d" && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/install.sh -o install.sh && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/SHA256SUMS -o SHA256SUMS && sha256sum -c SHA256SUMS && bash install.sh --version v3.5.0
+```
+
+En un servidor donde quieras que siga corriendo sin tu sesión, mira
+[`VPS.md`](VPS.md) (systemd, pm2, tmux).
+
+---
+
+## 3. Arrancar y vincular WhatsApp
+
+```bash
+cd ~/Shin-MD && npm start -- --code
+```
+
+Aparece el panel y, debajo, un **código de 8 dígitos**. En WhatsApp:
+
+**Ajustes → Dispositivos vinculados → Vincular un dispositivo → Vincular con
+número de teléfono**
+
+Y tecleas el código. Si prefieres QR: `npm start -- --qr`.
+
+```
+╭ SHIN-MD 3.5.0 ──────────────────────────────────────╮
+│ ● ACTIVO  0 grupos  ↑ 1m  pid 4242                   │
+│ web http://127.0.0.1:3000                            │
+╰──────────────────────────────────────────────────────╯
+ ✓ Bot listo ✓
+ ● Grupos: 12
+```
+
+**El panel de arriba no se mueve nunca**, aunque el bot se caiga o reinicie.
+Debajo va saliendo lo que hace. Teclas: `r` reinicia, `q` o `Ctrl+C` sale.
+
+Si alguna vez `Ctrl+C` no basta, añade `--force` al final del comando.
+
+### ¿Por qué `--code` y no QR?
+
+El QR no cabe en la pantalla de muchos móviles y en Termux se ve cortado. El
+código de 8 dígitos se teclea y no tiene ese problema. Si eliges QR, usa
+`npm start -- --qr` en una ventana ancha o con `npm run vigia -- --qr`, que lo
+imprime sin panel.
+
+---
+
+## 4. Que Android no lo mate
+
+Android cierra procesos en segundo plano cuando necesita memoria. Si no haces
+esto, el bot se apaga solo a las horas y parece que "se rompió":
+
+1. **Notificación de Termux → Acquire wakelock.** Se queda fija y evita que
+   Android duerma el proceso.
+2. **Ajustes → Apps → Termux → Batería → Sin restricciones.**
+3. **Android 14 o superior:** Ajustes → Opciones de desarrollador →
+   **Desactivar restricciones de procesos hijos**.
+
+Este último es el que casi nadie hace y es el culpable de la mayoría de las
+muertes silenciosas en Android 14+.
+
+---
+
+## 5. Comprobar que todo está bien
+
+```bash
+cd ~/Shin-MD && bash install.sh --verify
+```
+
+Comprueba la instalación sin tocar nada. Y desde WhatsApp, estos comandos te
+dicen mucho:
+
+| Comando | Qué te dice |
+|---|---|
+| `.health` | el riesgo de ban ahora mismo |
+| `.status` | memoria, tiempo encendido, grupo |
+| `.ping` | si responde y cuánto tarda |
+| `.owner` | tu contacto con el crédito del bot |
+
+---
+
+## 6. Actualizar, reparar, desinstalar
+
+Una sola regla: **tus datos nunca se tocan**. `.env`, `Sessions/` y `data/`
+sobreviven a todo menos a `--purge`, que pregunta dos veces.
+
+| Quiero… | Comando |
+|---|---|
+| actualizar conservando mi sesión | `cd ~/Shin-MD && bash install.sh --update` |
+| pasar a una versión concreta | `bash install.sh --update --version v3.5.0` |
+| seguir la rama `main` y dejar de estar fijado a una versión | `bash install.sh --update --branch main` |
+| arreglar una instalación rota | `bash install.sh --repair` |
+| saber si todo está bien | `bash install.sh --verify` |
+| desinstalar guardando mis datos | `bash install.sh --uninstall` |
+| desinstalar y borrar TODO | `bash install.sh --uninstall --purge` |
+
+Si instalaste con `--version`, el instalador **no te mueve solo** al actualizar:
+te avisa y te pide con cuál de las dos opciones quieres seguir. Es a propósito —
+tú decides cuándo cambias de versión.
+
+---
+
+## 7. Cuando algo sale mal
+
+### `npm start` dice "ENOENT: no such file or directory, open 'package.json'"
+
+Estás fuera de la carpeta. Los comandos de npm hay que lanzarlos **dentro** de
+`~/Shin-MD`:
+
+```bash
+cd ~/Shin-MD && npm start
+```
+
+### `Missing script: "panel"` o `Missing script: "vigia"`
+
+La instalación es más vieja que el comando. Actualiza:
+
+```bash
+cd ~/Shin-MD && bash install.sh --update --version v3.5.0
+```
+
+### "Node 20 es demasiado antiguo"
+
+```bash
+pkg install -y nodejs-lts
+node -v
+```
+
+Vuelve a ejecutar el instalador.
+
+### El bot arranca, pero no responde a `.menu`
+
+Suele ser el número del dueño. En `~/Shin-MD/.env` tiene que estar **tu número**
+(el de tu WhatsApp personal, el que escribe), en el formato largo de México:
+
+```
+OWNER_NUMBER=5215574370307
+```
+
+Solo dígitos, sin `+`, sin espacios, sin guiones. Después: `npm start`.
+
+### Un mensaje sale como "no compatible con tu versión"
+
+No es un fallo del bot: es tu WhatsApp que no entiende ese tipo de mensaje.
+Escribe **`.compat`** en un chat contigo (solo funciona en privado): manda
+cuatro mensajes numerados y el que salga mal es el culpable.
+
+### Se reinicia solo en bucle
+
+El panel te lo dice: `● SE CAYÓ` y luego vuelve a `ACTIVO`. Si se cae **cinco
+veces en dos minutos**, el vigía se rinde a propósito (`● RENDIDO`) y se para:
+eso ya no lo arregla reiniciar. Mira el error:
+
+```bash
+tail -f ~/Shin-MD/logs/*.log
+```
+
+### Nada de esto funciona
+
+```bash
+cd ~/Shin-MD && bash install.sh --verify
+```
+
+Y si sigue igual, `bash install.sh --repair` reconstruye las dependencias sin
+tocar tus datos.

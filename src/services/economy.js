@@ -22,7 +22,10 @@ const COOLDOWNS = {
 };
 
 export function getUserCoins(userJid) {
-  const db = getDatabase();
+  // getDatabase() devuelve el contenedor ({ db, migrate, settings, close });
+  // el SQLite de verdad está en .db. Sin esto, cualquier comando que leyera
+  // monedas se caía con "db.prepare is not a function".
+  const db = getDatabase().db;
   const r = db.prepare("SELECT coins, bank, health, stamina, inventory, tools, weapons, streak, last_daily_global FROM users WHERE jid = ?").get(userJid);
   return r || { coins: 0, bank: 0, health: 100, stamina: 100, inventory: '{}', tools: '{}', weapons: '{}', streak: 0, last_daily_global: 0 };
 }

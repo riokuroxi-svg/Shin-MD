@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 292 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 296 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="292/292 pruebas" height="52">
-<img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="296/296 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
 <img src="docs/assets/pastel/insignia-licencia.svg" alt="Licencia AGPL-3.0-only" height="52">
@@ -25,10 +25,10 @@ y reduce el riesgo de bloqueo.**
 _Reducir el riesgo no es eliminarlo: eso lo decide WhatsApp, no el bot. Lo que sí está en nuestra mano está contado en [el anti-ban por dentro](#el-anti-ban-por-dentro)._
 
 [🌐 Página del proyecto](docs/web/index.html) ·
-[⚡ Instalar](#instalación-en-5-minutos) ·
-[🧩 Comandos](#los-212-comandos) ·
+[⚡ Instalar](#instalación-en-un-comando) ·
+[🧩 Comandos](#los-comandos) ·
 [🛡️ Anti-ban](#el-anti-ban-por-dentro) ·
-[🪪 Identidades](#identidades-lid) ·
+[📚 Guías](#las-guías) · [🪪 Identidades](#identidades-lid) ·
 [🔌 El conector](#el-conector) ·
 [📜 Licencia](#licencia-y-marca) ·
 [🧪 Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab)
@@ -37,11 +37,30 @@ _Reducir el riesgo no es eliminarlo: eso lo decide WhatsApp, no el bot. Lo que s
 
 <img src="docs/assets/pastel/aviso.svg" alt="Usa un número secundario" width="100%">
 
+> **Usa un chip aparte, no tu número de siempre.** WhatsApp puede sancionar las
+> cuentas que automatizan mensajes; este bot reduce el riesgo, no lo elimina. Un
+> chip barato cuesta menos que tu cuenta personal.
+
 <h2 id="lo-que-lo-hace-distinto">Lo que lo hace distinto</h2>
 
 <img src="docs/assets/pastel/banner-01.svg" alt="01 · Lo que lo hace distinto" width="100%">
 
 <img src="docs/assets/pastel/razones.svg" alt="Seis razones medibles" width="100%">
+
+Y si quieres comprobarlo en vez de creértelo, cada razón tiene su archivo:
+
+| Lo que promete | Dónde está para leerlo |
+|---|---|
+| anti-ban (jitter, perfil, calentamiento) | `src/core/engine/throttler.js` |
+| cola con prioridad y reintentos | `src/network/queue.js` |
+| sesión en SQLite, sin `creds.json` corrupto | `src/core/auth.js` y `src/storage/database.js` |
+| el bot se reinicia solo si se cae | `scripts/supervisor.mjs` y `scripts/vigia.mjs` |
+| cada afirmación con su prueba | `test/` (una prueba por cosa que se dice) |
+| capas separadas: motor por un lado, comandos por otro | `src/` y `cmds/` |
+
+Eso es también la base para tus propios proyectos: no hace falta entenderlo
+todo de golpe. Se empieza por un comando y se va bajando. El camino, con
+ejemplos que funcionan tal cual, está en **[docs/DESARROLLO.md](docs/DESARROLLO.md)**.
 
 <h2 id="el-anti-ban-por-dentro">El anti-ban por dentro</h2>
 
@@ -77,7 +96,7 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 
 </details>
 
-<h2 id="los-212-comandos">Los 213 comandos</h2>
+<h2 id="los-comandos">Los 213 comandos</h2>
 
 <img src="docs/assets/pastel/banner-03.svg" alt="03 · Los 213 comandos" width="100%">
 
@@ -88,7 +107,7 @@ desplegable por categorías.
 
 <img src="docs/assets/pastel/categorias.svg" alt="Las 15 categorías con sus comandos" width="100%">
 
-**213 comandos únicos · 752 nombres en total (538 alias) · 15 categorías.** Nombres de
+**213 comandos únicos · 752 nombres en total (539 alias) · 15 categorías.** Nombres de
 ejemplo: `.play` (y sus alias `yt`, `mp3`, `musica`), `.sticker` (`s`),
 `.daily` (`diario`, `recompensa`), `.w` (`work`, `trabajar`), `.x` para Twitter,
 `.ig` para Instagram y `.menu` (`ayuda`, `h`).
@@ -99,7 +118,7 @@ Twitter funciona sin clave, pero es más estable con ella.*
 <details>
 <summary><b>Ver la lista completa de comandos (se genera del propio bot)</b></summary>
 
-La página **[docs/web/index.html](docs/web/index.html)** lleva los 212 con su
+La página **[docs/web/index.html](docs/web/index.html)** lleva los 213 con su
 buscador, filtros por categoría y descripción. Para regenerarla cuando añadas
 comandos:
 
@@ -126,9 +145,9 @@ npm run docs:web
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.4.0/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.4.0/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.4.0
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.5.0
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -145,15 +164,25 @@ Antes de arrancarlo, para que Android no lo mate mientras duerme:
 2. Ajustes → Batería → Termux → **Sin restricciones**.
 3. Android 14 o más: Opciones de desarrollador → **Desactivar restricciones de procesos hijos**.
 
-<img src="docs/assets/pastel/terminal-termux.svg" alt="Comandos para instalar en Termux" width="100%">
+Cuando el instalador termina, esto es lo único que queda por escribir:
 
-En WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono**.
-¿Prefieres QR? `npm start -- --qr`.
+```bash
+cd ~/Shin-MD
+npm start -- --code
+```
+
+`--code` muestra un código de 8 caracteres. En WhatsApp: **Dispositivos
+vinculados → Vincular con número de teléfono → Vincular con número de
+teléfono** y lo escribes ahí. ¿Prefieres escanear un QR? `npm start -- --qr`.
+
+> **Nada de esto hay que memorizarlo.** Está paso a paso, con lo que debes ver
+> en pantalla en cada momento y qué hacer cuando algo falla, en
+> **[docs/INSTALACION.md](docs/INSTALACION.md)**.
 
 **Un solo comando.** `npm start` levanta el bot y dibuja el panel:
 
 ```
-╭ SHIN-MD 3.4.0 ──────────────────────────────────────╮
+╭ SHIN-MD 3.5.0 ──────────────────────────────────────╮
 │ ● ACTIVO  12 grupos  ↑ 2h 15m  ⟳ 1  pid 4242        │
 │ mem 151M · cola 3 · riesgo 23 · disco 19.9G · bat 39│
 │ web http://127.0.0.1:3000                           │
@@ -186,14 +215,29 @@ una con el bot y otra con el teléfono donde corre. `npm run panel:vivir` la
 refresca cada dos segundos. Es de solo lectura: no manda nada, no expone nada
 hacia fuera y solo habla con `127.0.0.1`.
 
+<img src="docs/assets/pastel/subbanner-2.svg" alt="Servidor o VPS" width="100%">
+
 **Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.4.0/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.4.0/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.4.0
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.0/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.5.0
 cd ~/Shin-MD && npm start
 ```
+
+Sin terminal de verdad no hay panel: el bot escribe líneas normales, que es
+justo lo que quieres en un servidor. Y para que no se muera cuando cierres la
+sesión:
+
+```bash
+npm install -g pm2
+pm2 start index.js --name shin-md -- --code
+pm2 save && pm2 startup
+```
+
+`pm2 logs shin-md` para ver qué dice, `pm2 restart shin-md` para reiniciarlo.
+Detalle en **[docs/VPS.md](docs/VPS.md)**.
 
 **Ya instalado.** Un solo archivo manda sobre todo:
 
@@ -206,18 +250,47 @@ cd ~/Shin-MD && npm start
 
 Por qué se descarga y luego se ejecuta, en lugar de `curl … | bash`: así puedes
 leerlo antes de correrlo, y si falla a mitad sabes qué archivo estaba haciendo qué.
-[Guía completa de Termux](docs/TERMUX.md) · [Instalador y recuperación](docs/INSTALACION.md) ·
-[Auditoría de seguridad](docs/AUDITORIA-3.2.1.md)
 
-<img src="docs/assets/pastel/subbanner-2.svg" alt="Servidor o VPS" width="100%">
+### Las guías
 
-<img src="docs/assets/pastel/terminal-vps.svg" alt="Comandos para instalar en un VPS" width="100%">
+El README es el resumen. Lo que de verdad hace falta para **hacer** algo está en
+`docs/`, en texto que se puede copiar:
+
+| Guía | Para quién |
+|---|---|
+| **[docs/INSTALACION.md](docs/INSTALACION.md)** | el que instala por primera vez: Termux o VPS, qué escribir, qué debe ver, y qué hacer cuando sale un error |
+| **[docs/TERMUX.md](docs/TERMUX.md)** | el caso del teléfono con todo el detalle (wakelock, batería, procesos hijos) |
+| **[docs/VPS.md](docs/VPS.md)** | servidor, systemd, pm2 y `0.0.0.0` con contraseña |
+| **[docs/DESARROLLO.md](docs/DESARROLLO.md)** | el que quiere **entender**: cómo está montado, tu primer comando, botones, base de datos y migraciones |
+| **[docs/FORK.md](docs/FORK.md)** | el que quiere **publicar su propia versión**: nombre, instalador, imágenes, su copyright y cómo no romper la licencia |
+| **[docs/CONECTOR.md](docs/CONECTOR.md)** | los ocho parches de Baileys y por qué |
+| **[docs/LID.md](docs/LID.md)** | identidades `@lid` contra teléfonos |
+| **[docs/AUDITORIA-3.2.1.md](docs/AUDITORIA-3.2.1.md)** | qué se revisó y qué se encontró |
+
 
 <h2 id="cómo-está-hecho">Cómo está hecho</h2>
 
 <img src="docs/assets/pastel/banner-06.svg" alt="06 · Cómo está hecho" width="100%">
 
 <img src="docs/assets/pastel/estructura.svg" alt="Estructura de carpetas y comandos npm" width="100%">
+
+Los comandos que se usan de verdad, tal cual:
+
+```bash
+npm start              # arranca el bot y dibuja el panel
+npm test               # las 296 pruebas
+npm run lint           # 0 errores, o no entra
+npm run typecheck      # tipos con JSDoc
+npm run docs:web       # regenera docs/web/index.html desde el propio bot
+npm run docs:pastel    # regenera las imágenes de este README
+```
+
+Nada de eso hace falta para usarlo: se instala con un comando y se arranca con
+`npm start`. Están aquí porque **el que quiera tocarlo tiene derecho a saber
+dónde está cada cosa**. Si es tu caso, empieza por
+**[docs/DESARROLLO.md](docs/DESARROLLO.md)**: cómo se carga un comando, dónde se
+guarda un dato, qué puedes cambiar sin romper nada y las cinco reglas que este
+proyecto no se salta.
 
 <details>
 <summary><b>Regenerar los gráficos del README (trazo vectorial, sin fuentes externas)</b></summary>
@@ -310,6 +383,20 @@ Todo lo experimental vive en [**Shin-Lab**](https://github.com/riokuroxi-svg/Shi
 <img src="docs/assets/pastel/licencia-tabla.svg" alt="Tabla de licencias por capa" width="100%">
 
 <img src="docs/assets/pastel/licencia-reglas.svg" alt="Las cuatro reglas de la licencia" width="100%">
+
+En corto, y por escrito:
+
+- El núcleo es **AGPL-3.0-only**: úsalo, modifícalo y redistribúyelo, pero todo
+  derivado sigue siendo AGPL (con su código disponible).
+- **La marca no se hereda**: un fork es legítimo, llamarse Shin-MD o usar 反魂 no.
+- **La atribución no se borra**: `LICENSE`, `NOTICE` y los encabezados SPDX
+  siguen ahí. Puedes **añadir** tu propio copyright; quitar el original no.
+- El bot lo comprueba al arrancar: si alguien borra `LICENSE` o `NOTICE`, no
+  arranca.
+
+El texto completo de la licencia está en **[LICENSE](LICENSE)** y las condiciones
+de marca en **[NOTICE](NOTICE)**. Si tu idea es publicar tu propia versión, la
+guía con los pasos exactos es **[docs/FORK.md](docs/FORK.md)**.
 
 <h2 id="créditos">Créditos</h2>
 
