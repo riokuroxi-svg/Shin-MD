@@ -68,7 +68,7 @@ import json  # noqa: E402
 
 DATOS_DE_RESPALDO = dict(
     comandos=212, nombres=750, alias=538, categorias=15,
-    pruebas=287, pruebas_total=287, archivos=35, version="3.3.1",
+    pruebas=288, pruebas_total=288, archivos=35, version="3.3.2",
     node="22.5", baileys="7.0.0-rc14", licencia="AGPL-3.0-only",
 )
 

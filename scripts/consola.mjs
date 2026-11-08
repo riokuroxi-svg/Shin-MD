@@ -60,8 +60,23 @@ const URL_BASE = process.env.SHIN_PANEL_URL || `http://127.0.0.1:${process.env.P
 
 // ─────────────────────────── utilidades ───────────────────────────
 
+const sinColor = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, "");
+
 /** Largo en pantalla: sin códigos de color, contando anchos como uno. */
-export const visible = (s) => [...String(s).replace(/\x1b\[[0-9;]*m/g, "")].length;
+export const visible = (s) => [...sinColor(s)].length;
+
+/**
+ * ¿Es arte de bloques (un QR) más ancho que la pantalla?
+ * Partirlo lo convierte en basura ilegible; es mejor decirlo que fingir
+ * que se está enseñando algo.
+ */
+export function esArteAncho(linea, ancho) {
+  const t = sinColor(linea);
+  if ([...t].length <= ancho) return false;
+  // Un QR es puro bloque; una línea de texto normal no lleva ni uno.
+  const bloques = (t.match(/[▀▄█▓▒░▚▞▛▜▟▙■]/g) || []).length;
+  return bloques >= 8;
+}
 
 /**
  * Corta a `max` caracteres visibles sin partir un código de color (partirlo
@@ -268,7 +283,17 @@ export function componerPantalla({
   const hueco = Math.max(1, alto - cabecera.length - 1);
 
   const envueltas = [];
-  for (const l of registro) envueltas.push(...ajustar(l, ancho));
+  let avisadoElQr = false;
+  for (const l of registro) {
+    if (esArteAncho(l, ancho)) {
+      if (!avisadoElQr) {
+        envueltas.push(`${GRIS}▚ el QR no cabe en el panel: usa --code, o npm run vigia para verlo${RESET}`);
+        avisadoElQr = true;
+      }
+      continue;
+    }
+    envueltas.push(...ajustar(l, ancho));
+  }
   const cola = envueltas.slice(-hueco);
 
   // El registro se pega debajo de la caja y se rellena por abajo: así no

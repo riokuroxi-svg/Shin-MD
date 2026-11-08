@@ -190,3 +190,23 @@ test("con terminal de verdad: panel fijo, registro debajo y sale limpio", (t) =>
   assert.match(limpio, /SHIN-MD 9\.9\.9/);
   assert.match(limpio, /web http/);
 });
+
+test("el QR que no cabe se avisa en vez de romperse", () => {
+  // En una pantalla de 60 columnas el QR mide 65: partido no se puede leer.
+  const qr = "█ ▄▄▄▄▄ █▄█▄ ▀█▄▀▄▄█▀▀█▀██▀██ █▄█ ▄██▀▀█    █ ▄▀▄▀▀▄  █▄█ ▄█▀▄▀▀▄";
+  const { lineas } = componerPantalla({
+    estado: "activo",
+    registro: ["antes del qr", qr, qr, "después del qr"],
+    ancho: 60,
+    alto: 12,
+  });
+  const texto = lineas.map(sinColor).join("\n");
+
+  assert.match(texto, /el QR no cabe en el panel/, "tiene que avisar");
+  assert.match(texto, /--code/, "y decir cómo evitarlo");
+  assert.equal(texto.split("el QR no cabe").length - 1, 1, "el aviso se da una vez, no por línea");
+  // Ni un trozo de QR a medias.
+  assert.doesNotMatch(texto, /▄▄▄▄▄ █▄█▄/, "no debe quedar el QR partido");
+  assert.match(texto, /antes del qr/);
+  assert.match(texto, /después del qr/);
+});

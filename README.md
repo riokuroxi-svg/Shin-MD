@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 287 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 288 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="287/287 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="288/288 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -126,9 +126,9 @@ npm run docs:web
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.3.1
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.2/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.2/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.3.2
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -153,7 +153,7 @@ En WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono**.
 **Un solo comando.** `npm start` levanta el bot y dibuja el panel:
 
 ```
-╭ SHIN-MD 3.3.1 ──────────────────────────────────────╮
+╭ SHIN-MD 3.3.2 ──────────────────────────────────────╮
 │ ● ACTIVO  12 grupos  ↑ 2h 15m  ⟳ 1  pid 4242        │
 │ mem 151M · cola 3 · riesgo 23 · disco 19.9G · bat 39│
 │ web http://127.0.0.1:3000                           │
@@ -189,9 +189,9 @@ hacia fuera y solo habla con `127.0.0.1`.
 **Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.3.1
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.2/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.2/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.3.2
 cd ~/Shin-MD && npm start
 ```
 
