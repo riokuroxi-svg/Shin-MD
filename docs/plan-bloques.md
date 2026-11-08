@@ -1,0 +1,157 @@
+# 🗺️ Shin-MD — Plan por bloques (desde la lluvia de ideas)
+
+_Fecha: 2026-09-25 · Estado: BLOQUES 0, 1, 2, 3, 4 y 5 COMPLETADOS ✅ (falta prueba visual del menú en teléfono real)_
+
+Este plan organiza la lluvia de ideas (chat con "Ginko") en bloques de trabajo.
+**Regla de oro:** nada entra al bot sin estar verificado contra el código real y
+con las pruebas (27 tests) pasando. Lo que no se pudo verificar, va al laboratorio.
+
+---
+
+## 🔍 Triage previo (hecho hoy contra el código real)
+
+| Afirmación de la lluvia de ideas | Veredicto verificado en código |
+|---|---|
+| "15 desconexiones borran auth.db" | ✅ **REAL Y VIVO** — `socket.js` línea ~290: `retries > MAX_RETRIES(15)` → `clearSession()` para CUALQUIER código, incluidos 408/428 (cortes de red). Crítico en Termux con datos móviles. |
+| "Durante pairing no debería sumar riesgo" | ✅ **REAL** — `health.recordDisconnect()` se llama en todo `close`, incluso sin sesión registrada. |
+| "health.js no detecta 403" | ❌ **YA ARREGLADO** — health.js tiene fix explícito del 403 (líneas 50-83). |
+| "Loop infinito de restartRequired (515)" | ❌ **YA ARREGLADO** — backoff escalonado + streak >= 6 con salida controlada. |
+| "Queue se congela si un envío falla" | ⚠️ **PARCIAL** — hay reject/retry; falta auditar el camino de timeout. Va en Bloque 0. |
+| "Bug LID en permissions.js" | ⚠️ **DOCUMENTADO** — serialize.js explica que en Baileys 6.7.x no hay mapa LID↔teléfono; `userPart()` ya normaliza. Va en Bloque 0 re-verificar. |
+| ".menu invisible tras auth corrupto" | ⚠️ **POR VERIFICAR** — hay fix previo en commits; falta validar fallback iOS y checkpoint WAL al arranque. |
+| Rankings de forks Baileys (japofc, kyyinfinite, etc.) | ❓ **NO VERIFICADO** — viene de otra IA, sin auditar. Riesgo de supply-chain real (el propio chat menciona forks que robaban credenciales). Ver decisión D1. |
+
+---
+
+## 🧱 LOS BLOQUES
+
+### BLOQUE 0 — Auditoría de bugs reclamados ✅ (2026-09-24)
+Verificado uno por uno contra el código real:
+- [x] Congelamiento de `queue.js` → **YA ARREGLADO** (withTimeout + reject en todas las rutas)
+- [x] `.menu` tras auth corrupta → fallback a texto **YA EXISTE** en interactive.js; WAL checkpoint añadido en B1.3
+- [x] Router + self mode vs throttler → **REAL**: el delay por longitud de texto (+25ms/char hasta 2s) hacía lento `.menu`. Fixeado en B1.4
+- [x] Health 403, LID, loop 515 → **YA ARREGLADOS** en commits anteriores (Batch H/I)
+- [x] Rate-limit por usuario → **YA EXISTE** en cooldown.js (10 req/min por JID)
+- [ ] Duplicados de alias (667 handlers → 195 únicos) → cosmético, pasa al Bloque 2
+
+### BLOQUE 1 — Estabilidad anti-borrado ✅ (2026-09-24, commit de esta sesión)
+- [x] **B1.1** `socket.js`: una sesión registrada NUNCA se borra por cortes de red.
+      Al superar 15 reintentos ahora entra en **modo paciente** (reintento cada ~5 min,
+      sesión intacta) en vez de `clearSession()`. Tormenta de c0 con sesión válida:
+      sale sin borrar, con aviso. Solo se limpia en 401/403/411/500 (sesión muerta real).
+- [x] **B1.2** Pairing paciente: con `!creds.registered` los reintentos no cuentan,
+      no suman riesgo en health, y reconecta con backoff sin límite (como Ginko-MD).
+- [x] **B1.3** `auth.js`: `PRAGMA wal_checkpoint(TRUNCATE)` al abrir (pliega -wal
+      huérfanos tras cortes bruscos). Fallback a texto de sendInteractive ya existía.
+- [x] **B1.4** Ventana de prioridad en la cola: `.menu`/`.ping`/`.owner` llevan
+      `priority: true` → sus envíos salen con delay mínimo y saltan el bloqueo del
+      warm-up (antes 3-5s de silencio tras conectar). 3 tests nuevos lo cubren.
+- [x] **B1.5** Ya existía (antispam por usuario en cooldown.js) — verificado, sin cambios.
+
+**Verificación:** 30/30 tests ✅ · arranque real con .env carga 195 comandos ✅ ·
+ruta 401 (sesión inválida real) sigue limpiando correctamente ✅
+
+### BLOQUE 2 — UX y consola ✅ COMPLETADO (2026-09-24)
+- [x] `numberProfile`: NUMBER_PROFILE=auto|nuevo|veterano en .env. Nuevo =
+      1500ms + warm-up 7d; veterano = 700ms + warm-up 2d. La fecha de warm-up
+      YA se persiste en settings (antes se reiniciaba en cada arranque y un
+      número viejo nunca se sentía ágil). Auto: >=7 días de antigüedad → veterano.
+- [x] Log "Grupos: X" al conectar (estilo Ginko) + campo `groups` en `/health`.
+- [x] Misterio "667 vs 195" resuelto: el Map cuenta nombres + aliases; NO hay
+      comandos duplicados (Batch I ya los limpió). El log ahora muestra el
+      número real: "195 comandos únicos · 667 entradas con aliases".
+- [x] Estética: logger con iconos ◐ ◑ ✓ ✕ en vez de INFO/SUCCESS en mayúsculas.
+- [x] README: aviso estricto de usar número secundario (ningún bot es 100% inmune).
+
+### BLOQUE 3 — Descargas y herramientas de owner ✅ COMPLETADO (2026-09-24)
+- [x] `.subir` (solo owner): escribe/actualiza archivos desde WhatsApp.
+      Candado: la ruta resuelta debe quedar dentro del repo, `.git/`
+      protegido, máx 200k chars, aviso de `.reload` si es un comando.
+- [x] `.subircookies`: envías el cookies.txt como documento (directo con
+      caption o respondiendo) y el bot lo guarda en ./cookies.txt.
+      cookies.txt bloqueado en .gitignore (son credenciales).
+- [x] `ytdl-core` → `@distube/ytdl-core` (fork mantenido). Verificado en
+      vivo: el original devuelve HTTP 410 (endpoint muerto). El fork
+      funciona; el 429 que da desde IPs de datacenter es justo lo que las
+      cookies resuelven (.play/.play2 las inyectan vía requestOptions).
+- [x] soundcloud-scraper: DESCARTADO — Shin-MD no tiene comando de
+      SoundCloud; instalar la dependencia sin comando sería peso muerto.
+      Se instalará cuando se cree el comando.
+
+### BLOQUE 4 — UI premium (menús) ✅ CÓDIGO COMPLETADO (2026-09-24)
+- [x] Helpers nuevos en interactive.js: `singleSelect` (lista desplegable
+      nativa), `sendAdReply` (tag verde vía externalAdReply con thumbnail)
+      y `fallbackText` (el fallback puede llevar un texto más completo).
+- [x] `.menu` premium: tarjeta nativa con banner + estadísticas + lista
+      desplegable por categorías (cada fila ejecuta `.menu <cat>`) +
+      botones Ping/Owner/GitHub. Fallback en cadena: tarjeta → menú
+      clásico completo → texto simple. MENU_STYLE=text fuerza el clásico.
+- [x] El router YA convierte los ids de botón/lista en comandos
+      ("menu:games" → ".menu games") — nada que tocar ahí.
+- [x] ⚠️ RICH_EXTRA=0 por defecto: los trucos forwardingScore/newsletter
+      quedan detrás de env var y documentados como riesgo de ban.
+- [x] D1 aplicada: seguimos en Baileys oficial 6.7.24, sin forks.
+- [ ] ⏳ PENDIENTE DE USUARIO: prueba visual en teléfono real (Android y
+      iPhone): enviar .menu y confirmar que la tarjeta y la lista se ven.
+      Si algún cliente no la renderiza, MENU_STYLE=text como salida rápida.
+
+### BLOQUE 5 — Seguridad ✅ COMPLETADO (2026-09-25)
+- [x] `chmod 600` automático para `auth.db` (credenciales) y la DB principal
+      (economía/perfil). SQLCipher descartado: añade peso y complejidad sin
+      justificación; 600 cubre el vector real (lectura local).
+- [x] Auth básica en el panel web cuando `LOOPBACK=0`: exige
+      `PANEL_PASSWORD` (usuario fijo `admin`). Failsafe: sin contraseña el
+      panel vuelve a 127.0.0.1 aunque pidas exponerlo. Comparación con
+      timingSafeEqual. 2 tests nuevos cubren failsafe + auth (32/32).
+- [x] Logs a archivo rotativo `logs/shin-YYYY-MM-DD.log` (diario, retención
+      7 días) para debuggear bans. Se apaga con `LOG_FILE=0`. Nunca tumba
+      al bot si el fs falla. (No era Pino: el logger es chalk.)
+- [x] `.env.example` completo: PANEL_PASSWORD, LOG_FILE, MENU_STYLE,
+      RICH_EXTRA, NUMBER_PROFILE, COOKIES_FILE documentadas.
+- [x] CI: `.github/workflows/test.yml` corre `npm test` en cada push — red
+      de seguridad contra commits rotos.
+
+### BLOQUE 6 — Laboratorio (repo aparte: Shin-Lab)
+Nada de esto toca el bot principal hasta estar probado:
+- [ ] Brain heurístico 20KB (reglas/brain.js) para spam-detect y routing de cola.
+- [ ] Memoria estilo AIRI: RAG simple sobre SQLite ("este usuario siempre pide X").
+- [ ] Sub-bots aislados por proceso (jadibot seguro).
+- [ ] Migración `global.db` JSON → SQLite (script de 80 líneas).
+- [ ] Evaluar TypeScript en el core (costo/beneficio real).
+- [ ] Plugin store (`.find-skill`) — solo si lo anterior está estable.
+
+---
+
+## ⚖️ Decisiones donde corrijo a la lluvia de ideas
+
+- **D1 — No cambiar de Baileys por ahora.** El bot está en la versión oficial
+  6.7.24 fijada + parcheada (vinculación, companion_reg_refresh). Los rankings de
+  forks (japofc/kyyinfinite/ultra-baileys) no están verificados y mudar la pieza
+  más delicada del bot a un fork comunitario sin auditar es el riesgo número 1 de
+  supply-chain. Camino: quedarse en oficial; si el Bloque 4 demuestra que faltan
+  features, probar el "inyector biz" primero EN EL LAB.
+- **D2 — Nada de modelos de 151MB en el repo.** Viola la propia restricción de
+  <15MB y en un celular modesto será lento. Si hay "cerebro", primero la versión
+  heurística de 20KB, solo en el laboratorio.
+- **D3 — El candado LICENSE con SHA256 es cosmético.** Se puede añadir (barato),
+  pero quien edita el checker se salta el hash. La protección real es legal (AGPL).
+  Va al final del Bloque 5, prioridad baja.
+- **D4 — TypeScript no es la prioridad.** Primero los bugs críticos que hoy borran
+  sesiones; TS después, si se justifica, en el lab.
+- **D5 — Carpeta `pro/` + licencia comercial:** posible solo si posees el 100% del
+  copyright. Ojo: los 181 comandos portados de Ginko y partes derivadas de otros
+  bots AGPL pueden no ser 100% tuyos. Revisar antes de prometer licencia dual.
+
+---
+
+## 📅 Orden propuesto
+
+```
+Bloque 0 (auditoría)  →  Bloque 1 (crítico)  →  Bloque 2 (UX)
+                                                     ↓
+                       Bloque 3, 4 y 5 (independientes, en el orden que elijas)
+                                                     ↓
+                       Bloque 6 → repo Shin-Lab separado
+```
+
+Cada bloque termina con: tests pasando + arranque verificado + commit descriptivo.

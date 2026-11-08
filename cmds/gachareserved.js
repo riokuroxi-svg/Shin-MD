@@ -1,0 +1,39 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import log from "#logger";
+import chalk from 'chalk';
+import db from '../src/services/ginko-db.js';
+
+const limpiarRolls = async () => {
+  try {
+    const now = Date.now();
+    const allChats = db.getChat();
+    for (const chat of allChats) {
+      if (!chat.rolls) continue;
+      let rolls = chat.rolls;
+      let cambios = false;
+      for (const msgId of Object.keys(rolls)) {
+        const roll = rolls[msgId];
+        const expirado = roll.expiresAt && now > roll.expiresAt;
+        const reclamado = roll.claimed === true;
+        if (expirado || reclamado) {
+          delete rolls[msgId];
+          cambios = true;
+        }
+      }
+      if (cambios) {
+        db.setChat(chat.id, 'rolls', rolls);
+      }
+    }
+  } catch (e) {
+    log.info(chalk.gray('Error limpiando rolls'));
+  }
+};
+
+// .unref(): no debe impedir la salida limpia del proceso (tests/shutdown)
+setInterval(limpiarRolls, 1800000).unref?.();
+limpiarRolls();

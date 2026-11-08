@@ -1,0 +1,127 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import log from "#logger";
+import { botJid, deleteCachedMeta, getCachedMeta, normalizeJid, resolveJidSync, resolveParticipantJid, setCachedMeta } from "#serialize";
+import chalk from 'chalk';
+import moment from 'moment-timezone';
+import db from '../src/services/ginko-db.js';
+import defaultAvatar from '../lib/default-avatar.js';
+import { generateWelcomeCard } from '../src/lib/cardGenerator.js';
+
+function getGroupAdmins(participants) {
+  return (participants ?? []).filter(p => p.admin === 'admin' || p.admin === 'superadmin').map(p => p.id).filter(Boolean);
+}
+
+function resolveEventParticipant(p, sock) {
+  if (typeof p === 'string') return resolveJidSync(p, sock) || p;
+  return resolveParticipantJid(p, sock) || normalizeJid(p.id || p.phoneNumber || p.jid || p.lid || '') || '';
+}
+
+export default async (sock, msg) => {
+  sock.ev.on('group-participants.update', async (anu) => {
+    try {
+      if (['add', 'remove', 'leave', 'promote', 'demote'].includes(anu.action)) {
+        deleteCachedMeta(anu.id);
+      }
+      const metadata = await (async () => {
+        const cached = getCachedMeta(anu.id);
+        if (cached) return cached;
+        for (let i = 0; i < 3; i++) {
+          const m = await sock.groupMetadata(anu.id).catch(() => null);
+          if (m) { setCachedMeta(anu.id, m); return m; }
+          await new Promise(r => setTimeout(r, 1500));
+        }
+        return null;
+      })();
+      const groupAdmins = metadata ? getGroupAdmins(metadata.participants) : [];
+      const botId = botJid(sock);
+      const chat = db.getChat(anu.id) || {};
+      const settings = db.getSettings(botId) || {};
+      const primaryBotId = chat?.primaryBot;
+      const now = new Date();
+      const colombianTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+      const tiempo = colombianTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/,/g, '');
+      const tiempo2 = moment.tz('America/Bogota').format('hh:mm A');
+      const memberCount = metadata?.participants?.length || 0;
+      const isSelf = (settings.self ?? false) || (chat.isMute ?? false);
+      if (isSelf) return;
+
+      for (const p of anu.participants) {
+        const jid = resolveEventParticipant(p, sock);
+        if (!jid) continue;
+        const phone = jid.split('@')[0];
+        let pp = null;
+        try {
+          pp = await sock.profilePictureUrl(jid, 'image');
+        } catch {
+          pp = null;
+        }
+
+        if (anu.action === 'add' && chat?.welcome && (!primaryBotId || primaryBotId === botId)) {
+          if (!metadata) continue;
+          let caption;
+          if (chat.sWelcome && chat.sWelcome.trim() !== '') {
+            caption = chat.sWelcome.replace(/@user/g, `@${phone}`).replace(/@group/g, metadata.subject).replace(/@desc/g, metadata.desc || 'Sin descripción').replace(/@members/g, memberCount).replace(/@time/g, `${tiempo} ${tiempo2}`);
+          } else {
+            caption = `╭┈┈⫹⫺ *¡BIENVENIDO(A)!* ⫹⫺┈┈╮\n│ ◈ *Usuario* : @${phone}\n│ ◈ *Grupo*   : *${metadata.subject}*\n│ ◈ *Miembros*: *#${memberCount}*\n│ ◈ *Hora*    : \`${tiempo2}\`\n╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n_Usa .menu para ver la lista de comandos disponibles._`;
+          }
+
+          let cardBuffer = null;
+          try {
+            cardBuffer = await generateWelcomeCard({
+              groupName: metadata.subject,
+              memberName: phone,
+              memberCount,
+              avatarUrl: pp,
+            });
+          } catch {}
+
+          if (cardBuffer) {
+            await sock.sendMessage(anu.id, { image: cardBuffer, caption, mentions: [jid] });
+          } else if (pp) {
+            await sock.sendMessage(anu.id, { image: { url: pp }, caption, mentions: [jid] });
+          } else {
+            await sock.sendMessage(anu.id, { text: caption, mentions: [jid] });
+          }
+        }
+
+        if ((anu.action === 'remove' || anu.action === 'leave') && chat?.goodbye && (!primaryBotId || primaryBotId === botId)) {
+          if (!metadata) continue;
+          let caption;
+          if (chat.sGoodbye && chat.sGoodbye.trim() !== '') {
+            caption = chat.sGoodbye.replace(/@user/g, `@${phone}`).replace(/@group/g, metadata.subject).replace(/@desc/g, metadata.desc || 'Sin descripción').replace(/@members/g, memberCount).replace(/@time/g, `${tiempo} ${tiempo2}`);
+          } else {
+            caption = `╭┈┈⫹⫺ *HASTA PRONTO* ⫹⫺┈┈╮\n│ ◈ *Usuario* : @${phone}\n│ ◈ *Grupo*   : *${metadata.subject}*\n│ ◈ *Restan*  : *${memberCount} miembros*\n╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n_Esperamos verte de vuelta pronto._`;
+          }
+          if (pp) {
+            await sock.sendMessage(anu.id, { image: { url: pp }, caption, mentions: [jid] });
+          } else {
+            await sock.sendMessage(anu.id, { text: caption, mentions: [jid] });
+          }
+        }
+
+        if (anu.action === 'remove' || anu.action === 'leave') {
+          const user = db.getChatUser(anu.id, jid);
+          if (user && typeof user.afk === 'number' && user.afk > -1) {
+            db.setChatUser(anu.id, jid, 'afk', -1);
+            db.setChatUser(anu.id, jid, 'afkReason', '');
+          }
+        }
+        if (anu.action === 'promote' && chat?.alerts && (!primaryBotId || primaryBotId === botId)) {
+          const authorJid = normalizeJid(anu.author) || anu.author;
+          await sock.sendMessage(anu.id, { text: `「🛡️」 *@${phone}* ha sido promovido a *Administrador* por *@${authorJid.split('@')[0]}.*`, mentions: [jid, authorJid, ...groupAdmins] });
+        }
+        if (anu.action === 'demote' && chat?.alerts && (!primaryBotId || primaryBotId === botId)) {
+          const authorJid = normalizeJid(anu.author) || anu.author;
+          await sock.sendMessage(anu.id, { text: `「⚠️」 *@${phone}* ha sido degradado de *Administrador* por *@${authorJid.split('@')[0]}.*`, mentions: [jid, authorJid, ...groupAdmins] });
+        }
+      }
+    } catch (err) {
+      log.info(chalk.gray(`[ EVENT ERROR ]  → ${err}`));
+    }
+  });
+};

@@ -1,0 +1,17 @@
+Fuentes usadas para dibujar los gráficos del README
+====================================================
+
+  Baloo2.ttf     (Baloo 2)   — títulos y números       · SIL Open Font License 1.1
+  Nunito.ttf     (Nunito)    — textos y párrafos       · SIL Open Font License 1.1
+  Quicksand.ttf  (Quicksand) — etiquetas y botones     · SIL Open Font License 1.1
+
+Las tres son libres y se pueden redistribuir con el repositorio. El kanji 反魂
+usa Noto Sans CJK JP, que no se copia aquí porque es un archivo del sistema
+(en Debian/Ubuntu lo instala fonts-noto-cjk).
+
+¿Para qué sirven? Solo para regenerar los SVG con `python3 tools/build_pastel.py`.
+El texto se convierte a trazado vectorial: los SVG finales NO necesitan estas
+fuentes para verse bien en GitHub, en un móvil o en un navegador viejo.
+
+Si quieres un repositorio más liviano y no vas a regenerar los gráficos, puedes
+borrar esta carpeta sin romper nada (el README seguirá viéndose igual).

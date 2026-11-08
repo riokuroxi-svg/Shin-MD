@@ -1,0 +1,160 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import { PALABRAS_NSFW } from "#lib/palabras-nsfw";
+import { contienePalabraProhibida } from "#lib/filtro-texto";
+import axios from 'axios';
+import db from '../../src/services/ginko-db.js';
+import { withLimit } from '#lib/limits';
+// El álbum de verdad: un mensaje padre albumMessage y los medios
+// colgados de él con messageAssociation. Antes este comando llamaba
+// a un método de álbum que NO EXISTE en el bot, así que se caía
+// siempre al catch y no mandaba ni una sola imagen.
+import { sendAlbum } from '#lib/album';
+import { state } from '#lib/theme';
+
+/**
+ * ¿Las fotos van en álbum? Solo si se pide en el .env.
+ * El álbum es lo último de WhatsApp y los clientes viejos lo pintan como
+ * «mensaje no compatible», sin que el envío dé ningún error aquí.
+ */
+export const usaAlbum = (env = process.env) => env.SHIN_ALBUM === "1";
+
+export default {
+  command: ['imagen', 'img', 'image'],
+  category: 'downloads',
+  description: 'Buscar y descargar imágenes de Google.',
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
+    return withLimit('media', 3, async () => {
+    const text = args.join(' ');
+    if (!text) {
+      return sock.reply(msg.chat, `《✧》 Por favor, Ingrese un término de búsqueda.`, msg);
+    }
+    const bannedWords = PALABRAS_NSFW;
+    const chat = db.getChat(msg.chat);
+    const nsfwEnabled = chat.nsfw === 1;
+    // Límites de palabra + normalización (ver src/lib/filtro-texto.js):
+    // antes "cumpleaños" se bloqueaba por la palabra "cum".
+    if (!nsfwEnabled && contienePalabraProhibida(text, bannedWords)) {
+      return msg.reply('《✧》 Este comando no *permite* búsquedas de contenido *+18* o *NSFW*');
+    }
+    try {
+      const results = await getImageSearchResults(text);
+      if (!results || results.length === 0) {
+        return sock.reply(msg.chat, `《✧》 No se encontraron imágenes para "${text}".`, msg);
+      }
+      const validResults = await filterValidImages(results.slice(0, 15));
+      if (validResults.length < 1) {
+        return sock.reply(msg.chat, `《✧》 Las imágenes encontradas no se pudieron abrir. Prueba con otro término.`, msg);
+      }
+      const medias = validResults.slice(0, 10).map(r => ({ image: { url: r.url }, caption: `ㅤ۟∩　ׅ　★　ׅ　🅖oogle 🅘mage 🅢earch　ׄᰙ　\n\n${r.title ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Título* › ${r.title}\n` : ''}` + `${r.domain ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Fuente* › ${r.domain}\n` : ''}` + `${r.resolution ? `𖣣ֶㅤ֯⌗ ☆  ⬭ *Resolución* › ${r.resolution}\n` : ''}` + `𖣣ֶㅤ֯⌗ ☆  ⬭ *Búsqueda* › ${text}` }));
+      // El álbum se manda SOLO si se pide (SHIN_ALBUM=1). Es la función
+      // más nueva de WhatsApp y los clientes sin soporte la pintan como
+      // «Recibiste un mensaje que no es compatible con tu versión», sin
+      // dar ningún error aquí: el envío figure como bueno. Sueltas se
+      // ven siempre, así que ese es el camino por defecto.
+      if (usaAlbum() && medias.length >= 2) {
+        const album = await sendAlbum(sock, msg.chat, medias, { quoted: msg.full || msg });
+        if (album.sent) return;
+      }
+      for (const medio of medias.slice(0, 5)) {
+        await sock.sendMessage(msg.chat, { image: medio.image, caption: medio.caption }, { quoted: msg.full || msg });
+      }
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+    })
+  }
+};
+
+async function isImageAccessible(url) {
+  try {
+    const response = await axios.head(url, { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36' }, maxRedirects: 3, validateStatus: (status) => status < 400 });
+    return (response.headers['content-type'] || '').startsWith('image/');
+  } catch {
+    try {
+      await axios.get(url, { timeout: 5000, headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36', 'Range': 'bytes=0-1023' }, maxRedirects: 3, responseType: 'arraybuffer', validateStatus: (status) => status < 400 || status === 206 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+async function filterValidImages(results) {
+  const checks = await Promise.allSettled(
+    results.map(async (r) => {
+      const ok = await isImageAccessible(r.url);
+      return ok ? r : null;
+    })
+  );
+  return checks.filter(c => c.status === 'fulfilled' && c.value !== null).map(c => c.value);
+}
+
+// ── Fuente PRINCIPAL: Bing Images (local, sin API externa) ─────────────
+// Se scrapea el HTML de Bing Images (sin key). Es robusto y no depende de
+// ningún servicio externo que se caiga. Si por algún motivo Bing falla, se
+// intentan las APIs de respaldo de abajo.
+async function bingImageSearch(query) {
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  const url = `https://www.bing.com/images/search?q=${encodeURIComponent(query)}&form=HDRSC2&first=1`;
+  const { data } = await axios.get(url, { headers: { 'User-Agent': UA, 'Accept-Language': 'es-ES,es;q=0.9' }, timeout: 15000 });
+  const results = [];
+  const seen = new Set();
+  const re = /class="iusc"[^>]*m="([^"]{20,})"/g;
+  let m;
+  while ((m = re.exec(data))) {
+    let raw = m[1].replace(/&quot;/g, '"').replace(/\\&quot;/g, '"').replace(/\\"/g, '"').replace(/&amp;/g, '&');
+    let j;
+    try { j = JSON.parse(raw); } catch { continue; }
+    if (!j.murl) continue;
+    if (seen.has(j.murl)) continue;
+    seen.add(j.murl);
+    let domain = null;
+    try { domain = new URL(j.murl).hostname; } catch {}
+    results.push({
+      url: j.murl,
+      title: j.t || null,
+      domain,
+      resolution: (j.mw && j.mh) ? `${j.mw}x${j.mh}` : null
+    });
+    if (results.length >= 20) break;
+  }
+  return results;
+}
+
+async function getImageSearchResults(query) {
+  // 1) Bing local
+  try {
+    const bing = await bingImageSearch(query);
+    if (bing && bing.length > 0) return bing;
+  } catch {
+    // cae a las APIs de respaldo
+  }
+  // 2) APIs de respaldo (delirius, lempi/Ginko)
+  const apis = [
+    { endpoint: `${global.APIs.delirius.url}/search/gimage?query=${encodeURIComponent(query)}`, extractor: (res) => {
+        if (!res.status || !Array.isArray(res.data)) return [];
+        return res.data.map(item => ({ url: item.url, title: item.origin?.title || null, domain: item.origin?.website?.domain || null, resolution: item.width && item.height ? `${item.width}x${item.height}` : null }));
+      }
+    },
+    { endpoint: `${global.APIs.Ginko.url}/search/image?q=${encodeURIComponent(query)}&api_key=${global.APIs.Ginko.key}`, extractor: (res) => {
+        if (!res.status || !Array.isArray(res.result)) return [];
+        return res.result.map(item => ({ url: item.image, title: item.title || null, domain: item.url ? new URL(item.url).hostname : null, resolution: null }));
+      }
+    }
+  ];
+  for (const { endpoint, extractor } of apis) {
+    try {
+      const { data } = await axios.get(endpoint);
+      const results = extractor(data);
+      if (results && results.length > 0) return results;
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}

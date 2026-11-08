@@ -1,0 +1,37 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import { pickRandom } from "#lib/random";
+import fetch from 'node-fetch'
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+
+export default {
+  command: ['danbooru', 'dbooru'],
+  category: 'nsfw',
+  description: 'Buscar imágenes en Danbooru.',
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
+    try {
+      const chat = db.getChat(msg.chat);
+      if (!chat.nsfw) return msg.reply(`ꕥ El contenido *NSFW* está desactivado en este grupo.\n\nUn *administrador* puede activarlo con el comando:\n» *${usedPrefix}nsfw on*`)
+      if (!args[0]) return sock.reply(msg.chat, `《✧》 Debes especificar tags para buscar\n> Ejemplo » *${usedPrefix + command} neko*`, msg)
+      await msg.react('🕒')
+      const tag = args[0].replace(/\s+/g, '_')
+      const url = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(tag)}`
+      const res = await fetch(url)
+      const json = await res.json()
+      const mediaList = json.map(p => p?.file_url).filter(u => typeof u === 'string' && /\.(jpe?g|png|gif)$/.test(u))
+      if (!mediaList.length) return sock.reply(msg.chat, `《✧》 No se encontraron resultados para ${tag}`, msg)
+      const media = pickRandom(mediaList)
+      const caption = `ꕥ Resultados para » ${tag}`
+      await sock.sendMessage(msg.chat, { image: { url: media }, caption, mentions: [msg.sender] })
+      await msg.react('✔️')
+    } catch (e) {
+      await msg.react('✖️')
+      await msg.reply(state('error', { detail: e.message }))
+    }
+  }
+}

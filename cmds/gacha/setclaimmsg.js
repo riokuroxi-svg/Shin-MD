@@ -1,0 +1,32 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+export default {
+  command: ['setclaim', 'setclaimmsg'],
+  category: 'gacha',
+  description: 'Modificar el mensaje al reclamar un personaje.',
+  run: async ({ msg, args, usedPrefix, command }) => {
+    try {
+      const chat = db.getChat(msg.chat);
+      if (chat.adminonly || !chat.gacha) {
+        return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
+      }
+      if (!args[0]) {
+        return msg.reply(`❀ Debes especificar un mensaje para reclamar un personaje.\n> Ejemplos:\n> ${usedPrefix + command} €user ha reclamado el personaje €character!\n> ${usedPrefix + command} €character ha sido reclamado por €user`);
+      }
+      const customMsg = args.join(' ');
+      if (!customMsg.includes('€user') || !customMsg.includes('€character')) {
+        return msg.reply(`ꕥ Tu mensaje debe incluir *€user* y *€character* para que funcione correctamente.`);
+      }
+      db.setUser(msg.sender, 'claimMessage', customMsg);
+      await msg.reply('❀ Mensaje de reclamación modificado.');
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  },
+};

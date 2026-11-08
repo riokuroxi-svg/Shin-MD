@@ -1,0 +1,29 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import { botJid } from "#serialize";
+import db from '../../src/services/ginko-db.js';
+export default {
+  command: ['setlink', 'setbotlink'],
+  category: 'socket',
+  description: 'Cambiar el enlace del bot.',
+  run: async ({ msg, sock, args }) => {
+    const idBot = botJid(sock)
+    const config = db.getSettings(idBot) || {}
+    const isOwner2 = [idBot, ...(config.owner ? [config.owner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
+    if (!isOwner2) return msg.reply(global.mess.socket);
+    const value = args.join(' ').trim()
+    if (!value) {
+      return msg.reply(`✿ Por favor, Ingresa un enlace válido que comience con http:// o https://`)
+    }
+    if (!/^https?:\/\//i.test(value)) {
+      return msg.reply('ꕥ El enlace debe comenzar con http:// o https://')
+    }
+    config.link = value
+    db.setSettings(idBot, 'link', config.link)
+    return msg.reply(`✎ Se cambió el enlace del Socket correctamente.`)
+  },
+};

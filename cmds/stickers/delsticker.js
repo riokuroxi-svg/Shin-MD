@@ -1,0 +1,59 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+export default {
+  command: ['stickerdel', 'delsticker'],
+  category: 'stickers',
+  description: 'Eliminar un sticker de un paquete.',
+  run: async ({ msg, args, usedPrefix, command }) => {
+    try {
+      if (!args.length) {
+        return msg.reply('《✧》Especifica el nombre del paquete.')
+      }
+      const packName = args.join(' ').trim()
+      const stickerPackData = db.getStickersPack(msg.sender)
+      const packs = stickerPackData.packs || []
+      if (!packs || packs.length === 0) {
+        return msg.reply('《✧》No tienes paquetes creados.')
+      }
+      const pack = packs.find(p => p.name.toLowerCase() === packName.toLowerCase())
+      if (!pack) {
+        return msg.reply('《✧》No se encontró un paquete con ese nombre.')
+      }
+      const quoted = msg.quoted
+      if (!quoted) {
+        return msg.reply('《✧》Responde a un sticker para eliminarlo del paquete de stickers.')
+      }
+      const mime = quoted.mimetype || quoted.msg?.mimetype || ''
+      if (!/webp/i.test(mime)) {
+        return msg.reply('《✧》Solo puedes eliminar stickers.')
+      }
+      if (!pack.stickers || pack.stickers.length === 0) {
+        return msg.reply('《✧》El paquete no tiene stickers.')
+      }
+      let buffer = await quoted.download()
+      if (!buffer) {
+        return msg.reply('《✧》No se pudo obtener el sticker.')
+      }
+      if (!Buffer.isBuffer(buffer)) {
+        buffer = Buffer.from(buffer)
+      }
+      const base64Buffer = buffer.toString('base64')
+      const index = pack.stickers.findIndex(stored => stored === base64Buffer)
+      if (index === -1) {
+        return msg.reply('《✧》Ese sticker no está en el paquete.')
+      }
+      pack.stickers.splice(index, 1)
+      pack.lastModified = Date.now().toString()
+      db.setStickersPack(msg.sender, 'packs', packs);
+      await msg.reply(`❀ El sticker ha sido eliminado del paquete de stickers ${pack.name}!`)
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  }
+}

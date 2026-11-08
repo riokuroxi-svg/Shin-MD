@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1200 72" width="1200" height="72" role="img" aria-label="divisor">
+<line x1="340" y1="36" x2="560" y2="36" stroke="#FFD3E2" stroke-width="2.5" stroke-linecap="round"/>
+<line x1="640" y1="36" x2="860" y2="36" stroke="#FFD3E2" stroke-width="2.5" stroke-linecap="round"/>
+<path d="M 600 36.8 c -11.2 -8.1 -14 -13.5 -14 0 c 13.5 8.1 11.2 8.1 11.2 8.1 Z" fill="#F0689B"/>
+<path d="M 572.8 37.8 L 567 37.7 L 564.2 42.8 L 564.3 37 L 559.2 34.2 L 565 34.3 L 567.8 29.2 L 567.7 35 Z" fill="#3FBF95"/>
+<path d="M 640.8 37.8 L 635 37.7 L 632.2 42.8 L 632.3 37 L 627.2 34.2 L 633 34.3 L 635.8 29.2 L 635.7 35 Z" fill="#3FBF95"/>
+</svg>

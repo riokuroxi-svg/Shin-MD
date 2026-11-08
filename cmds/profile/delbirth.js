@@ -1,0 +1,20 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import db from '../../src/services/ginko-db.js';
+export default {
+  command: ['delbirth'],
+  category: 'profile',
+  description: 'Borrar tu fecha de cumpleaños.',
+  run: async ({ msg }) => {
+    const user = db.getUser(msg.sender);
+    if (!user.birth) {
+      return msg.reply(`《✧》 No tienes una fecha de nacimiento establecida.`);
+    }
+    db.setUser(msg.sender, 'birth', '');
+    return msg.reply(`✎ Tu fecha de nacimiento ha sido eliminada.`);
+  },
+};

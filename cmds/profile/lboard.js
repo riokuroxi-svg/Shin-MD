@@ -1,0 +1,52 @@
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+import db from '../../src/services/ginko-db.js';
+import { state } from '#lib/theme';
+import { xpRange } from "#lib/xp";
+
+export default {
+  command: ['lboard', 'lb', 'leaderboard'],
+  category: 'profile',
+  description: 'Top de usuarios con más experiencia.',
+  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+    try {
+      const allUsers = db.getUser();
+      const users = allUsers.filter(user => (user.exp || 0) >= 1).map(user => {
+        const name = user.name || 'Usuario';
+        const exp = user.exp || 0;
+        const level = user.level || 0;
+        const { min, xp } = xpRange(level, global.multiplier);
+        const progreso = exp - min;
+        const porcentaje = xp > 0 ? Math.floor((progreso / xp) * 100) : 0;
+        return { jid: user.id, name, exp, level, progreso, xp, porcentaje };
+      });
+      if (users.length === 0) {
+        return msg.reply(`ꕥ No hay usuarios registrados con experiencia.`);
+      }
+      const sorted = users.sort((a, b) => (b.exp || 0) - (a.exp || 0));
+      const page = parseInt(args[0]) || 1;
+      const pageSize = 10;
+      const totalPages = Math.ceil(sorted.length / pageSize);
+      if (isNaN(page) || page < 1 || page > totalPages) {
+        return msg.reply(`《✧》 La página *${page}* no existe. Hay *${totalPages}* páginas.`);
+      }
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize;
+      let text = `*✩ Top de usuarios con más experiencia ✩*\n\n`;
+      text += sorted.slice(start, end).map(({ name, exp, level, progreso, xp, porcentaje }, i) => {
+        return `✩ ${start + i + 1} › *${name}*\n     XP → *${exp.toLocaleString()}*  LVL → *${level}*\n     ➨ Progreso → *${progreso} => ${xp}* _(${porcentaje}%)_`;
+      }).join('\n\n');
+      text += `\n\n> ⌦ Página *${page}* de *${totalPages}*`;
+      if (page < totalPages) {
+        text += `\n> Para ver la siguiente página › *${usedPrefix + command} ${page + 1}*`;
+      }
+      await sock.sendMessage(msg.chat, { text }, { quoted: msg });
+    } catch (e) {
+      await msg.reply(state('error', { detail: e.message }));
+    }
+  }
+};
