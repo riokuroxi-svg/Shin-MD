@@ -1719,3 +1719,19 @@ test("si la descarga limpia falla, no deja nada a medias en su sitio", () => {
   assert.equal(apartadas.length, 1, "la carpeta vieja se aparta, no se pierde");
   assert.ok(fs.existsSync(path.join(raiz, apartadas[0], "package.json")));
 });
+
+test("el resumen final da un solo bloque por tarea, con el cd dentro", () => {
+  // Lo que pasó de verdad: el resumen decía "cd ..." y "npm start" en dos
+  // líneas; se copió la segunda, npm buscó package.json en /tmp y falló con
+  // un error que no se entendía. Un comando por línea, con su cd.
+  const origen = crearOrigen();
+  const raiz = temporal("shin-resumen");
+  const r = correr(INSTALADOR, ["--yes"], { raiz, env: { SHIN_REPO_URL: origen } });
+  assert.equal(r.status, 0, r.salida);
+
+  assert.match(r.salida, /npm start -- --code/);
+  assert.match(r.salida, /npm run vigia -- --code/);
+  // El cd y el comando tienen que ir en la misma línea.
+  const linea = r.salida.split("\n").find((l) => l.includes("npm start -- --code"));
+  assert.ok(linea && linea.includes("cd "), `el comando tiene que llevar su cd: ${linea}`);
+});

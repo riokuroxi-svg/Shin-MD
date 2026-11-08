@@ -1,6 +1,6 @@
 {
   "name": "shin-md",
-  "version": "3.2.7",
+  "version": "3.2.8",
   "license": "AGPL-3.0-only",
   "author": "riokuroxi-svg (github.com/riokuroxi-svg/Shin-MD)",
   "description": "反魂 Shin-MD — Bot WhatsApp Multi-Device Superior. Anti-ban nativo, auto-healing, eficiente en recursos.",
@@ -10,6 +10,10 @@
     "start": "node index.js",
     "start:code": "node index.js --code",
     "start:qr": "node index.js --qr",
+    "vigia": "node scripts/vigia.mjs",
+    "panel": "node scripts/panel.mjs",
+    "panel:vivir": "node scripts/panel.mjs --vivir",
+    "start:keep": "node scripts/vigia.mjs",
     "test": "node scripts/run-tests.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

@@ -31,10 +31,10 @@ congelados: con ella, `pkg install` falla o instala Node viejo.
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.7/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.7/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.2.8/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS
-bash install.sh --version v3.2.7
+bash install.sh --version v3.2.8
 ```
 
 Los tres primeros comandos descargan una versión concreta y **comprueban su
@@ -94,6 +94,45 @@ npm start
 - **Con QR:** `npm run start:qr`, y escaneas desde el mismo menú.
 
 Para detenerlo: `Ctrl+C`. En Termux, `Ctrl` está en la fila de teclas extra.
+
+### Que se reinicie solo
+
+Con `npm start`, el comando `.restart` del bot no sirve para nada: el proceso
+muere y nadie lo vuelve a levantar. Para eso está el vigía:
+
+```bash
+cd ~/Shin-MD && npm run vigia -- --code
+```
+
+Es el mismo bot, con alguien mirándolo desde fuera. Si escribes `.restart` en
+WhatsApp, vuelve a arrancar sin que toques el teléfono. Si se cae por lo que
+sea (memoria, un plugin que explota), lo levanta otra vez, esperando 1, 2, 4,
+8 y 15 segundos entre intentos para no entrar en un bucle.
+
+Si se cae **cinco veces en dos minutos**, se rinde y lo dice en la terminal:
+reiniciar ya no arregla nada, hay que leer el error. Ahí es donde tienes que
+mirar el log:
+
+```bash
+tail -f ~/Shin-MD/logs/*.log
+```
+
+El vigía no esquiva a Android. Si el sistema mata el proceso entero, se mueren
+los dos. Para eso sirven los ajustes del punto 3.
+
+### Mirar cómo está, sin abrir WhatsApp
+
+```bash
+npm run panel
+```
+
+Dibuja en la terminal lo que el bot ya sabe de sí mismo: si está activo, cuánto
+lleva encendido, memoria, cola de envíos, riesgo, grupos y versión. Con
+`npm run panel:vivir` se refresca cada dos segundos hasta que pulses `Ctrl+C`.
+
+Es de solo lectura: no manda mensajes, no toca la sesión, no expone nada hacia
+fuera. Lee del panel local (`127.0.0.1:3000`), así que el bot tiene que estar
+arrancado para que enseñe algo.
 
 ## 5. Actualizar, reparar, desinstalar
 

@@ -46,3 +46,7 @@ audit/
 
 # Installer state (one per installation, never committed)
 .shin-install
+
+# Python
+__pycache__/
+*.pyc

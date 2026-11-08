@@ -896,11 +896,15 @@ resumen() {
   dato "carpeta    $DESTINO"
   dato "node       ${NODE_V:-?}   npm ${NPM_V:-?}   $(arquitectura)"
   dato "conector   8 parches verificados"
-  printf '\n%s  Arrancar%s\n' "$C_NEG" "$C_RESET"
-  printf '    cd %s\n    npm start\n\n' "$DESTINO"
+  # Un solo bloque por tarea, con el cd dentro: si se copia la segunda línea
+  # suelta, npm se queja de que no hay package.json y no se entiende por qué.
+  printf '\n%s  Arrancar de una vez%s\n' "$C_NEG" "$C_RESET"
+  printf '    cd %s && npm start -- --code\n\n' "$DESTINO"
+  printf '%s  Con reinicio automático (si se cae, vuelve solo)%s\n' "$C_NEG" "$C_RESET"
+  printf '    cd %s && npm run vigia -- --code\n\n' "$DESTINO"
   printf '%s  Vincular WhatsApp%s\n' "$C_NEG" "$C_RESET"
-  printf '    npm run start:code    (código de 8 dígitos: WhatsApp → Dispositivos vinculados)\n'
-  printf '    npm run start:qr      (si prefieres escanear un QR)\n\n'
+  printf '    la opción --code pide un código de 8 dígitos (WhatsApp → Dispositivos vinculados)\n'
+  printf '    si prefieres QR:  cd %s && npm run start:qr\n\n' "$DESTINO"
   printf '%s  Parar%s\n' "$C_NEG" "$C_RESET"
   printf '    Ctrl+C\n\n'
   printf '%s  Mantenerlo vivo%s\n' "$C_NEG" "$C_RESET"
