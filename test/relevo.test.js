@@ -23,7 +23,9 @@ function montar({ conVigia = true } = {}) {
   fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
   fs.mkdirSync(path.join(dir, "cmds", "owner"), { recursive: true });
   if (conVigia) {
-    fs.copyFileSync(path.join(RAIZ, "scripts", "vigia.mjs"), path.join(dir, "scripts", "vigia.mjs"));
+    for (const pieza of ["vigia.mjs", "supervisor.mjs"]) {
+      fs.copyFileSync(path.join(RAIZ, "scripts", pieza), path.join(dir, "scripts", pieza));
+    }
   }
   fs.copyFileSync(
     path.join(RAIZ, "cmds", "owner", "restart.js"),

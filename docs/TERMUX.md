@@ -31,10 +31,10 @@ congelados: con ella, `pkg install` falla o instala Node viejo.
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS
-bash install.sh --version v3.3.0
+bash install.sh --version v3.3.1
 ```
 
 Los tres primeros comandos descargan una versión concreta y **comprueban su
@@ -85,9 +85,12 @@ es el hilo de referencia.
 ## 4. Arrancar y vincular
 
 ```bash
-cd ~/Shin-MD
-npm start
+cd ~/Shin-MD && npm start
 ```
+
+Eso levanta el bot y dibuja el panel: arriba el estado (grupos, memoria, disco,
+batería, la dirección del panel web) y debajo lo que va diciendo el bot. El
+panel no se mueve aunque el bot se reinicie, y `Ctrl+C` lo para todo.
 
 - **Con código:** `npm run start:code`. WhatsApp → *Dispositivos vinculados* →
   *Vincular con número de teléfono* → mete el código de 8 dígitos en el teléfono.
@@ -97,17 +100,10 @@ Para detenerlo: `Ctrl+C`. En Termux, `Ctrl` está en la fila de teclas extra.
 
 ### Que se reinicie solo
 
-Con `npm start`, el comando `.restart` del bot no sirve para nada: el proceso
-muere y nadie lo vuelve a levantar. Para eso está el vigía:
-
-```bash
-cd ~/Shin-MD && npm run vigia -- --code
-```
-
-Es el mismo bot, con alguien mirándolo desde fuera. Si escribes `.restart` en
-WhatsApp, vuelve a arrancar sin que toques el teléfono. Si se cae por lo que
-sea (memoria, un plugin que explota), lo levanta otra vez, esperando 1, 2, 4,
-8 y 15 segundos entre intentos para no entrar en un bucle.
+`npm start` ya lo hace: vigila al bot mientras te enseña el panel. Si escribes
+`.restart` en WhatsApp, el bot vuelve a arrancar sin que toques el teléfono. Si
+se cae por lo que sea (memoria, un plugin que explota), lo levanta otra vez,
+esperando 1, 2, 4, 8 y 15 segundos entre intentos para no entrar en un bucle.
 
 Si se cae **cinco veces en dos minutos**, se rinde y lo dice en la terminal:
 reiniciar ya no arregla nada, hay que leer el error. Ahí es donde tienes que
@@ -117,9 +113,15 @@ mirar el log:
 tail -f ~/Shin-MD/logs/*.log
 ```
 
-Si arrancaste con `npm start` y escribes `.restart`, el bot se releva solo:
-deja el vigía arrancado en esa misma terminal y se aparta. Desde ahí ya es el
-vigía el que manda. Ojo: si cierras esa terminal, se va con ella.
+En el panel lo ves sin hacer nada: pasa a `SE CAYÓ · lo levanto solo en un
+momento` y luego vuelve a `ACTIVO`, con el contador `⟳` a la derecha.
+
+Si quieres el bot **sin** panel (por ejemplo, para dejarlo con `nohup` o en un
+VPS), lo mismo pero sin dibujo:
+
+```bash
+cd ~/Shin-MD && npm run vigia -- --code
+```
 
 El vigía no esquiva a Android. Si el sistema mata el proceso entero, se mueren
 los dos. Para eso sirven los ajustes del punto 3.

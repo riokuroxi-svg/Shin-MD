@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 279 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 287 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="279/279 pruebas" height="52">
-<img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="287/287 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-comandos.svg" alt="212 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
 <img src="docs/assets/pastel/insignia-licencia.svg" alt="Licencia AGPL-3.0-only" height="52">
@@ -126,9 +126,9 @@ npm run docs:web
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.3.0
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.3.1
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -150,20 +150,30 @@ Antes de arrancarlo, para que Android no lo mate mientras duerme:
 En WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono**.
 ¿Prefieres QR? `npm start -- --qr`.
 
-**Que se reinicie solo.** Con `npm start`, el comando `.restart` deja el bot
-muerto y hay que entrar a la terminal a levantarlo a mano. Arrancándolo con el
-vigía, vuelve solo:
+**Un solo comando.** `npm start` levanta el bot y dibuja el panel:
 
-```bash
-cd ~/Shin-MD && npm run vigia -- --code
+```
+╭ SHIN-MD 3.3.1 ──────────────────────────────────────╮
+│ ● ACTIVO  12 grupos  ↑ 2h 15m  ⟳ 1  pid 4242        │
+│ mem 151M · cola 3 · riesgo 23 · disco 19.9G · bat 39│
+│ web http://127.0.0.1:3000                           │
+╰─────────────────────────────────────────────────────╯
+ 01:56:37  bot arrancado
+ ✓ Bot listo ✓
+ mensaje de 52155…
 ```
 
-Si escribes `.restart`, revive. Si se cae, revive (esperando 1, 2, 4, 8 y 15 s
-entre intentos). Si se cae cinco veces en dos minutos, se rinde y lo explica en
-la terminal, porque eso ya no lo arregla un reinicio.
+El panel se queda clavado arriba y lo que va diciendo el bot sale debajo. Si
+escribes `.restart`, si el bot se cae, si lo reinicias con la tecla `r`: el
+panel no se mueve, solo cambia el estado (`REINICIANDO · espera un momento`).
+Y como se redibuja cada segundo, ni un `clear` se lo lleva por delante.
 
-`.restart` también funciona con el `npm start` de siempre: al no encontrar a
-nadie vigilándolo, deja el vigía arrancado en la misma terminal y se aparta.
+Teclas: `r` reiniciar, `q` o `Ctrl+C` salir. La dirección del panel local está
+siempre en la cabecera, así que no se pierde al limpiar la pantalla.
+
+**Sin terminal no hay panel, y está bien.** En un VPS, con systemd, pm2 o
+`nohup`, `npm start` escribe líneas normales: el panel solo se dibuja cuando
+hay una terminal de verdad. Ver [`docs/VPS.md`](docs/VPS.md).
 
 **Cuando un mensaje sale como «no compatible con tu versión».** Ese cartel no
 lo pone el bot: lo pone tu WhatsApp cuando no entiende un tipo de mensaje. Como
@@ -171,18 +181,17 @@ el envío sí funciona, no da ningún error y quedas a ciegas. Hay un comando qu
 lo mide: `.compat`, en privado, manda cuatro mensajes numerados —texto, botones,
 hoja inferior y álbum— y el que salga mal es el culpable.
 
-**Ver el estado sin abrir WhatsApp.** `npm run panel` dibuja dos cajas: una con
-el bot (memoria, cola, grupos, riesgo, versión) y otra con el teléfono donde
-corre (batería, memoria del sistema, disco, modelo). `npm run panel:vivir` lo
+**Una foto del estado, sin arrancar nada.** `npm run panel` dibuja dos cajas:
+una con el bot y otra con el teléfono donde corre. `npm run panel:vivir` la
 refresca cada dos segundos. Es de solo lectura: no manda nada, no expone nada
 hacia fuera y solo habla con `127.0.0.1`.
 
 **Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.0/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.3.0
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.3.1/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.3.1
 cd ~/Shin-MD && npm start
 ```
 

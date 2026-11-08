@@ -898,9 +898,12 @@ resumen() {
   dato "conector   8 parches verificados"
   # Un solo bloque por tarea, con el cd dentro: si se copia la segunda línea
   # suelta, npm se queja de que no hay package.json y no se entiende por qué.
-  printf '\n%s  Arrancar de una vez%s\n' "$C_NEG" "$C_RESET"
+  # Un solo comando para todo: panel arriba y el bot vigilado debajo.
+  printf '\n%s  Arrancar%s\n' "$C_NEG" "$C_RESET"
   printf '    cd %s && npm start -- --code\n\n' "$DESTINO"
-  printf '%s  Con reinicio automático (si se cae, vuelve solo)%s\n' "$C_NEG" "$C_RESET"
+  printf '    (el panel se queda arriba y lo que dice el bot va debajo;\n'
+  printf '     si se cae o pides .restart, vuelve solo y el panel no se mueve)\n\n'
+  printf '%s  En un servidor, sin panel%s\n' "$C_NEG" "$C_RESET"
   printf '    cd %s && npm run vigia -- --code\n\n' "$DESTINO"
   printf '%s  Vincular WhatsApp%s\n' "$C_NEG" "$C_RESET"
   printf '    la opción --code pide un código de 8 dígitos (WhatsApp → Dispositivos vinculados)\n'

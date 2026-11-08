@@ -22,7 +22,9 @@ const VIGIA = path.join(RAIZ, "scripts", "vigia.mjs");
 function proyecto(modo) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shin-vigia-"));
   fs.mkdirSync(path.join(dir, "scripts"), { recursive: true });
-  fs.copyFileSync(VIGIA, path.join(dir, "scripts", "vigia.mjs"));
+  for (const pieza of ["vigia.mjs", "supervisor.mjs"]) {
+    fs.copyFileSync(path.join(RAIZ, "scripts", pieza), path.join(dir, "scripts", pieza));
+  }
   fs.writeFileSync(
     path.join(dir, "index.js"),
     `console.log("hijo vivo " + process.pid);

@@ -24,8 +24,8 @@
 //    npm run panel:vivir       (se refresca cada 2 s hasta Ctrl+C)
 // ═══════════════════════════════════════════════════════════════════
 
-import fs from "node:fs";
 import os from "node:os";
+import { datosAndroid, bateria, disco, memoriaSistema, ipLocal, hace, gb } from "./datos-equipo.mjs";
 
 const AZUL = "\x1b[38;5;111m";
 const VERDE = "\x1b[38;5;79m";
@@ -40,7 +40,6 @@ const VIVIR = process.argv.includes("--vivir");
 const INTERVALO = Number(process.env.SHIN_PANEL_MS || 2000);
 // Dónde buscar los datos del equipo. Normalmente la raíz del sistema; se
 // puede apuntar a otra carpeta para probar el panel sin tener un Android.
-const RAIZ = process.env.SHIN_PANEL_RAIZ || "";
 
 const ancho = () => {
   // SHIN_PANEL_ANCHO existe porque algunas terminales (y sobre todo los
@@ -100,88 +99,8 @@ function barra(valor, maximo, color) {
 
 const colorSegun = (v, aviso, malo) => (v >= malo ? ROJO : v >= aviso ? AMBAR : VERDE);
 
-function hace(brutos) {
-  const segundos = Math.floor(brutos); // os.uptime() trae decimales
-  if (segundos < 60) return `${segundos}s`;
-  const m = Math.floor(segundos / 60);
-  if (m < 60) return `${m}m ${segundos % 60}s`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ${m % 60}m`;
-  return `${Math.floor(h / 24)}d ${h % 24}h`;
-}
-
-const gb = (bytes) => `${(bytes / 1073741824).toFixed(1)} GB`;
-
 // ─────────────────────────── el teléfono ───────────────────────────
-
-const leer = (ruta) => {
-  try {
-    return fs.readFileSync(ruta, "utf8").trim();
-  } catch {
-    return null;
-  }
-};
-
-/** Android deja leer esto sin permisos especiales. En Linux no existe. */
-function datosAndroid() {
-  const prop = leer(`${RAIZ}/system/build.prop`);
-  if (!prop) return null;
-  const campo = (clave) => {
-    const m = prop.match(new RegExp(`^${clave}=(.*)$`, "m"));
-    return m ? m[1].trim() : null;
-  };
-  return {
-    version: campo("ro.build.version.release"),
-    modelo: campo("ro.product.model"),
-    marca: campo("ro.product.brand"),
-  };
-}
-
-function bateria() {
-  for (const base of [`${RAIZ}/sys/class/power_supply/battery`, `${RAIZ}/sys/class/power_supply/bms`]) {
-    const capacidad = leer(`${base}/capacity`);
-    if (capacidad && /^\d+$/.test(capacidad)) {
-      const temperatura = leer(`${base}/temp`);
-      return {
-        pct: Number(capacidad),
-        estado: leer(`${base}/status`) || "",
-        // Viene en décimas de grado.
-        temp: temperatura && /^-?\d+$/.test(temperatura) ? Number(temperatura) / 10 : null,
-      };
-    }
-  }
-  return null;
-}
-
-function disco() {
-  try {
-    const s = fs.statfsSync(os.homedir());
-    const total = s.blocks * s.bsize;
-    const libre = s.bavail * s.bsize;
-    return { total, libre, pct: total ? Math.round(((total - libre) / total) * 100) : 0 };
-  } catch {
-    return null;
-  }
-}
-
-function memoriaSistema() {
-  const info = leer(`${RAIZ}/proc/meminfo`);
-  if (!info) return null;
-  const total = Number((info.match(/^MemTotal:\s+(\d+) kB/m) || [])[1]);
-  const disponible = Number((info.match(/^MemAvailable:\s+(\d+) kB/m) || [])[1]);
-  if (!total || !disponible) return null;
-  return { totalMB: Math.round(total / 1024), usadoMB: Math.round((total - disponible) / 1024) };
-}
-
-/** La IPv4 de la red local; en Android suele ser la del wifi. */
-function ipLocal() {
-  for (const interfaces of Object.values(os.networkInterfaces())) {
-    for (const i of interfaces || []) {
-      if (i.family === "IPv4" && !i.internal) return i.address;
-    }
-  }
-  return null;
-}
+// Todo eso vive en datos-equipo.mjs desde que la consola también lo usa.
 
 function cajaTelefono() {
   const and = datosAndroid();
