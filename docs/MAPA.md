@@ -1,4 +1,4 @@
-# Mapa de Shin-MD 3.7.1
+# Mapa de Shin-MD 3.7.2
 
 > Generado con `npm run mapa`. No se edita a mano: los números y las listas
 > salen del repositorio, así que si algo se mueve, se vuelve a lanzar.
