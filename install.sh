@@ -2210,7 +2210,10 @@ accion_servicio() {
         || morir "La unidad está escrita, pero no arrancó. Mira: journalctl --user -u $PAQUETE -n 50"
       printf '\n'
       aviso "los servicios de usuario se paran al cerrar la sesión."
-      dato "para que siga tras el logout:  sudo loginctl enable-linger $USER"
+      # `$USER` no existe en un contenedor ni en un servicio de systemd: con
+      # `set -u` eso mata el instalador al final, justo cuando ya está todo
+      # hecho. Se cae a `id -un`, que siempre contesta.
+      dato "para que siga tras el logout:  sudo loginctl enable-linger ${USER:-$(id -un 2>/dev/null || echo TU_USUARIO)}"
     fi
   fi
   bien "servicio $PAQUETE activo (ámbito $ambito)"
