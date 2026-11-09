@@ -191,22 +191,23 @@ test("con terminal de verdad: panel fijo, registro debajo y sale limpio", (t) =>
   assert.match(limpio, /web http/);
 });
 
-test("el QR que no cabe se avisa en vez de romperse", () => {
-  // En una pantalla de 60 columnas el QR mide 65: partido no se puede leer.
-  const qr = "█ ▄▄▄▄▄ █▄█▄ ▀█▄▀▄▄█▀▀█▀██▀██ █▄█ ▄██▀▀█    █ ▄▀▄▀▀▄  █▄█ ▄█▀▄▀▀▄";
+test("el dibujo que no cabe se avisa en vez de romper el panel", () => {
+  // Ya no hay QR (la vinculación es por código), pero el bot puede imprimir
+  // arte ancho: en 60 columnas no entra y partido no se entiende.
+  const arte = "█ ▄▄▄▄▄ █▄█▄ ▀█▄▀▄▄█▀▀█▀██▀██ █▄█ ▄██▀▀█    █ ▄▀▄▀▀▄  █▄█ ▄█▀▄▀▀▄";
   const { lineas } = componerPantalla({
     estado: "activo",
-    registro: ["antes del qr", qr, qr, "después del qr"],
+    registro: ["antes del dibujo", arte, arte, "después del dibujo"],
     ancho: 60,
     alto: 12,
   });
   const texto = lineas.map(sinColor).join("\n");
 
-  assert.match(texto, /el QR no cabe en el panel/, "tiene que avisar");
-  assert.match(texto, /--code/, "y decir cómo evitarlo");
-  assert.equal(texto.split("el QR no cabe").length - 1, 1, "el aviso se da una vez, no por línea");
-  // Ni un trozo de QR a medias.
-  assert.doesNotMatch(texto, /▄▄▄▄▄ █▄█▄/, "no debe quedar el QR partido");
-  assert.match(texto, /antes del qr/);
-  assert.match(texto, /después del qr/);
+  assert.match(texto, /no cabe en el panel/, "tiene que avisar");
+  assert.match(texto, /vigia/, "y decir dónde verlo entero");
+  assert.equal(texto.split("no cabe en el panel").length - 1, 1, "el aviso se da una vez, no por línea");
+  // Ni un trozo del dibujo a medias.
+  assert.doesNotMatch(texto, /▄▄▄▄▄ █▄█▄/, "no debe quedar el dibujo partido");
+  assert.match(texto, /antes del dibujo/);
+  assert.match(texto, /después del dibujo/);
 });

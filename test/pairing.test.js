@@ -145,8 +145,13 @@ test("el código que se muestra en pantalla es el que devolvió WhatsApp", async
   const registro = await arrancarConPairing({ numero: "5215512345678", respuesta: "WXYZ9876" });
   // eslint-disable-next-line no-control-regex -- quita los colores ANSI antes de comparar
   const pantalla = registro.salida.join("\n").replace(/\u001b\[[0-9;]*m/g, "");
-  assert.match(pantalla, /Código de emparejamiento/, "debe avisar que hay un código");
-  assert.match(pantalla, /WXYZ-9876/, "el código debe verse completo, no solo la etiqueta");
+  assert.match(pantalla, /tu código/, "el código va en su propio panel");
+  // El panel separa las letras para que no se confundan (8/B, 1/l): lo que
+  // importa es que el código esté completo y en orden.
+  const junto = pantalla.replace(/\s+/g, "");
+  assert.match(junto, /WXYZ-9876/, "el código debe verse completo, no solo la etiqueta");
+  assert.match(pantalla, /Dispositivos vinculados/, "y decir dónde teclearlo");
+  assert.doesNotMatch(pantalla, /█/, "sin QR: la consola no dibuja bloques");
 });
 
 test("si WhatsApp no devuelve código, no se inventa nada", async () => {
@@ -155,11 +160,16 @@ test("si WhatsApp no devuelve código, no se inventa nada", async () => {
   assert.equal(formatearCodigoDeVinculacion(null), null, "sin código no hay nada que formatear");
 });
 
-test("sin --code no se pide ningún código (modo QR)", async () => {
+test("--qr ya no existe: pide el código igual que --code", async () => {
+  // Se sigue aceptando para no romper guiones viejos, pero hace lo mismo:
+  // el QR no cabe en la pantalla de un móvil y partido no se puede escanear.
   const args = parseArgs(["--qr"]);
-  assert.equal(args.code, false);
-  const registro = await arrancarConPairing({ numero: args.phone });
-  assert.deepEqual(registro.llamadas, [], "el modo QR no debe pedir código");
+  assert.equal(args.code, true, "--qr tiene que activar el código");
+  assert.equal(args.qrDeprecado, true, "y marcar que se usó una opción vieja");
+
+  const registro = await arrancarConPairing({ numero: "5215512345678", respuesta: "QRQR1234" });
+  assert.equal(registro.llamadas.length, 1, "el código sí se pide");
+  assert.equal(registro.llamadas[0], "5215512345678");
 });
 
 test("normalizePhone respeta las reglas de México y Argentina", () => {

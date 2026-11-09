@@ -169,7 +169,12 @@ export default {
     const captionText = captions[currentCommand](fromName, toName, genero);
     const caption = who !== msg.sender ? `\`${fromName}.\` ${captionText} \`${toName}.\` ${getRandomSymbol()}.` : `\`${fromName}\` ${captionText} ${getRandomSymbol()}.`;
     try {
-      const response = await fetch(`${global.APIs.Ginko.url}/sfw/interaction?inter=${currentCommand}&key=${global.APIs.Ginko.key}`);
+      // Sin API configurada no se llama: se avisa con palabras.
+      const api = globalThis.APIs?.Ginko;
+      if (!api?.url) {
+        return msg.reply(state('sinApi', { what: 'interacciones' }));
+      }
+      const response = await fetch(`${api.url}/sfw/interaction?inter=${currentCommand}&key=${api.key}`);
       const json = await response.json();
       const result = json?.result || json?.url || json?.data;
       if (!result) throw new Error('Sin resultado de la API.');

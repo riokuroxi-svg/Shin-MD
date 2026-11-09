@@ -5,14 +5,16 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { normalizePhone, parseArgs } from "../src/lib/cli-args.js";
+import * as ui from "../src/services/consola.js";
+import { panelListo } from "../src/services/consola.js";
+import { instalarAPIs } from "../src/lib/apis.js";
 // ═══════════════════════════════════════════════════════════════════
 //  boot/index.js — Punto de arranque estilo Ginko-MD
-//  Uso: node index.js [--qr | --code | --menu]
+//  Uso: node index.js [--code | --menu]
 // ═══════════════════════════════════════════════════════════════════
 
 import "dotenv/config";
 import chalk from "chalk";
-import cfonts from "cfonts";
 import moment from "moment-timezone";
 import readlineSync from "readline-sync";
 import fs from "fs";
@@ -39,6 +41,10 @@ import { createMemoryMonitor } from "../src/services/memory-monitor.js";
 installLogFilter();
 installAntiCrash();
 
+// El banner, lo primero: es la cara del bot y así no queda enterrado entre
+// el ruido de los parches y las migraciones.
+printBanner();
+
 // ─── Check legal AGPL (Sección 7) ───────────────────────────────
 // LICENSE y NOTICE son parte de la licencia. Si esta copia no los
 // incluye, es incompleta o modificada sin respetar AGPL: no arranca.
@@ -57,9 +63,8 @@ installAntiCrash();
       process.exit(1);
     }
   }
-  let __ver = "dev";
-  try { __ver = JSON.parse(fs.readFileSync(path.join(__root, "package.json"), "utf8")).version || __ver; } catch {}
-  log.ui(chalk.magenta("Shin-MD v" + __ver + " - Powered by riokuroxi-svg"));
+  // La versión y el autor ya los dice el banner: aquí solo se comprueba
+  // que la copia trae lo que la licencia exige.
 }
 
 // Red de seguridad del conector: el npm install aplica los parches a
@@ -74,9 +79,25 @@ installAntiCrash();
   const __patchScript = path.resolve(__rootDir, "..", "scripts", "patch-baileys.cjs");
   const __baileysSocket = path.resolve(__rootDir, "..", "node_modules", "baileys", "lib", "Socket", "socket.js");
   if (fs.existsSync(__patchScript) && fs.existsSync(__baileysSocket)) {
-    const r = spawnSync(process.execPath, [__patchScript], { stdio: "inherit" });
-    if (r.status !== 0) {
-      log.ui(chalk.red("[ ✗ ]  AVISO: no se pudieron aplicar los parches del conector. Si no puedes vincular un dispositivo nuevo, ejecuta \"npm install\"."));
+    // Antes se soltaban diez líneas «ya aplicado» en cada arranque. Ahora se
+    // resume en una: el detalle solo aparece si algo falla, que es cuando
+    // de verdad hace falta leerlo.
+    const r = spawnSync(process.execPath, [__patchScript], { encoding: "utf8" });
+    const salida = String(r.stdout || "") + String(r.stderr || "");
+    if (r.status === 0) {
+      // El script dice cuántos parches deja puestos; si no lo dice, no se
+      // inventa una cifra.
+      // Se cuentan las líneas numeradas del script (1., 2a., 2b.…), que son
+      // los parches de verdad; «aplicado» también sale en el resumen final.
+      const total = (salida.match(/^\[patch-baileys\] ·\s+\d+[a-z]?\./gm) || []).length;
+      const detalle = /no hay nada que escribir/.test(salida)
+        ? (total ? total + " parches al día" : "parches al día")
+        : "parches revisados y puestos";
+      console.log(ui.estado("ok", "conector: " + detalle));
+    } else {
+      console.log(ui.estado("error", "no se pudieron aplicar los parches del conector"));
+      console.log("  " + chalk.hex("#8B82A3")("si no puedes vincular un dispositivo nuevo, ejecuta \"npm install\"."));
+      if (process.env.SHIN_VERBOSE === "1") console.log(salida);
     }
   }
 }
@@ -100,126 +121,110 @@ function hasValidSession(sessionDir) {
 }
 
 function printBanner() {
-  cfonts.say("SHIN-MD", {
-    font: "block", align: "center",
-    gradient: ["#ff7eb3", "#f97316"],
-    letterSpacing: 1, space: false,
-  });
-  cfonts.say("Bot WhatsApp Multi-Device", {
-    font: "chrome", align: "center",
-    gradient: ["blue", "magenta"], letterSpacing: 2,
-  });
-  log.ui(chalk.cyan("      🍁 Hecho por riokuroxi-svg · Anti-ban nativo") + "\n");
+  let version = "dev";
+  try {
+    version = JSON.parse(fs.readFileSync(path.join(__dirname(), "..", "package.json"), "utf8")).version || version;
+  } catch {}
+  const plataforma = process.platform === "android" ? "termux" : process.platform;
+  console.log(ui.banner({ version, node: process.versions.node, plataforma }));
 }
 
+/** La carpeta de este archivo, para no repetir el cálculo tres veces. */
+function __dirname() {
+  return path.dirname(fileURLToPath(import.meta.url));
+}
+
+// El registro de mensajes, en una línea por mensaje. Antes cada texto que
+// entraba soltaba un cuadro de siete filas con colores distintos a los del
+// resto de la consola: en un grupo activo eso es ilegible. Ahora se lee
+// como un registro y comparte la paleta del resto.
 function logIncomingMessage(ctx, usedPrefix) {
-  const t = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
-  const name = ctx.pushName || "Usuario";
-  const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
-  const isCmd = !!usedPrefix;
-  const boxColor = isCmd ? chalk.hex("#00ff88") : chalk.hex("#38bdf8");
-  log.ui("");
-  log.ui(boxColor("  ╭───────────────────────────────────────"));
-  log.ui(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
-  log.ui(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
-  log.ui(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
-  log.ui(boxColor("  │") + chalk.magenta("  Remitente: ") + chalk.magentaBright(ctx.senderId || ctx.chatId));
-  log.ui(boxColor("  │") + chalk.green("  " + (ctx.isGroup ? "Grupo" : "Privado") + ": ") + chalk.white(g));
-  log.ui(boxColor("  │") + chalk.cyanBright("  " + (isCmd ? "Comando" : "Mensaje") + ": ") + chalk.white(ctx.text.slice(0, 70)));
-  log.ui(boxColor("  ╰───────────────────────────────────────"));
+  const t = moment().tz("America/Mexico_City").format("HH:mm:ss");
+  const donde = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "privado";
+  log.ui(ui.mensaje({
+    hora: t,
+    quien: ctx.pushName || ctx.pushname || "Usuario",
+    donde,
+    texto: String(ctx.text || ""),
+    comando: !!usedPrefix,
+  }));
 }
 
 function logCommand(ctx, cmdName, ms) {
-  const t = moment().tz("America/Mexico_City").format("DD/MM/YY HH:mm:ss");
-  const name = ctx.pushName || ctx.pushname || "Usuario";
-  const g = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "Chat Privado";
-  const boxColor = chalk.hex("#00ff88");
-  log.ui("");
-  log.ui(boxColor("  ╭───────────────────────────────────────"));
-  log.ui(boxColor("  │") + chalk.cyan("  Bot: ") + chalk.greenBright(process.env.BOT_JID || "Shin-MD"));
-  log.ui(boxColor("  │") + chalk.yellow("  Hora: ") + chalk.yellowBright(t));
-  log.ui(boxColor("  │") + chalk.blueBright("  Usuario: ") + chalk.white(name));
-  log.ui(boxColor("  │") + chalk.magenta("  Grupo: ") + chalk.white(g));
-  log.ui(boxColor("  │") + chalk.cyanBright("  Comando: ") + chalk.white(cmdName) + boxColor(` (${ms}ms)`));
-  log.ui(boxColor("  ╰───────────────────────────────────────"));
+  const t = moment().tz("America/Mexico_City").format("HH:mm:ss");
+  const donde = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "privado";
+  log.ui(ui.mensaje({
+    hora: t,
+    quien: ctx.pushName || ctx.pushname || "Usuario",
+    donde,
+    texto: cmdName,
+    comando: true,
+    ms,
+  }));
 }
 
 // ==================================================================
 //  INICIO — TODO SINCRONO hasta el menú (como Ginko-MD)
 // ==================================================================
 
-printBanner();
-
 const args = parseArgs(process.argv.slice(2));
 // SESSION_DIR permite arrancar con otra sesión (ej. para probar la
 // vinculación sin tocar la del dueño: SESSION_DIR=/tmp/prueba).
 const sessionDir = process.env.SESSION_DIR || "./Sessions/Owner";
 const sessionValida = hasValidSession(sessionDir);
-const methodCodeByEnv = (process.env.PAIRING_METHOD || "").trim().toLowerCase() === "code" && process.env.PAIRING_NUMBER;
 const envNumber = (process.env.PAIRING_NUMBER || "").trim();
 
-let opcion, phoneNumber = "";
+let phoneNumber = "";
 
-if (args.menu) {
-  // Forzar menú aunque haya sesión
-  opcion = "";
-} else if (args.qr) {
-  opcion = "1";
-} else if (args.code) {
-  opcion = "2";
-  // Prioridad: número por CLI > PAIRING_NUMBER de .env > preguntar.
-  // (Antes: siempre preguntaba con readline-sync y crasheaba en hosts
-  //  sin terminal interactiva — BoxMine, Docker, paneles, etc.)
-  phoneNumber = args.phone || normalizePhone(envNumber);
-  if (!phoneNumber) {
-    if (!process.stdin.isTTY) {
-      log.error(chalk.red("[Shin-MD] --code sin número y sin consola interactiva."));
-      log.error(chalk.yellow("[Shin-MD] Usa: node index.js --code +521XXXXXXXXXX"));
-      log.error(chalk.yellow("[Shin-MD] o define PAIRING_NUMBER en tu archivo .env"));
-      process.exit(1);
-    }
-    phoneNumber = normalizePhone(readlineSync.question(
-      chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp.\n") +
-      chalk.bold.yellowBright("Ejemplo: +57301******\n") +
-      chalk.bold.magentaBright("---> ")
-    ));
-  } else {
-    log.ui(chalk.gray(`[ ✿ ] Vinculación por código (número: ${phoneNumber})\n`));
-  }
-} else if (sessionValida) {
-  opcion = "0";
-  log.ui(chalk.gray("[ ✿ ] Sesión existente detectada, cargando...\n"));
-} else if (methodCodeByEnv) {
-  opcion = "2";
-  phoneNumber = normalizePhone(envNumber);
-  log.ui(chalk.gray(`[ ✿ ] Vinculación por código (número desde .env: ${phoneNumber})\n`));
+// ── Vinculación: siempre por código ────────────────────────────────
+// El QR se retiró a propósito. En un móvil (Termux) no cabe en la
+// pantalla y sale partido, y al copiarlo a un chat o a un log deja de
+// ser legible. El código de 8 caracteres se teclea y funciona igual en
+// un teléfono, en un VPS y en Docker. `--qr` se sigue aceptando para no
+// romper los guiones que ya existan, pero hace lo mismo que `--code`.
+if (args.qrDeprecado) {
+  log.warn("El QR ya no se usa: la vinculación es siempre por código.");
+  console.log(ui.estado("info", "te pediré el número y WhatsApp te dará un código de 8 caracteres."));
 }
 
-// Menú interactivo si no se decidió antes
-if (!opcion) {
-  const isInteractive = !!process.stdin.isTTY;
-  if (!isInteractive) {
-    log.warn("No hay consola interactiva. Usa --qr, --code o configura .env");
-    opcion = "1";
-  } else {
-    log.ui(chalk.yellow("\n  ╔═══════════════════════════════╗"));
-    log.ui(chalk.yellow("  ║") + chalk.cyan("     📲  CONEXIÓN  📲        ") + chalk.yellow("║"));
-    log.ui(chalk.yellow("  ╚═══════════════════════════════╝\n"));
-    log.ui(chalk.white("     [1]") + chalk.cyan(" QR Code"));
-    log.ui(chalk.white("     [2]") + chalk.cyan(" Pairing Code\n"));
-
-    opcion = readlineSync.question(chalk.yellow("     ❯ Opción: "));
-    while (!/^[1-2]$/.test(opcion)) {
-      log.ui(chalk.bold.redBright("     ✗ Solo 1 o 2"));
-      opcion = readlineSync.question(chalk.yellow("     ❯ Opción: "));
-    }
-
-    if (opcion === "2") {
-      log.ui(chalk.bold.redBright("\nPor favor, Ingrese el número de WhatsApp."));
-      log.ui(chalk.bold.yellowBright("Ejemplo: 521234567890\n"));
-      phoneNumber = normalizePhone(readlineSync.question(chalk.magenta("---> ")));
-    }
+/** Pregunta el número (o sale con un mensaje claro si no hay terminal). */
+function pedirNumero() {
+  if (!process.stdin.isTTY) {
+    console.error("");
+    console.error(ui.estado("error", "no hay terminal para preguntar el número."));
+    console.error("  " + chalk.hex("#8B82A3")("Arranca con el número puesto:"));
+    console.error("    " + chalk.hex("#CFC6E0")("node index.js --code 521XXXXXXXXXX"));
+    console.error("    " + chalk.hex("#CFC6E0")("o define PAIRING_NUMBER en el .env"));
+    console.error("");
+    process.exit(1);
   }
+  console.log(ui.panelVinculacion().join("\n"));
+  const respuesta = readlineSync.question(ui.preguntaNumero());
+  return normalizePhone(respuesta);
+}
+
+/**
+ * De dónde sale el número, en este orden: argumento, .env y pregunta.
+ * El orden importa en un VPS, donde no hay terminal para preguntar.
+ * Si no hay número usable, no se sigue a medias: se sale con el motivo.
+ */
+function pedirNumeroOSalir() {
+  const numero = args.phone || normalizePhone(envNumber) || pedirNumero();
+  if (!numero) {
+    console.error(ui.estado("error", "ese número no tiene dígitos usables."));
+    process.exit(1);
+  }
+  return numero;
+}
+
+if (args.menu) {
+  // Forzar la vinculación aunque haya sesión guardada: se salta el atajo
+  // de abajo y se pregunta el número igual que en un arranque nuevo.
+  phoneNumber = pedirNumeroOSalir();
+} else if (sessionValida && !args.code && !args.qr) {
+  console.log(ui.estado("ok", "sesión existente: no hace falta vincular nada."));
+} else {
+  phoneNumber = pedirNumeroOSalir();
 }
 
 // ==================================================================
@@ -375,21 +380,34 @@ async function main() {
     // hasta configurarlo. (Bot de una sola cuenta: sin cambios — tus
     // propios mensajes ya pasan por ctx.fromMe.)
     if (!engine.getOwnerJid()) {
-      log.warn("┌─────────────────────────────────────────────────────────");
-      log.warn("│ ⚠ OWNER_NUMBER SIN CONFIGURAR — nadie será dueño del bot");
-      log.warn("│   1) cp .env.example .env");
-      log.warn("│   2) escribe tu número en OWNER_NUMBER (solo dígitos)");
-      log.warn("│   3) reinicia el bot. Hasta entonces: todos sin permisos.");
-      log.warn("└─────────────────────────────────────────────────────────");
+      console.log("");
+      console.log(ui.caja({
+        titulo: "falta el dueño",
+        color: ui.COLOR.ambar,
+        lineas: [
+          "OWNER_NUMBER sin configurar: nadie será dueño.",
+          "",
+          "1) cp .env.example .env",
+          "2) escribe tu número en OWNER_NUMBER (solo dígitos)",
+          "3) reinicia el bot",
+          "",
+          ui.COLOR.tenue("hasta entonces, todos sin permisos."),
+        ],
+      }).join("\n"));
+      console.log("");
     }
   });
 
+  // Las APIs de respaldo se configuran ANTES de cargar los comandos: si no,
+  // el primer .instagram se encuentra `global.APIs` sin definir y revienta.
+  instalarAPIs();
   const router = createRouter(engine, { onCommand: logCommand, onMessage: logIncomingMessage });
   await router.init();
 
   const sockModule = connectSocket(engine, {
     sessionDir,
-    pairingMethod: opcion === "2" ? "code" : "qr",
+    // Siempre por código: el QR se retiró de la consola.
+    pairingMethod: "code",
     pairingNumber: phoneNumber,
     onMessage: (s, m) => router.handle(s, m),
     onReady: async s => {
@@ -401,6 +419,18 @@ async function main() {
         log.error("Events registration: " + (e.message || e));
       }
       log.success("Bot listo ✓");
+      console.log("");
+      console.log(panelListo({
+        version: (() => {
+          try { return JSON.parse(fs.readFileSync(path.join(__dirname(), "..", "package.json"), "utf8")).version; }
+          catch { return "?"; }
+        })(),
+        nombre: s?.user?.name || s?.user?.id || "?",
+        comandos: typeof router.countUnique === "function" ? router.countUnique() : 0,
+        prefijo: router.PREFIX || ".",
+        web: `http://127.0.0.1:${process.env.PORT || 3000}`,
+      }));
+      console.log("  " + ui.COLOR.tenue("el registro de lo que pasa va aquí abajo.") + "\n");
     },
     watchdog,
   });

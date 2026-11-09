@@ -146,7 +146,10 @@ async function getImageSearchResults(query) {
         return res.result.map(item => ({ url: item.image, title: item.title || null, domain: item.url ? new URL(item.url).hostname : null, resolution: null }));
       }
     }
-  ];
+  ]
+    // Solo las APIs configuradas: una URL con «undefined» no se intenta.
+    .filter(({ endpoint }) => typeof endpoint === "string" && !endpoint.includes("undefined"));
+  if (!apis.length) return [];
   for (const { endpoint, extractor } of apis) {
     try {
       const { data } = await axios.get(endpoint);

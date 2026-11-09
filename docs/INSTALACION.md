@@ -138,20 +138,41 @@ SHIN_PERMITIR_PAQUETAS=1 curl … | sh
 shin --code
 ```
 
-Aparece el panel y, debajo, un **código de 8 dígitos**. En WhatsApp:
-
-**Ajustes → Dispositivos vinculados → Vincular un dispositivo → Vincular con
-número de teléfono**
-
-Y tecleas el código. Si prefieres QR: `shin --qr`.
+Aparece el panel y, debajo, un **código de 8 caracteres** en su propia caja:
 
 ```
-╭ SHIN-MD 3.6.0 ──────────────────────────────────────╮
-│ ● ACTIVO  0 grupos  ↑ 1m  pid 4242                   │
-│ web http://127.0.0.1:3000                            │
-╰──────────────────────────────────────────────────────╯
- ✓ Bot listo ✓
- ● Grupos: 12
+╭ tu código ─────────────────────────────────────────────╮
+│                                                        │
+│                escríbelo en el teléfono                │
+│                                                        │
+│                   A B C D - 1 2 3 4                    │
+│                                                        │
+│     caduca en ~60 s · si expira, vuelve a arrancar     │
+│                                                        │
+╰────────────────────────────────────────────────────────╯
+
+  cuenta: 5215512345678
+  1. abre WhatsApp en ese teléfono
+  2. Ajustes › Dispositivos vinculados
+  3. Vincular un dispositivo › con número
+  4. teclea el código de arriba
+```
+
+En WhatsApp: **Ajustes → Dispositivos vinculados → Vincular un dispositivo →
+Vincular con número de teléfono**, y tecleas el código.
+
+```
+╭ tu código ─────────────────────────────────────────────╮
+│                   A B C D - 1 2 3 4                    │
+╰────────────────────────────────────────────────────────╯
+
+╭ en línea ──────────────────────────────────────────────╮
+│ cuenta   Shin-MD                                       │
+│ versión  v3.8.0                                        │
+│ comandos 213                                           │
+│ prefijo  .                                             │
+│ panel    http://127.0.0.1:3000                         │
+╰────────────────────────────────────────────────────────╯
 ```
 
 **El panel de arriba no se mueve nunca**, aunque el bot se caiga o reinicie.
@@ -159,12 +180,13 @@ Debajo va saliendo lo que hace. Teclas: `r` reinicia, `q` o `Ctrl+C` sale.
 
 Si alguna vez `Ctrl+C` no basta, añade `--force` al final del comando.
 
-### ¿Por qué `--code` y no QR?
+### ¿Por qué no hay QR?
 
-El QR no cabe en la pantalla de muchos móviles y en Termux se ve cortado. El
-código de 8 dígitos se teclea y no tiene ese problema. Si eliges QR, usa
-`npm start -- --qr` en una ventana ancha o con `npm run vigia -- --qr`, que lo
-imprime sin panel.
+Porque no funciona donde de verdad se instala esto: en la pantalla de un móvil
+(Termux) el QR no cabe y sale partido, y partido no hay quien lo escanee. El
+código de 8 caracteres se teclea y funciona igual en un teléfono, en un VPS y
+en un contenedor. `--qr` se sigue aceptando por si algún guion viejo lo usa,
+pero hace exactamente lo mismo que `--code` y avisa de que ya no hace falta.
 
 ---
 

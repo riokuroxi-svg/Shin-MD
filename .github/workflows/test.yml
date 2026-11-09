@@ -1,13 +1,32 @@
-# Shin-MD — CI: cada push debe pasar la suite de tests.
-# Red de seguridad: un commit roto queda marcado aquí aunque se cuele a main.
+# ═══════════════════════════════════════════════════════════════════
+#  CI de Shin-MD — tres puertas, ninguna opcional.
+#
+#    1. suite   → la batería completa en Node 22 (la versión que pide el
+#                 package.json; con Node 20 no arranca y eso ya pasó).
+#    2. lint    → cero ERRORES (los avisos de estilo se toleran: hay 200
+#                 y son de código viejo; los errores son bugs y no entran).
+#    3. shell   → los instaladores se analizan con `bash -n`, `sh -n` y
+#                 shellcheck, y se comprueba que las huellas de
+#                 SHA256SUMS siguen cuadrando con los archivos publicados.
+#
+#  Lo que NO se hace aquí, a propósito: nada que hable con WhatsApp. El
+#  flujo de vinculación se prueba a mano con `npm run test:pairing`; en un
+#  CI eso sería una petición por cada push a los servidores de WhatsApp.
+# ═══════════════════════════════════════════════════════════════════
 name: Tests
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  suite:
+    name: suite · node 22
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -15,7 +34,56 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Instalar dependencias (incluye parche de Baileys)
+          cache: npm
+      - name: Instalar dependencias (incluye el parche de Baileys)
         run: npm ci --no-audit --no-fund
-      - name: Suite de tests
+      - name: Suite de pruebas
         run: npm test
+      - name: Resumen de la suite
+        if: always()
+        run: cat test/resumen-suite.json || true
+
+  lint:
+    name: lint · cero errores
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # --max-warnings alto a propósito: los 238 avisos son de estilo y van
+      # bajando cuando se toca cada archivo. Un ERROR, en cambio, para todo.
+      - name: ESLint
+        run: npx eslint . --max-warnings 300
+
+  instaladores:
+    name: instaladores · huellas y sintaxis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sintaxis (bash, dash y POSIX puro)
+        run: |
+          bash -n install.sh
+          sh -n shin.sh
+          # `shin.sh` promete funcionar con sh de verdad, no solo con bash:
+          # se comprueba con dash, que es el sh de Debian.
+          if command -v dash >/dev/null; then dash -n shin.sh; fi
+      - name: shellcheck (si está disponible)
+        run: |
+          if command -v shellcheck >/dev/null; then
+            shellcheck -S error install.sh shin.sh
+          else
+            sudo apt-get update && sudo apt-get install -y shellcheck
+            shellcheck -S error install.sh shin.sh
+          fi
+      - name: Las huellas de SHA256SUMS siguen cuadrando
+        run: node scripts/firma-instalador.mjs --check
+      - name: La ayuda del instalador no se rompe
+        run: ./install.sh --help | head -40

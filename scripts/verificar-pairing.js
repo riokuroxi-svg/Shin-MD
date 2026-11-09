@@ -75,6 +75,7 @@ const hijo = spawn(process.execPath, ["index.js", "--code", numero], {
 // escribe la etiqueta y el mensaje por separado), así que se guarda un
 // búfer y solo se analizan las líneas completas.
 let pendiente = "";
+let enPanel = false;
 function revisar(texto) {
   pendiente += texto;
   const trozos = pendiente.split("\n");
@@ -86,9 +87,18 @@ function revisar(texto) {
     lineas.push(limpia);
     if (process.env.SHIN_PAIRING_VERBOSE === "1") console.log("   │ " + limpia);
     if (/solicitando código de vinculación/i.test(limpia)) pidioCodigo = true;
-    if (/Código de emparejamiento/i.test(limpia)) {
+    // El código ya no se anuncia con una etiqueta suelta: va dentro de su
+    // panel («tu código»), así que se busca el panel y luego la línea que
+    // trae el código separado (A B C D - 1 2 3 4).
+    if (/tu código/i.test(limpia)) enPanel = true;
+    // El código va dentro del panel, con espacios entre letra y letra y
+    // los bordes de la caja alrededor: se quitan bordes y huecos y se
+    // mira si lo que queda es un código (ABCD-1234).
+    const plano = limpia.replace(/[│╭╮╰╯─]/g, " ").replace(/\s+/g, " ").trim();
+    const compacto = plano.replace(/\s/g, "");   // el panel lo separa letra a letra
+    if (enPanel && /^[A-Z0-9]{4}-?[A-Z0-9]{4}$/.test(compacto)) {
       recibioCodigo = true;
-      evidencia = limpia;
+      evidencia = compacto;
       // Ya está lo que buscábamos: no hace falta seguir conectados.
       setTimeout(() => terminar("ya tenemos el código"), 50);
     }

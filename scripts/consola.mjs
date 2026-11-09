@@ -29,7 +29,7 @@
 //  Uso:
 //    npm start                 (panel + bot)
 //    npm start -- --code       (igual, pidiendo código de vinculación)
-//    npm start -- --qr
+//    npm start -- --code 5215…  (con el número ya puesto, sin preguntar)
 //
 //  Teclas:  r reiniciar el bot   ·   q o Ctrl+C salir
 // ═══════════════════════════════════════════════════════════════════
@@ -66,9 +66,13 @@ const sinColor = (s) => String(s).replace(/\x1b\[[0-9;]*m/g, "");
 export const visible = (s) => [...sinColor(s)].length;
 
 /**
- * ¿Es arte de bloques (un QR) más ancho que la pantalla?
- * Partirlo lo convierte en basura ilegible; es mejor decirlo que fingir
- * que se está enseñando algo.
+ * ¿Es arte de bloques (un QR viejo, una tabla ASCII enorme) más ancho que
+ * la pantalla? Partirlo lo convierte en basura ilegible; es mejor decirlo
+ * que fingir que se está enseñando algo.
+ *
+ * Desde que la vinculación es solo por código no debería aparecer nada
+ * así, pero el bot puede imprimir arte de un comando (`.ascii`, `figlet`)
+ * y el panel no debe descuadrarse por eso.
  */
 export function esArteAncho(linea, ancho) {
   const t = sinColor(linea);
@@ -290,7 +294,7 @@ export function componerPantalla({
   for (const l of registro) {
     if (esArteAncho(l, ancho)) {
       if (!avisadoElQr) {
-        envueltas.push(`${GRIS}▚ el QR no cabe en el panel: usa --code, o npm run vigia para verlo${RESET}`);
+        envueltas.push(`${GRIS}▚ ese dibujo no cabe en el panel: mira el registro con npm run vigia${RESET}`);
         avisadoElQr = true;
       }
       continue;

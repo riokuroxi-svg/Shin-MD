@@ -78,4 +78,11 @@ export default [
     files: ["cmds/**/*.js"],
     rules: { "no-unused-vars": "off" },
   },
+  // Quien lee la consola para probarla (el vigía, el panel y sus pruebas)
+  // tiene que mirar los códigos de color carácter a carácter: `\u001b` en
+  // una expresión regular es correcto aquí, no un descuido.
+  {
+    files: ["scripts/consola.mjs", "scripts/panel.mjs", "test/consola.test.js", "test/vigia.test.js"],
+    rules: { "no-control-regex": "off" },
+  },
 ];

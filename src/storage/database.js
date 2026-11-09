@@ -57,18 +57,26 @@ export function createDatabase(dbPath) {
     const applied = new Set(
       db.prepare("SELECT version FROM migrations").all().map(r => r.version)
     );
+    // Las migraciones se resumen en una línea al terminar. Antes cada una
+    // soltaba dos («Migrating…» / «applied»): seis líneas de ruido en el
+    // arranque por algo que el dueño no tiene que leer. Si una falla, sí
+    // se dice cuál y por qué.
+    const nuevas = [];
     for (const m of MIGRATIONS) {
       if (applied.has(m.version)) continue;
-      log.gray("Migrating db → v" + m.version + " (" + m.name + ")");
       try {
         m.up(db);
         db.prepare("INSERT INTO migrations (version, name, applied_at) VALUES (?, ?, ?)")
           .run(m.version, m.name, Date.now());
-        log.success("Migration v" + m.version + " applied");
+        nuevas.push(m.version);
       } catch (err) {
-        log.error("Migration v" + m.version + " failed: " + (err.message || err));
+        log.error("Migración v" + m.version + " (" + m.name + ") falló: " + (err.message || err));
         throw err;
       }
+    }
+    if (nuevas.length) {
+      const ultima = nuevas[nuevas.length - 1];
+      log.success("Base de datos al día: " + (nuevas.length === 1 ? "1 migración nueva" : nuevas.length + " migraciones nuevas") + " (v" + ultima + ")");
     }
   }
 

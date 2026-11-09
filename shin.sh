@@ -48,7 +48,7 @@
 # ═══════════════════════════════════════════════════════════════════
 set -eu
 
-readonly VERSION="${SHIN_VERSION:-v3.7.0}"
+readonly VERSION="${SHIN_VERSION:-v3.7.1}"
 REPO="${SHIN_REPO:-riokuroxi-svg/Shin-MD}"
 
 # ─────────────────────────── salida ───────────────────────────
@@ -82,7 +82,7 @@ Opciones que entiende este archivo:
   --version vX.Y.Z      usar otra etiqueta (por defecto, la de este archivo)
   --dry-run             comprobar la huella y decir qué haría, sin ejecutar
 
-Cualquier otra opción se pasa al instalador: --dir RUTA, --code, --qr,
+Cualquier otra opción se pasa al instalador: --dir RUTA, --code,
 --no-arrancar, --branch RAMA, --repair, --uninstall, --doctor, --service…
 
 Ejemplos:

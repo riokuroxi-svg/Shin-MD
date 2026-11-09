@@ -204,6 +204,10 @@ const STATES = {
   success:     (d) => `✅ ${d.text || "Listo."}`,
   notfound:    (d) => `🔍 No encontré *${d.what || "eso"}*.\n> ${d.hint || "Prueba con otro nombre."}`,
   needQuote:   (d) => boxNotice("💬", [`Responde al mensaje que quieres ${d.action || "usar"} y vuelve a escribir el comando.`]),
+  sinApi:      (d) => boxNotice("🔌", [
+    `Este comando necesita una API de ${d.what || "respaldo"} y no hay ninguna configurada.`,
+    "Se activa con una URL en el .env (mira .env.example). Los demás comandos funcionan igual.",
+  ]),
   usage:       (d) => `💡 Se usa así: \`${d.usage || ""}\`${d.example ? `\n> Ejemplo: \`${d.example}\`` : ""}`,
   error:       (d) => boxNotice("❌", ["Algo salió mal.", d.detail ? `_${String(d.detail).slice(0, 120)}_` : "Inténtalo de nuevo en un momento."]),
 };
@@ -212,7 +216,7 @@ const STATES = {
  * Mensaje de estado unificado.
  * @param {string} kind  denied|onlyOwner|onlyAdmin|onlyGroup|onlyPrivate|
  *                       botNotAdmin|cooldown|loading|success|notfound|
- *                       needQuote|usage|error
+ *                       needQuote|sinApi|usage|error
  * @param {object} data  datos del estado (ver STATES)
  */
 export function state(kind, data = {}) {

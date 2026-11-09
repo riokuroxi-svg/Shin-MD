@@ -61,6 +61,9 @@ async function getTwitterMedia(url) {
       }
     }
   ]
+  // Solo se intentan las APIs que estén configuradas: si falta la URL, se
+  // salta en vez de pedir «undefined/dl/…» y reventar con un TypeError.
+  .filter(({ endpoint }) => typeof endpoint === "string" && !endpoint.includes("undefined"))
 
   for (const { endpoint, extractor } of apis) {
     try {

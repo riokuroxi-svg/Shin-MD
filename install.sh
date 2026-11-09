@@ -32,7 +32,8 @@
 #    --branch RAMA  seguir esa rama en vez de main
 #    --go           arrancar el bot al terminar (lo que hace `shin`)
 #    --no-arrancar  aunque sea --auto, no arrancar el bot
-#    --code, --qr   pasárselos al bot: pedir código de vinculación o QR
+#    --code          pasárselo al bot: pedir código de vinculación
+#    --qr           igual que --code (se acepta por compatibilidad)
 #    --print        con --service: enseñar la unidad, sin escribir nada
 #    --user/--system  ámbito del servicio (por defecto, el que se pueda)
 #    --yes          no preguntar
@@ -76,7 +77,7 @@ PURGAR=0
 BOOST=1
 GO=0                 # --go: arrancar el bot al terminar
 SIN_ARRANQUE=0       # --no-arrancar: aunque --auto pida arrancar
-ARRANQUE_ARGS=()     # --code / --qr, tal cual se le pasan al bot
+ARRANQUE_ARGS=()     # --code, tal cual se le pasa al bot
 SERVICIO_PRINT=0     # --print: enseñar la unidad y no escribir nada
 SERVICIO_AMBITO=""   # system | user (por defecto, lo que se pueda)
 
@@ -1540,11 +1541,7 @@ resumen() {
   fi
   printf '%s  Vincular WhatsApp%s\n' "$C_NEG" "$C_RESET"
   printf '    la opción --code pide un código de 8 dígitos (WhatsApp → Dispositivos vinculados)\n'
-  if tiene_script start:qr; then
-    printf '    si prefieres QR:  cd %s && npm run start:qr\n\n' "$DESTINO"
-  else
-    printf '\n'
-  fi
+  printf '    el bot te lo enseña en un panel y te dice dónde teclearlo\n\n'
   printf '%s  Parar%s\n' "$C_NEG" "$C_RESET"
   printf '    Ctrl+C\n\n'
   printf '%s  Mantenerlo vivo%s\n' "$C_NEG" "$C_RESET"
@@ -2255,7 +2252,7 @@ while [ $# -gt 0 ]; do
     --system|--sistema)        SERVICIO_AMBITO="system" ;;
     --no-arrancar|--no-start)  SIN_ARRANQUE=1 ;;
     --go|--iniciar)            GO=1 ;;
-    --code|--qr)               ARRANQUE_ARGS+=("$1") ;;
+    --code|--qr)               ARRANQUE_ARGS+=("--code") ;;  # --qr se acepta, pero ya no existe
     --dir)
       [ $# -ge 2 ] || morir "--dir necesita una ruta"
       DESTINO="$2"; DESTINO_EXPLICITO=1; shift ;;

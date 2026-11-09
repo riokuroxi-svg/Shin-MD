@@ -319,10 +319,15 @@ function sincronizarNumerosReadme() {
   const texto = fs.readFileSync(README, "utf8");
   // Tres formas en que el README dice el número: la insignia (299%2F299),
   // el texto del alt (299/299 pruebas) y el comentario de `npm test`.
+  const etiqueta = "v" + leerJson(PAQUETE).version;
   const nuevo = texto
     .replace(/\b\d+%2F\d+(?=%20)/g, `${pasan}%2F${total}`)
     .replace(/\b\d+\/\d+ pruebas\b/g, `${pasan}/${total} pruebas`)
-    .replace(/(# las )\d+( pruebas)/g, `$1${total}$2`);
+    .replace(/(# las )\d+( pruebas)/g, `$1${total}$2`)
+    // El comando de instalación lleva la versión DENTRO de la URL. Antes se
+    // quedaba con la anterior y el README mandaba a instalar una versión
+    // vieja justo después de publicar la nueva.
+    .replace(/(raw\.githubusercontent\.com\/[^/]+\/[^/]+\/)v\d+\.\d+\.\d+/g, `$1${etiqueta}`);
   if (nuevo !== texto) fs.writeFileSync(README, nuevo);
 }
 

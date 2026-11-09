@@ -89,8 +89,10 @@ batería, la dirección del panel web) y debajo lo que va diciendo el bot. El
 panel no se mueve aunque el bot se reinicie, y `Ctrl+C` lo para todo.
 
 - **Con código:** `npm run start:code`. WhatsApp → *Dispositivos vinculados* →
-  *Vincular con número de teléfono* → mete el código de 8 dígitos en el teléfono.
-- **Con QR:** `npm run start:qr`, y escaneas desde el mismo menú.
+  *Vincular con número de teléfono* → mete el código de 8 caracteres que te
+  enseña el panel. El bot te pregunta el número una sola vez.
+- **No hay QR**: en la pantalla de un móvil no cabe y sale partido, así que la
+  vinculación es siempre por código.
 
 Para detenerlo: `Ctrl+C`. En Termux, `Ctrl` está en la fila de teclas extra.
 

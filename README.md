@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 353 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 378 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="353/353 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="378/378 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -128,8 +128,11 @@ ejemplo: `.play` (y sus alias `yt`, `mp3`, `musica`), `.sticker` (`s`),
 `.daily` (`diario`, `recompensa`), `.w` (`work`, `trabajar`), `.x` para Twitter,
 `.ig` para Instagram y `.menu` (`ayuda`, `h`).
 
-🔑 *Instagram y Pinterest usan `FASTSAVER_KEY` (gratis en api.fastsaver.io).
-Twitter funciona sin clave, pero es más estable con ella.*
+🔑 *`.instagram`, `.twitter` y `.imagen` funcionan solos; si quieres un plan B
+cuando el método directo falla, se les puede configurar una API de respaldo en
+el `.env` (`GINKO_API_URL`, `DELIRIUS_API_URL`…). Sin ella el comando lo dice y
+el resto del bot no se entera. `.pinterest` está fuera de servicio: su API
+gratuita cerró.*
 
 <details>
 <summary><b>Ver la lista completa de comandos (se genera del propio bot)</b></summary>
@@ -160,7 +163,7 @@ npm run docs:web
 —la versión de Play Store está abandonada y rompe los paquetes— y pega esto:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/shin.sh | sh
 ```
 
 Una línea, y el bot queda arrancado. Ese archivo descarga el instalador de
@@ -187,7 +190,7 @@ shin
 | Escribes | Pasa |
 |---|---|
 | `shin` | arranca el bot (panel + bot) |
-| `shin --code` · `shin --qr` | arranca pidiendo código de vinculación o con QR |
+| `shin --code` | arranca pidiendo el código de vinculación (no hay QR) |
 | `shin update` | actualiza y arranca |
 | `shin repair` | reconstruye dependencias y arranca |
 | `shin doctor` | foto del estado, para pegar si pides ayuda |
@@ -212,8 +215,8 @@ huella cubre también el arranque:
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/SHA256SUMS -o SHA256SUMS
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/SHA256SUMS -o SHA256SUMS
 sha256sum -c SHA256SUMS && bash install.sh --version v3.7.0 --go
 ```
 
@@ -224,7 +227,7 @@ sin él, el instalador se queda en «instalado» y se arranca luego con `shin`.
 ¿Solo quieres saber si el archivo es el bueno, sin instalar nada?
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/shin.sh | sh -s -- --dry-run
 ```
 
 </details>
@@ -235,9 +238,10 @@ Antes de arrancarlo, para que Android no lo mate mientras duerme:
 2. Ajustes → Batería → Termux → **Sin restricciones**.
 3. Android 14 o más: Opciones de desarrollador → **Desactivar restricciones de procesos hijos**.
 
-En el primer arranque, `shin --code` muestra un código de 8 caracteres. En
-WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono** y lo
-escribes ahí. ¿Prefieres escanear un QR? `shin --qr`.
+En el primer arranque, `shin --code` te pide el número una vez y luego enseña un
+código de 8 caracteres en su propio panel. En WhatsApp: **Dispositivos
+vinculados → Vincular con número de teléfono** y lo escribes ahí. No hay QR: en
+la pantalla de un móvil no cabe y, partido, no hay quien lo escanee.
 
 > **Nada de esto hay que memorizarlo.** Está paso a paso, con lo que debes ver
 > en pantalla en cada momento y qué hacer cuando algo falla, en
@@ -284,7 +288,7 @@ hacia fuera y solo habla con `127.0.0.1`.
 **Servidor o VPS.** El mismo comando, sin preparar nada antes:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/shin.sh | sh
 ```
 
 Si falta Node o git, el instalador lo resuelve: con el gestor de paquetes del
@@ -374,7 +378,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 353 pruebas
+npm test               # las 378 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot

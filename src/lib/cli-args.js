@@ -39,21 +39,36 @@ export function normalizePhone(input) {
 
 /**
  * Interpreta los argumentos de la línea de comandos.
- *   node index.js --qr          → vinculación por QR
- *   node index.js --code 5215.. → vinculación por código con ese número
- *   node index.js --menu        → fuerza el menú interactivo
+ *
+ *   node index.js --code 5215..  → vinculación con ese número
+ *   node index.js --code         → vinculación, preguntando el número
+ *   node index.js --menu         → fuerza la vinculación aunque haya sesión
+ *   node index.js --qr           → ya no existe: hace lo mismo que --code
+ *
+ * El QR se retiró porque no cabe en la pantalla de un móvil y, partido,
+ * no hay quien lo escanee. `--qr` se acepta todavía —hay guías y
+ * servicios ya escritos que lo usan— pero activa el código y marca
+ * `qrDeprecado` para poder avisar una sola vez.
  *
  * @param {string[]} argv  normalmente process.argv.slice(2)
- * @returns {{qr: boolean, code: boolean, menu: boolean, phone: string}}
+ * @returns {{qr: boolean, qrDeprecado: boolean, code: boolean, menu: boolean, phone: string}}
  */
 export function parseArgs(argv) {
-  const r = { qr: false, code: false, menu: false, phone: "" };
+  const r = { qr: false, qrDeprecado: false, code: false, menu: false, phone: "" };
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--qr") r.qr = true;
+    if (argv[i] === "--qr") {
+      r.qr = true;
+      r.qrDeprecado = true;
+      r.code = true;
+    }
     if (argv[i] === "--menu") r.menu = true;
-    if (argv[i] === "--code") r.code = true;
-    if (argv[i] === "--code" && argv[i + 1] && /^\+?\d{7,15}$/.test(argv[i + 1])) {
-      r.phone = normalizePhone(argv[++i]);
+    if (argv[i] === "--code") {
+      r.code = true;
+      // Se acepta el número tal como lo pega la gente (+52 55 1234 5678):
+      // normalizePhone ya se queda con los dígitos.
+      if (argv[i + 1] && /^\+?[\d\s-]{7,20}$/.test(argv[i + 1]) && /\d{7,}/.test(argv[i + 1].replace(/\D/g, ""))) {
+        r.phone = normalizePhone(argv[++i]);
+      }
     }
   }
   return r;

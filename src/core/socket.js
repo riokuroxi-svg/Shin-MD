@@ -17,14 +17,13 @@ import { useSQLiteAuthState } from "./auth.js";
 import { getCachedMeta, setCachedMeta, deleteCachedMeta } from "./metaCache.js";
 import { patchGroupMetadata } from "#serialize";
 import * as lid from "../lib/lid.js";
+import { panelCodigo } from "../services/consola.js";
 import { esLid as esJidLid } from "../lib/jid.js";
 import { resolveChannel } from "../lib/channel.js";
 import db from "../services/ginko-db.js";
-import qrcode from "qrcode-terminal";
 import pino from "pino";
 import fs from "fs";
 import path from "path";
-import chalk from "chalk";
 import NodeCache from "node-cache";
 import log from "#logger";
 import { estilizar } from "#lib/theme";
@@ -95,6 +94,7 @@ export function connectSocket(engine, opts) {
   let restartStreak = 0;
   let lastRestartAt = 0;
   let patientWarned = false;
+  let avisoSinNumero = false;
   const MAX_RETRIES = 15;
   const msgStore = new Map();
   // Tope ÚNICO del msgStore: envíos y recibidos comparten el mismo Map.
@@ -354,10 +354,12 @@ export function connectSocket(engine, opts) {
     s.ev.on("connection.update", async (upd) => {
       const { qr, connection, lastDisconnect, isNewLogin } = upd;
 
-      if (qr != null && !state.creds.registered && pairingMethod !== "code") {
-        log.info(chalk.green.bold("[ ✿ ] Escanea este código QR\n"));
-        qrcode.generate(qr, { small: true });
-        log.info("");
+      // Sin QR, a propósito: en un móvil no cabe y partido no se puede
+      // escanear. Si el conector manda uno es porque nadie pidió el
+      // código todavía; se ignora y se dice qué hacer, una sola vez.
+      if (qr != null && !state.creds.registered && !pairingNumber && !avisoSinNumero) {
+        avisoSinNumero = true;
+        log.warn("WhatsApp pide vincular, pero no sé con qué número: reinicia con --code o define PAIRING_NUMBER.");
       }
 
       if (connection === "open") {
@@ -530,7 +532,9 @@ export function connectSocket(engine, opts) {
             if (process.env.SHIN_PAIRING_DEBUG === "1") log.info("Pairing: solicitando código de vinculación…");
             const pair = await s.requestPairingCode(phone);
             const code = formatearCodigoDeVinculacion(pair);
-            log.info(chalk.bold.white(chalk.bgMagenta(" Código de emparejamiento: ")) + " " + chalk.bold.white(code));
+            // El código se dibuja aparte del registro: es lo único que la
+            // persona tiene que mirar, y entre líneas de log se perdía.
+            console.log(panelCodigo({ numero: phone, codigo: code }));
           }
         } catch (e) { log.error("Pairing: " + (e.message || e)); }
       }, pairingDelayMs);
