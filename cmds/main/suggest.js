@@ -6,7 +6,7 @@
  */
 import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
-import defaultAvatar from '../../lib/default-avatar.js';
+import defaultAvatar from "#lib/default-avatar";
 import { tiempoLargo as msToTime } from "#lib/tiempo";
 export default {
   command: ['report', 'reporte', 'sug', 'suggest'],

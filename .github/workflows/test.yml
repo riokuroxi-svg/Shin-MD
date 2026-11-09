@@ -58,6 +58,11 @@ jobs:
       # bajando cuando se toca cada archivo. Un ERROR, en cambio, para todo.
       - name: ESLint
         run: npx eslint . --max-warnings 300
+      # Una etiqueta vieja en un comando de instalación manda a instalar la
+      # versión anterior justo después de anunciar la nueva. Es invisible, así
+      # que la comprueba el CI y no un lector.
+      - name: Versiones de la documentación
+        run: node scripts/versiones.mjs --check
 
   instaladores:
     name: instaladores · huellas y sintaxis

@@ -8,7 +8,7 @@ import { botJid } from "#serialize";
 import ws from 'ws';
 import fs from 'fs';
 import db from '../../src/services/ginko-db.js';
-import defaultAvatar from '../../lib/default-avatar.js';
+import defaultAvatar from "#lib/default-avatar";
 import { state } from '#lib/theme';
 
 export default {

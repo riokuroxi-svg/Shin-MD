@@ -53,6 +53,26 @@ function numerosReales(totalComandos) {
   }
   const pkg = JSON.parse(fs.readFileSync(PAQUETE, "utf8"));
   const node = (pkg.engines?.node || "22").replace(/[^0-9.]/g, "").replace(/\.0$/, "");
+  // `docs/assets/datos.json` alimenta los gráficos del README y lo comprueba
+  // `test/docs-web.test.js`. Nada lo actualizaba: había que acordarse a mano,
+  // y cuando se olvidaba la página decía 397 y el README 378. Se escribe aquí
+  // porque este es el único sitio que ya sabe los números de la última corrida.
+  if (pruebas) {
+    const rutaDatos = path.join(RAIZ, "docs", "assets", "datos.json");
+    try {
+      const datos = JSON.parse(fs.readFileSync(rutaDatos, "utf8"));
+      const antes = JSON.stringify([datos.pruebas, datos.pruebasTotal, datos.archivos]);
+      datos.pruebas = pruebas;
+      datos.pruebasTotal = total || pruebas;
+      datos.archivos = archivos;
+      if (JSON.stringify([datos.pruebas, datos.pruebasTotal, datos.archivos]) !== antes) {
+        fs.writeFileSync(rutaDatos, `${JSON.stringify(datos, null, 2)}\n`);
+        console.log(`  ✓ docs/assets/datos.json al día · ${pruebas}/${total} · ${archivos} archivos`);
+      }
+    } catch (err) {
+      console.warn(`  ⚠  no pude actualizar docs/assets/datos.json: ${err.message}`);
+    }
+  }
   return {
     __PRUEBAS__: String(pruebas || "—"),
     __PRUEBAS_TOTAL__: String(total || pruebas || "—"),

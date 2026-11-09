@@ -126,6 +126,18 @@ function proyecto() {
   for (const pieza of ["consola.mjs", "supervisor.mjs", "datos-equipo.mjs"]) {
     fs.copyFileSync(path.join(RAIZ, "scripts", pieza), path.join(dir, "scripts", pieza));
   }
+  // La consola ya no es autosuficiente, y hace bien: lee los argumentos y
+  // decide la vinculación con los mismos módulos que el bot. Se copian tal
+  // cual, y `node_modules` se enlaza en vez de copiarse (chalk tarda).
+  for (const [carpeta, pieza] of [
+    ["lib", "cli-args.js"],
+    ["lib", "vinculacion.js"],
+    ["services", "consola.js"],
+  ]) {
+    fs.mkdirSync(path.join(dir, "src", carpeta), { recursive: true });
+    fs.copyFileSync(path.join(RAIZ, "src", carpeta, pieza), path.join(dir, "src", carpeta, pieza));
+  }
+  fs.symlinkSync(path.join(RAIZ, "node_modules"), path.join(dir, "node_modules"), "dir");
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ version: "9.9.9", type: "module" }));
   fs.writeFileSync(
     path.join(dir, "index.js"),
@@ -143,7 +155,9 @@ test("sin terminal (VPS, journalctl) no dibuja nada raro y sigue vigilando", asy
   const hijo = spawn(process.execPath, [path.join(dir, "scripts", "consola.mjs")], {
     cwd: dir,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, YA_REINICIO: "1" },
+    // Con número: esta prueba es del panel. Que sin número el bot NO
+    // arranque se comprueba en vinculacion.test.js.
+    env: { ...process.env, YA_REINICIO: "1", PAIRING_NUMBER: "5215512345678" },
   });
   let salida = "";
   hijo.stdout.on("data", (d) => (salida += d));
@@ -170,7 +184,7 @@ test("con terminal de verdad: panel fijo, registro debajo y sale limpio", (t) =>
     "script",
     // `timeout -s TERM` cierra la consola como lo haría un Ctrl+C, para
     // poder comprobar que deja la terminal como la encontró.
-    ["-qec", "stty rows 20 cols 60; timeout -s TERM 5 env YA_REINICIO=1 node scripts/consola.mjs", "/dev/null"],
+    ["-qec", "stty rows 20 cols 60; timeout -s TERM 5 env YA_REINICIO=1 PAIRING_NUMBER=5215512345678 node scripts/consola.mjs", "/dev/null"],
     { cwd: dir, encoding: "utf8", timeout: 20000 },
   );
   const salida = `${r.stdout || ""}${r.stderr || ""}`;

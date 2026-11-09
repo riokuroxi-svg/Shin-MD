@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import defaultAvatar from '../../lib/default-avatar.js';
+import defaultAvatar from "#lib/default-avatar";
 import db from '../../src/services/ginko-db.js';
 import { tiempoLargo as msToTime } from "#lib/tiempo";
 const linkRegex = /chat\.whatsapp\.com\/([0-9A-Za-z]{20,24})(?:\s+[0-9]{1,3})?/i;

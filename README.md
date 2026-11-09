@@ -4,7 +4,7 @@
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="378/378 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="406/406 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -217,7 +217,7 @@ huella cubre también el arranque:
 pkg update -y && pkg install -y curl
 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/install.sh -o install.sh
 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.7.0 --go
+sha256sum -c SHA256SUMS && bash install.sh --version v3.7.1 --go
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -238,10 +238,15 @@ Antes de arrancarlo, para que Android no lo mate mientras duerme:
 2. Ajustes → Batería → Termux → **Sin restricciones**.
 3. Android 14 o más: Opciones de desarrollador → **Desactivar restricciones de procesos hijos**.
 
-En el primer arranque, `shin --code` te pide el número una vez y luego enseña un
+En el primer arranque, `shin` te pide el número ahí mismo y luego enseña un
 código de 8 caracteres en su propio panel. En WhatsApp: **Dispositivos
 vinculados → Vincular con número de teléfono** y lo escribes ahí. No hay QR: en
 la pantalla de un móvil no cabe y, partido, no hay quien lo escanee.
+
+Si no hay terminal donde preguntar —un servicio, un contenedor, un `nohup`— el
+bot **no arranca a ciegas**: se detiene y te dice la orden exacta
+(`PAIRING_NUMBER=521… shin`, o `shin --code 521…`). Antes seguía adelante y
+acababa pidiendo un QR que nadie podía escanear desde el mismo teléfono.
 
 > **Nada de esto hay que memorizarlo.** Está paso a paso, con lo que debes ver
 > en pantalla en cada momento y qué hacer cuando algo falla, en
@@ -361,6 +366,7 @@ El README es el resumen. Lo que de verdad hace falta para **hacer** algo está e
 | **[docs/INSTALACION.md](docs/INSTALACION.md)** | el que instala por primera vez: Termux o VPS, qué escribir, qué debe ver, y qué hacer cuando sale un error |
 | **[docs/TERMUX.md](docs/TERMUX.md)** | el caso del teléfono con todo el detalle (wakelock, batería, procesos hijos) |
 | **[docs/VPS.md](docs/VPS.md)** | servidor, systemd, pm2 y `0.0.0.0` con contraseña |
+| **[docs/MAPA.md](docs/MAPA.md)** | el plano: qué hay en cada carpeta, el viaje de un mensaje, para qué está cada dependencia y qué se retiró (se regenera con `npm run mapa`) |
 | **[docs/DESARROLLO.md](docs/DESARROLLO.md)** | el que quiere **entender**: cómo está montado, tu primer comando, botones, base de datos y migraciones |
 | **[docs/FORK.md](docs/FORK.md)** | el que quiere **publicar su propia versión**: nombre, instalador, imágenes, su copyright y cómo no romper la licencia |
 | **[docs/CONECTOR.md](docs/CONECTOR.md)** | los ocho parches de Baileys y por qué |
@@ -393,7 +399,14 @@ npm run publicar       # saca una versión: firma, suite, docs, commit, etiqueta
 y las imágenes con los números reales de esa corrida, hace el commit, crea la
 etiqueta, sube la rama y la etiqueta por separado y publica la release con las
 notas que genera GitHub. Al terminar imprime la línea de instalación ya
-apuntando a la versión nueva:
+apuntando a la versión nueva.
+
+La release no depende de tener `gh` instalado: si no lo encuentra y hay un
+token en `GH_TOKEN` (o `GITHUB_TOKEN`), la crea por la API y sube los tres
+adjuntos igual. El token se lee del entorno y no se escribe en ningún archivo.
+Y no hay versión escrita a mano en la documentación: `scripts/versiones.mjs`
+las cuadra todas con `package.json` antes de la suite, porque la 3.7.1 llegó a
+publicarse con su propio `shin.sh --help` mandando a la 3.7.0.
 
 ```bash
 npm run publicar                  # sube el parche: 3.7.0 → 3.7.1
@@ -407,7 +420,10 @@ Nada de eso hace falta para usarlo: se instala con un comando y se arranca con
 dónde está cada cosa**. Si es tu caso, empieza por
 **[docs/DESARROLLO.md](docs/DESARROLLO.md)**: cómo se carga un comando, dónde se
 guarda un dato, qué puedes cambiar sin romper nada y las cinco reglas que este
-proyecto no se salta.
+proyecto no se salta. Y si lo que quieres es el plano —qué hay en cada carpeta,
+el viaje de un mensaje, para qué está cada dependencia, qué se retiró y por qué—
+**[docs/MAPA.md](docs/MAPA.md)**, que se regenera con `npm run mapa` y falla en
+la suite si se queda viejo.
 
 <details>
 <summary><b>Regenerar los gráficos del README (trazo vectorial, sin fuentes externas)</b></summary>

@@ -4,7 +4,7 @@
 #  https://github.com/riokuroxi-svg/Shin-MD
 #  Copyright (C) 2026 riokuroxi-svg · SPDX-License-Identifier: AGPL-3.0-only
 #
-#    curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+#    curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/shin.sh | sh
 #
 #  Eso es todo. No hace falta `pkg update`, ni descargar tres archivos,
 #  ni comprobar huellas a mano, ni `cd`, ni `npm start`.
@@ -72,10 +72,12 @@ morir() { printf '\n  %s✗ %s%s\n\n' "$RJ" "$*" "$R" >&2; exit 1; }
 hay() { command -v "$1" >/dev/null 2>&1; }
 
 ayuda() {
-  cat <<'AYUDA'
+  # Heredoc sin comillas: así la URL sale con la versión de ESTE archivo y
+  # no con una copia escrita a mano que se queda vieja al publicar.
+  cat <<AYUDA
 Shin-MD — instalación y arranque en un comando.
 
-  curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+  curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/${VERSION}/shin.sh | sh
 
 Opciones que entiende este archivo:
   -h, --help            esta ayuda

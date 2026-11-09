@@ -91,6 +91,22 @@ function hogarFalso() {
   return d;
 }
 
+/**
+ * Un PATH donde `yt-dlp` no existe.
+ *
+ * El instalador omite `pkg install yt-dlp` si ya lo encuentra, y eso está
+ * bien. Pero en una máquina que lo tiene instalado (esta, sin ir más
+ * lejos) la prueba de Termux se quedaba mirando un registro vacío y
+ * fallaba por el entorno, no por el código. Se quitan del PATH solo las
+ * carpetas que traen un yt-dlp; la carpeta de node se deja delante para
+ * que `npm` siga siendo el de la suite.
+ */
+function sinYtdlp() {
+  const partes = (process.env.PATH || "").split(":").filter(Boolean);
+  const limpias = partes.filter((d) => !fs.existsSync(path.join(d, "yt-dlp")));
+  return [BIN_NODE, ...limpias].join(":");
+}
+
 function correr(script, args, { cwd, raiz, env = {}, entrada } = {}) {
   if (raiz) dentroDeTmp(raiz);
   if (cwd) dentroDeTmp(cwd);
@@ -262,7 +278,7 @@ test("detecta Termux y avisa de lo que Android hace con el bot", () => {
 
   const r = correr(INSTALADOR, ["--yes"], {
     raiz,
-    env: { SHIN_REPO_URL: origen, TERMUX_VERSION: "0.118.3", PREFIX: falso },
+    env: { SHIN_REPO_URL: origen, TERMUX_VERSION: "0.118.3", PREFIX: falso, PATH: sinYtdlp() },
   });
 
   assert.equal(r.status, 0, r.salida);
@@ -1062,7 +1078,7 @@ exit 0
 
   const r = correr(INSTALADOR, ["--yes"], {
     raiz,
-    env: { SHIN_REPO_URL: origen, TERMUX_VERSION: "0.118.3", PREFIX: falso },
+    env: { SHIN_REPO_URL: origen, TERMUX_VERSION: "0.118.3", PREFIX: falso, PATH: sinYtdlp() },
   });
 
   assert.equal(r.status, 0, r.salida);

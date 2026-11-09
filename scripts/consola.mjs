@@ -35,9 +35,13 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import fs from "node:fs";
+import readline from "node:readline";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { crearSupervisor, VENTANA_MS } from "./supervisor.mjs";
+import { parseArgs } from "../src/lib/cli-args.js";
+import { estadoSesion, planDeVinculacion } from "../src/lib/vinculacion.js";
+import * as ui from "../src/services/consola.js";
 import { datosAndroid, bateria, disco, memoriaSistema, ipLocal, hace, gb } from "./datos-equipo.mjs";
 
 const RAIZ = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -131,30 +135,79 @@ export function limpiarSalida(texto) {
 export function ajustar(texto, ancho) {
   const limite = Math.max(1, ancho);
   if (visible(texto) <= limite) return [texto];
-  const trozos = [];
-  let actual = "";
-  let cuenta = 0;
+
+  // Se parte por PALABRAS, no por caracteres. Partir por caracteres deja
+  // renglones que empiezan con «, tope de hoy 20 mensajes»: se lee fatal y
+  // hace parecer que el registro está roto. Una palabra que sola no cabe
+  // (una URL larga) sí se parte, porque si no se saldría de la caja.
+  const piezas = [];
   const s = String(texto);
+  let ansi = "";
+  let palabra = "";
+  const cerrarPalabra = () => {
+    if (palabra) {
+      piezas.push({ tipo: "palabra", texto: palabra, ansi });
+      palabra = "";
+      ansi = "";
+    }
+  };
   for (let i = 0; i < s.length; ) {
     if (s[i] === "\x1b") {
-      const fin = s.indexOf("m", i);
-      if (fin === -1) break;
-      actual += s.slice(i, fin + 1);
-      i = fin + 1;
+      const finAnsi = s.indexOf("m", i);
+      if (finAnsi === -1) break;
+      ansi += s.slice(i, finAnsi + 1);
+      i = finAnsi + 1;
       continue;
     }
     const ch = String.fromCodePoint(s.codePointAt(i));
-    if (cuenta + 1 > limite) {
-      trozos.push(actual + RESET);
+    if (ch === " ") {
+      cerrarPalabra();
+      piezas.push({ tipo: "espacio" });
+    } else {
+      palabra += ch;
+    }
+    i += ch.length;
+  }
+  cerrarPalabra();
+
+  const lineas = [];
+  let actual = "";
+  let cuenta = 0;
+  for (const pieza of piezas) {
+    if (pieza.tipo === "espacio") {
+      // Los espacios del principio de renglón no se dibujan.
+      if (cuenta > 0) {
+        actual += " ";
+        cuenta += 1;
+      }
+      continue;
+    }
+    const anchoPalabra = visible(pieza.texto);
+    if (cuenta + anchoPalabra > limite && cuenta > 0) {
+      lineas.push(actual.replace(/ +$/, "") + RESET);
       actual = "";
       cuenta = 0;
     }
-    actual += ch;
-    cuenta++;
-    i += ch.length;
+    if (anchoPalabra > limite) {
+      // Palabra imposible: se corta a lo bruto, con sus colores delante.
+      const trozos = [];
+      let resto = pieza.texto;
+      let previo = pieza.ansi;
+      while (visible(resto) > limite) {
+        trozos.push(previo + [...resto].slice(0, limite).join("") + RESET);
+        resto = [...resto].slice(limite).join("");
+        previo = pieza.ansi;
+      }
+      for (const trozo of trozos) lineas.push(trozo);
+      actual = previo + resto;
+      cuenta = visible(resto);
+      continue;
+    }
+    actual += pieza.ansi + pieza.texto;
+    cuenta += anchoPalabra;
   }
-  if (actual) trozos.push(actual + RESET);
-  return trozos;
+  if (actual.trim()) lineas.push(actual + RESET);
+  return lineas.length ? lineas : [RESET];
 }
 
 const colorEstado = (estado) =>
@@ -323,6 +376,75 @@ const esPrincipal = () => {
   }
 };
 
+const SESSION_DIR = process.env.SESSION_DIR || "./Sessions/Owner";
+
+/**
+ * Decide qué número lleva el bot y lo deja en los argumentos del hijo.
+ *
+ * Devuelve los argumentos que hay que pasarle al bot, o `null` si no se
+ * puede arrancar (en cuyo caso ya se ha explicado el motivo).
+ *
+ * @param {boolean} tty  si la salida es una terminal (la del panel)
+ * @returns {Promise<string[]|null>}
+ */
+async function resolverVinculacion(tty) {
+  const args = parseArgs(ARGS);
+  const plan = planDeVinculacion({
+    args,
+    env: process.env,
+    sesion: estadoSesion(SESSION_DIR),
+    // Para preguntar hace falta poder ESCRIBIR: la entrada tiene que ser
+    // una terminal, no basta con que la salida lo sea.
+    hayTerminal: tty && Boolean(process.stdin.isTTY),
+  });
+
+  if (plan.accion === "salir") {
+    const lineas = [
+      "",
+      ui.estado("error", `no hay una terminal donde preguntarte el número (${plan.motivo}).`),
+      "  " + ui.COLOR.tenue("Se arranca sin preguntar de dos maneras:"),
+      "",
+      "    " + ui.COLOR.papel("npm start -- --code 521XXXXXXXXXX"),
+      "    " + ui.COLOR.papel("PAIRING_NUMBER=521XXXXXXXXXX npm start"),
+      "",
+      "  " + ui.COLOR.tenue("El número es el tuyo, el de la cuenta de WhatsApp que va a llevar el bot."),
+      "",
+    ];
+    console.log(lineas.join("\n"));
+    return null;
+  }
+
+  if (plan.accion !== "preguntar") return ARGS;
+
+  // Panel primero y pregunta después: se explica qué va a pasar antes de
+  // pedir nada, que es justo lo que faltaba cuando el bot se iba directo
+  // al QR.
+  console.log("");
+  console.log(ui.panelVinculacion().join("\n"));
+  const numero = await preguntarLinea(ui.preguntaNumero());
+  const limpio = parseArgs(["--code", numero.trim()]).phone;
+  if (!limpio) {
+    console.log("");
+    console.log(ui.estado("error", "ese número no tiene dígitos usables."));
+    console.log("  " + ui.COLOR.tenue("Escríbelo con el país delante: +52 1 55 1234 5678."));
+    console.log("");
+    return null;
+  }
+  console.log(ui.estado("ok", `vinculando con el número ${limpio}.`));
+  return [...ARGS, "--code", limpio];
+}
+
+/** Una línea de la terminal, sin romper el modo normal ni dejar residuos. */
+function preguntarLinea(pregunta) {
+  return new Promise((listo) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(pregunta, (respuesta) => {
+      rl.close();
+      listo(respuesta);
+    });
+  });
+}
+
 async function principal() {
   const tty = Boolean(process.stdout.isTTY);
   const props = { version: leeVersion() };
@@ -334,9 +456,23 @@ async function principal() {
   let timer = null;
 
   // ── el bot ────────────────────────────────────────────────────
+  // ── la vinculación, antes de nada ─────────────────────────────
+  // El bot NO puede preguntar por su cuenta: se lanza con la entrada
+  // cerrada para que el panel sea lo único que escribe en pantalla. Por
+  // eso la pregunta se hace aquí, en el proceso que sí tiene la
+  // terminal, y el número se le pasa al bot ya resuelto. Antes no se
+  // hacía: el bot arrancaba a ciegas y acababa enseñando un QR.
+  const vinculacion = await resolverVinculacion(tty);
+  if (vinculacion === null) {
+    // Todavía no hay panel, ni supervisor, ni temporizadores: se sale sin
+    // más y con código 1 para que un servicio sepa que no arrancó.
+    process.exitCode = 1;
+    return;
+  }
+
   const supervisor = crearSupervisor({
     raiz: RAIZ,
-    argumentos: ARGS,
+    argumentos: vinculacion,
     capturar: tty,
     ganchos: {
       arrancado: ({ pid }) => {

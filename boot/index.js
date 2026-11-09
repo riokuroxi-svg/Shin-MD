@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { normalizePhone, parseArgs } from "../src/lib/cli-args.js";
+import { estadoSesion, hayTerminalDetras, leerDeTerminal, planDeVinculacion } from "../src/lib/vinculacion.js";
 import * as ui from "../src/services/consola.js";
 import { panelListo } from "../src/services/consola.js";
 import { instalarAPIs } from "../src/lib/apis.js";
@@ -19,7 +20,6 @@ import moment from "moment-timezone";
 import readlineSync from "readline-sync";
 import fs from "fs";
 import path from "path";
-import { DatabaseSync } from "../src/storage/sqlite-compat.js";
 import { createEngine } from "#engine";
 import { connectSocket } from "#socket";
 import { createWatchdog } from "#watchdog";
@@ -105,21 +105,6 @@ printBanner();
 // ─── Helpers ────────────────────────────────────────────────────
 
 
-function hasValidSession(sessionDir) {
-  const authDb = path.join(sessionDir, "auth.db");
-  if (!fs.existsSync(authDb)) return false;
-  try {
-    const db = new DatabaseSync(authDb);
-    const row = db.prepare("SELECT data FROM creds WHERE id = 1").get();
-    db.close();
-    if (!row) return false;
-    const creds = JSON.parse(row.data);
-    return creds?.registered === true;
-  } catch {
-    return false;
-  }
-}
-
 function printBanner() {
   let version = "dev";
   try {
@@ -171,60 +156,79 @@ const args = parseArgs(process.argv.slice(2));
 // SESSION_DIR permite arrancar con otra sesión (ej. para probar la
 // vinculación sin tocar la del dueño: SESSION_DIR=/tmp/prueba).
 const sessionDir = process.env.SESSION_DIR || "./Sessions/Owner";
-const sessionValida = hasValidSession(sessionDir);
-const envNumber = (process.env.PAIRING_NUMBER || "").trim();
+const sesion = estadoSesion(sessionDir);
 
-let phoneNumber = "";
-
-// ── Vinculación: siempre por código ────────────────────────────────
-// El QR se retiró a propósito. En un móvil (Termux) no cabe en la
-// pantalla y sale partido, y al copiarlo a un chat o a un log deja de
-// ser legible. El código de 8 caracteres se teclea y funciona igual en
-// un teléfono, en un VPS y en Docker. `--qr` se sigue aceptando para no
-// romper los guiones que ya existan, pero hace lo mismo que `--code`.
+// ── Vinculación: siempre por código, nunca por QR ───────────────────
+// El QR se retiró porque en un móvil no cabe en la pantalla y, partido,
+// no hay quien lo escanee. `--qr` se sigue aceptando para no romper los
+// guiones que ya existan, pero hace lo mismo que `--code`.
 if (args.qrDeprecado) {
   log.warn("El QR ya no se usa: la vinculación es siempre por código.");
   console.log(ui.estado("info", "te pediré el número y WhatsApp te dará un código de 8 caracteres."));
 }
 
-/** Pregunta el número (o sale con un mensaje claro si no hay terminal). */
-function pedirNumero() {
-  if (!process.stdin.isTTY) {
-    console.error("");
-    console.error(ui.estado("error", "no hay terminal para preguntar el número."));
-    console.error("  " + chalk.hex("#8B82A3")("Arranca con el número puesto:"));
-    console.error("    " + chalk.hex("#CFC6E0")("node index.js --code 521XXXXXXXXXX"));
-    console.error("    " + chalk.hex("#CFC6E0")("o define PAIRING_NUMBER en el .env"));
-    console.error("");
-    process.exit(1);
-  }
+/**
+ * Pide el número por la terminal. Si la entrada estándar no es una
+ * terminal pero hay una detrás (`/dev/tty`), se lee de ahí: es el caso
+ * de un proceso lanzado con `< /dev/null` desde una sesión normal.
+ *
+ * @returns {string} el número normalizado, o "" si no se pudo preguntar
+ */
+function preguntarNumero() {
+  const porTty = !process.stdin.isTTY && hayTerminalDetras();
   console.log(ui.panelVinculacion().join("\n"));
-  const respuesta = readlineSync.question(ui.preguntaNumero());
+  const respuesta = porTty ? leerDeTerminal() : readlineSync.question(ui.preguntaNumero());
+  if (porTty) console.log(ui.preguntaNumero() + respuesta);
   return normalizePhone(respuesta);
 }
 
 /**
- * De dónde sale el número, en este orden: argumento, .env y pregunta.
- * El orden importa en un VPS, donde no hay terminal para preguntar.
- * Si no hay número usable, no se sigue a medias: se sale con el motivo.
+ * La orden exacta que hay que escribir cuando no hay dónde preguntar.
+ * Se enseña con `521XXXXXXXXXX` en lugar del número porque es lo único
+ * que hay que cambiar, y se recuerda el `.env` para quien prefiera no
+ * teclearlo cada vez.
  */
-function pedirNumeroOSalir() {
-  const numero = args.phone || normalizePhone(envNumber) || pedirNumero();
-  if (!numero) {
-    console.error(ui.estado("error", "ese número no tiene dígitos usables."));
-    process.exit(1);
-  }
-  return numero;
+function explicarSinTerminal(motivo) {
+  console.error("");
+  console.error(ui.estado("error", `no hay una terminal donde preguntarte el número (${motivo}).`));
+  console.error("  " + chalk.hex("#8B82A3")("Se arranca sin preguntar de dos maneras:"));
+  console.error("");
+  console.error("    " + chalk.hex("#CFC6E0")("npm start -- --code 521XXXXXXXXXX"));
+  console.error("    " + chalk.hex("#CFC6E0")("PAIRING_NUMBER=521XXXXXXXXXX npm start"));
+  console.error("");
+  console.error("  " + chalk.hex("#8B82A3")("El número es el tuyo, el de la cuenta de WhatsApp que va a llevar el bot."));
+  console.error("");
 }
 
-if (args.menu) {
-  // Forzar la vinculación aunque haya sesión guardada: se salta el atajo
-  // de abajo y se pregunta el número igual que en un arranque nuevo.
-  phoneNumber = pedirNumeroOSalir();
-} else if (sessionValida && !args.code && !args.qr) {
-  console.log(ui.estado("ok", "sesión existente: no hace falta vincular nada."));
-} else {
-  phoneNumber = pedirNumeroOSalir();
+const plan = planDeVinculacion({
+  args,
+  env: process.env,
+  sesion,
+  hayTerminal: hayTerminalDetras(),
+});
+
+let phoneNumber = "";
+switch (plan.accion) {
+  case "nada":
+    console.log(ui.estado("ok", "sesión existente: no hace falta vincular nada."));
+    break;
+  case "usar":
+    phoneNumber = plan.numero;
+    console.log(ui.estado("ok", `vinculando con el número ${phoneNumber}.`));
+    break;
+  case "preguntar":
+    phoneNumber = preguntarNumero();
+    if (!phoneNumber) {
+      console.error(ui.estado("error", "ese número no tiene dígitos usables."));
+      process.exit(1);
+    }
+    break;
+  default:
+    // Antes, aquí se seguía de largo y WhatsApp acababa pidiendo un QR
+    // que nadie había pedido y que no se puede escanear en un móvil. No
+    // se arranca a ciegas: se para y se dice qué escribir.
+    explicarSinTerminal(plan.motivo);
+    process.exit(1);
 }
 
 // ==================================================================

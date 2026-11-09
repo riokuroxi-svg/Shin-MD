@@ -76,6 +76,10 @@ function copiaDelRepo(version = "3.7.0") {
     fs.readFileSync(path.join(RAIZ, "scripts", "firma-instalador.mjs"), "utf8"));
   escribir(path.join(trabajo, "scripts", "publicar.mjs"),
     fs.readFileSync(path.join(RAIZ, "scripts", "publicar.mjs"), "utf8"));
+  // `publicar.mjs` importa el cuadre de versiones: sin este archivo la copia
+  // no arranca y todas las pruebas de aquí fallarían por un módulo que falta.
+  escribir(path.join(trabajo, "scripts", "versiones.mjs"),
+    fs.readFileSync(path.join(RAIZ, "scripts", "versiones.mjs"), "utf8"));
   escribir(path.join(trabajo, "package.json"), JSON.stringify({
     name: "shin-md", version, license: "AGPL-3.0-only", type: "module",
     scripts: { publicar: "node scripts/publicar.mjs" },
@@ -118,6 +122,14 @@ function publicar(repo, args = [], { gh, env = {} } = {}) {
     ...process.env,
     NO_COLOR: "1",
     PATH: gh ? `${gh}:${process.env.PATH}` : process.env.PATH,
+    // El token se borra a propósito, aunque lo haya en el entorno: si alguien
+    // publica de verdad con `GH_TOKEN` puesto, las pruebas que simulan «sin
+    // gh» dejarían de simularlo y verían una release por la API. Pasó: la
+    // suite se puso en rojo justo durante una publicación, y por un motivo
+    // que no tenía nada que ver con lo publicado. Cada prueba que quiere un
+    // token lo pasa explícitamente.
+    GH_TOKEN: "",
+    GITHUB_TOKEN: "",
     ...env,
   };
   // Se llama al script directamente: `npm run` añadiría ruido y su propio
@@ -267,6 +279,25 @@ test("si la suite falla, no se publica nada", () => {
   assert.equal(git(trabajo, "rev-parse", "HEAD"), antes, "no puede haber commit");
   assert.equal(git(remoto, "tag", "--list").trim(), "", "no puede haber etiqueta en el remoto");
   assert.equal(gh.leer(), "", "no puede haber release");
+});
+
+test("sin gh pero con GH_TOKEN, la release se anuncia por la API", () => {
+  const { trabajo } = copiaDelRepo("3.7.0");
+  // `--seco` no llama a la red: lo que se comprueba es que el plan ya cuenta
+  // con la release, para que la orden única no acabe en «subí el código pero
+  // no hay release».
+  const r = publicar(trabajo, ["3.9.0", "--seco"], { env: { GH_TOKEN: "token-de-prueba" } });
+  assert.equal(r.status, 0, r.salida);
+  assert.match(r.salida, /release v3\.9\.0 por la API/, r.salida);
+  assert.doesNotMatch(r.salida, /sin GitHub Release/, "no debe renunciar a la release si hay token");
+});
+
+test("sin gh y sin token, avisa en vez de fallar", () => {
+  const { trabajo } = copiaDelRepo("3.7.0");
+  const r = publicar(trabajo, ["3.9.0", "--seco"], { env: { GH_TOKEN: "", GITHUB_TOKEN: "" } });
+  assert.equal(r.status, 0, r.salida);
+  assert.match(r.salida, /sin GitHub Release/);
+  assert.match(r.salida, /GH_TOKEN/, "tiene que decir cómo arreglarlo");
 });
 
 test("el README queda con los números reales de la suite", () => {

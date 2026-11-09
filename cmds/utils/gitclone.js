@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import fetch from 'node-fetch';
-import defaultAvatar from '../../lib/default-avatar.js';
+import defaultAvatar from "#lib/default-avatar";
 import { state } from '#lib/theme';
 
 const regex = /^(?:https:\/\/|git@)github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/i;

@@ -21,25 +21,52 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { loadCommands } from "#commands";
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PAGINA = path.join(RAIZ, "docs", "web", "index.html");
 const PLANTILLA = path.join(RAIZ, "docs", "web", "plantilla.html");
 const LEE = (p) => fs.readFileSync(p, "utf8");
 
-/** La lista de comandos tal y como la ve el bot (sin repetir alias). */
-function catalogoDelBot(comandos) {
-  const vistos = new Set();
-  const lista = [];
-  for (const cmd of comandos.values()) {
-    if (!cmd || vistos.has(cmd.file)) continue;
-    vistos.add(cmd.file);
-    lista.push({ n: cmd.name, cat: cmd.category || "utils" });
-  }
-  return lista;
+/**
+ * La lista de comandos tal y como la ve el bot (sin repetir alias).
+ *
+ * Se pide a un proceso aparte, y no importando `#commands` aquí dentro, por
+ * un motivo que costó encontrar: cargar los ~200 comandos con importaciones
+ * dinámicas DESDE este proceso rompe, una de cada cinco veces, el canal por
+ * el que el runner de Node recibe los resultados («Unable to deserialize
+ * cloned data»). El archivo entero salía en rojo aunque las cuatro pruebas
+ * pasaran. En un proceso hijo el cargador de comandos trabaja igual de
+ * contento y no toca ese canal.
+ */
+function catalogoDelBot() {
+  const programa = `
+    import fs from "node:fs";
+    import { loadCommands } from "#commands";
+    const vistos = new Set();
+    const lista = [];
+    for (const cmd of (await loadCommands()).values()) {
+      if (!cmd || vistos.has(cmd.file)) continue;
+      vistos.add(cmd.file);
+      lista.push({ n: cmd.name, cat: cmd.category || "utils" });
+    }
+    // El catálogo va a un archivo, no a la salida: varios comandos escriben
+    // sus propios avisos al cargarse, y mezclarlos con el JSON lo rompe.
+    fs.writeFileSync(process.env.SHIN_CATALOGO, JSON.stringify(lista));
+  `;
+  const salida = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "shin-catalogo-")), "comandos.json");
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", programa], {
+    cwd: RAIZ,
+    encoding: "utf8",
+    timeout: 120_000,
+    env: { ...process.env, SHIN_CATALOGO: salida },
+  });
+  assert.equal(r.status, 0, `no pude cargar los comandos del bot:\n${r.stderr}`);
+  assert.ok(fs.existsSync(salida), `el bot no dejó el catálogo:\n${r.stdout}`);
+  return JSON.parse(fs.readFileSync(salida, "utf8"));
 }
 
 /** Los datos incrustados en la página. */
@@ -56,8 +83,7 @@ test("la página del proyecto está al día con los comandos del bot", async () 
     "la página quedó sin generar (aún tiene el marcador __DATOS__)"
   );
 
-  const comandos = await loadCommands();
-  const delBot = catalogoDelBot(comandos);
+  const delBot = catalogoDelBot();
   const enPagina = catalogoDeLaPagina(LEE(PAGINA));
 
   const nombresBot = delBot.map((c) => c.n).sort();

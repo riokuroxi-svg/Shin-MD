@@ -7,7 +7,7 @@
 import { botJid } from "#serialize";
 import moment from 'moment-timezone';
 import db from '../../src/services/ginko-db.js';
-import defaultAvatar from '../../lib/default-avatar.js';
+import defaultAvatar from "#lib/default-avatar";
 import { generateProfileCard } from '../../src/lib/cardGenerator.js';
 import { sendInteractive } from "#interactive";
 import { atajo } from "#lib/ui-kit";

@@ -9,7 +9,7 @@ import { botJid, deleteCachedMeta, getCachedMeta, normalizeJid, resolveJidSync, 
 import chalk from 'chalk';
 import moment from 'moment-timezone';
 import db from '../src/services/ginko-db.js';
-import defaultAvatar from '../lib/default-avatar.js';
+import defaultAvatar from "#lib/default-avatar";
 import { generateWelcomeCard } from '../src/lib/cardGenerator.js';
 
 function getGroupAdmins(participants) {

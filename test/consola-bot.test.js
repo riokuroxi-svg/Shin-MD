@@ -26,6 +26,9 @@ const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, "..");
 
 const ui = await import(path.join(RAIZ, "src", "services", "consola.js"));
+// El corte de líneas vive en la consola del panel (es quien mide la
+// pantalla), no en la librería de cajas.
+const panel = await import(path.join(RAIZ, "scripts", "consola.mjs"));
 const { parseArgs } = await import(path.join(RAIZ, "src", "lib", "cli-args.js"));
 
 const limpio = (s) => ui.sinColor(String(s));
@@ -73,6 +76,34 @@ test("una línea larga se parte sin cortar palabras", () => {
   // Ninguna línea pasa del ancho, y no queda una palabra partida por la mitad.
   for (const linea of caja.split("\n")) assert.ok([...linea].length <= 40);
   assert.doesNotMatch(caja, /SQLi\s*\n\s*te/, "no se corta una palabra");
+});
+
+test("el registro parte por palabras: ninguna línea empieza con una coma", () => {
+  // Lo que se veía: «… warm-up 7 días» / «, tope de hoy 20 mensajes». El
+  // corte era por caracteres, así que la coma se quedaba huérfana al
+  // principio del renglón siguiente y el registro parecía roto.
+  const { ajustar } = panel;
+  const { anchoVisible } = ui;
+  const texto = "  ◐  Perfil del número: nuevo (antigüedad 0d) — delay base 1500ms, warm-up 7 días, tope de hoy 20 mensajes";
+  const lineas = ajustar(texto, 78);
+  assert.ok(lineas.length > 1, "tiene que partirse");
+  for (const linea of lineas) {
+    assert.ok(anchoVisible(linea) <= 78, `se pasa del ancho: ${JSON.stringify(linea)}`);
+    assert.doesNotMatch(limpio(linea), /^\s*[,.;:!?]/, `empieza con signo suelto: ${JSON.stringify(lineas)}`);
+  }
+  // Y no se pierde texto: juntando las líneas están todas las palabras.
+  const palabras = (s) => limpio(s).split(/\s+/).filter(Boolean);
+  assert.deepEqual(palabras(lineas.join(" ")), palabras(texto));
+});
+
+test("una palabra que no cabe sola se corta, pero no se sale de la caja", () => {
+  const { ajustar } = panel;
+  const { anchoVisible } = ui;
+  const url = `https://ejemplo.mx/${"a".repeat(120)}`;
+  const lineas = ajustar(url, 40);
+  assert.ok(lineas.length > 1);
+  for (const linea of lineas) assert.ok(anchoVisible(linea) <= 40);
+  assert.equal(limpio(lineas.join("")), url, "ni se pierde ni se inventa un carácter");
 });
 
 test("lo que cabe tal cual conserva sus espacios (centrado del código)", () => {

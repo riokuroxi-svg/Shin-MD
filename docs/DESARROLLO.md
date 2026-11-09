@@ -34,7 +34,9 @@ Shin-MD/
 │   ├── commands/       cargador de comandos y router
 │   ├── storage/        base de datos y migraciones
 │   ├── services/       logger, watchdog, economy…
-│   └── lib/            utilidades sueltas (aquí vive casi todo)
+│   └── lib/            utilidades sueltas (aquí vive casi todo):
+│         vinculacion.js    a quién se vincula y quién pregunta el número
+│         cli-args.js       leer --code, --menu y normalizar el teléfono
 ├── cmds/             LOS COMANDOS, por categoría
 │   ├── main/           ping, menu, owner…
 │   ├── owner/          solo el dueño: restart, compat…
@@ -43,6 +45,13 @@ Shin-MD/
 ├── test/             una prueba por cada cosa que se afirma
 └── docs/             esta documentación
 ```
+
+Para no perderte entre tantas carpetas hay un plano que se regenera solo:
+**[MAPA.md](MAPA.md)** (`npm run mapa`). Ahí está, contado desde el repositorio,
+qué hay en cada carpeta, el viaje de un mensaje de WhatsApp hasta tu comando,
+para qué está cada dependencia y qué se retiró. Si añades una dependencia o una
+carpeta y no la describes en `tools/mapa.mjs`, la suite lo dice: el mapa no se
+queda viejo ni se queda callado.
 
 **La idea de fondo:** `src/` es el motor y `cmds/` son los comandos. Un comando
 no debería saber cómo funciona la cola anti-ban, ni el motor debería saber qué

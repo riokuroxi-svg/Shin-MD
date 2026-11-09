@@ -22,15 +22,20 @@
 //
 //  LO QUE HACE, EN ORDEN
 //    1. Sube la versión en package.json (y en docs/assets/datos.json).
-//    2. `firma`: reescribe SHA256SUMS y pone la etiqueta nueva en shin.sh.
-//    3. Regenera la página de comandos y las imágenes del README, y
-//       cuadra los números de pruebas del README con la suite real.
+//    2. Propaga esa versión a los comandos de instalación de la
+//       documentación y regenera el mapa.
+//    3. `firma`: reescribe SHA256SUMS y pone la etiqueta nueva en shin.sh.
+//       Va después del paso 2 porque el cuadre también toca shin.sh.
 //    4. Pasa la suite completa. Si algo falla, se para aquí y no se
 //       ha subido nada.
-//    5. commit + etiqueta anotada + push de la rama y de la etiqueta.
-//    6. `gh release create` con install.sh, shin.sh y SHA256SUMS, con las
-//       notas que genera GitHub.
-//    7. Imprime el comando de instalación ya apuntando a la versión nueva.
+//    5. Regenera la página de comandos y las imágenes del README con los
+//       números reales de esa corrida, y hace un último `firma --check`
+//       por si algo tocó el instalador después de firmarlo.
+//    6. commit + etiqueta anotada + push de la rama y de la etiqueta.
+//    7. La release con install.sh, shin.sh y SHA256SUMS: con `gh` si está,
+//       y si no con la API y un `GH_TOKEN` del entorno. Así la orden única
+//       funciona también en una máquina donde nadie instaló `gh`.
+//    8. Imprime el comando de instalación ya apuntando a la versión nueva.
 //
 //  OPCIONES
 //    --seco            enseñar el plan sin ejecutar nada
@@ -44,6 +49,7 @@
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import { sincronizarVersiones } from "./versiones.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -208,9 +214,14 @@ if (etiquetas === etiqueta) {
 // Se mira aquí para poder anunciarlo en el plan, pero no se ejecuta nada de
 // `gh` hasta después del modo seco: `--seco` no llama a nada.
 const hayGh = hay("gh");
-if (!hayGh && !opciones.sinRelease) {
-  aviso("no encuentro `gh`: se subirá el código y la etiqueta, sin GitHub Release.");
-  aviso("para tener el comando de una línea, instálalo: https://cli.github.com");
+// Sin `gh` hay otra puerta: la API de GitHub con un token del entorno. El
+// token se lee de `GH_TOKEN` o `GITHUB_TOKEN` y nunca se escribe en ningún
+// archivo ni se imprime.
+const TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN || "";
+const hayApi = Boolean(TOKEN);
+if (!hayGh && !hayApi && !opciones.sinRelease) {
+  aviso("no encuentro `gh` ni un `GH_TOKEN`: se subirá el código y la etiqueta, sin GitHub Release.");
+  aviso("para tener el comando de una línea: instala https://cli.github.com o exporta GH_TOKEN.");
 }
 
 const cambios = salida("git", ["status", "--porcelain"]);
@@ -223,9 +234,11 @@ const plan = [
   "regenerar docs/web y las imágenes del README",
   opciones.rapido ? "saltar la suite (--rapido)" : "pasar la suite completa",
   `git commit + git tag ${etiqueta} + push de ${opciones.rama} y de la etiqueta`,
-  opciones.sinRelease || !hayGh
+  opciones.sinRelease || (!hayGh && !hayApi)
     ? "sin GitHub Release"
-    : `gh release create ${etiqueta} ${ACTIVOS.join(" ")}${opciones.borrador ? " --draft" : ""} --generate-notes`,
+    : hayGh
+      ? `gh release create ${etiqueta} ${ACTIVOS.join(" ")}${opciones.borrador ? " --draft" : ""} --generate-notes`
+      : `release ${etiqueta} por la API (GH_TOKEN) con ${ACTIVOS.join(", ")}`,
 ];
 
 if (opciones.seco) {
@@ -234,6 +247,12 @@ if (opciones.seco) {
   console.log(`\n  ${c("38;5;245", "modo seco: no se ha tocado nada.")}\n`);
   process.exit(0);
 }
+
+// El repositorio público se resuelve a la primera que haga falta, no antes:
+// resolverlo puede preguntarle a `gh`, y ni `--seco` ni una suite en rojo
+// deben llegar a llamar a GitHub.
+let repoResuelto = "";
+const repo = () => (repoResuelto ||= repoPublico());
 
 if (!opciones.si && process.stdin.isTTY) {
   process.stdout.write(`\n  ¿Publicar ${c("1", destino)}? [S/n] `);
@@ -274,13 +293,39 @@ if (fs.existsSync(BLOQUEO)) {
 }
 bien("package.json, package-lock.json y docs/assets/datos.json al día");
 
-// ─────────────────────────── 2. huella ───────────────────────────
+// ─────────────────────── 2. versión en todo lo que se publica ───────────────────────
+// El ORDEN de este paso no es gusto: la versión se propaga primero y se firma
+// al final, y el mapa se genera aquí porque solo depende de `package.json`.
+//
+// Va antes de la suite a propósito: `test/versiones.test.js` falla si algún
+// documento manda a instalar la versión anterior, y `test/mapa.test.js` falla
+// si el mapa no coincide con el repositorio. Con el orden inverso, la primera
+// publicación de una versión nueva nunca podría pasar sus propias pruebas.
+//
+// Lo que costó aprender: cuando la firma iba ANTES de esto, el cuadre de
+// versiones reescribía la cabecera de `shin.sh` después de haberlo firmado y
+// la huella de `SHA256SUMS` quedaba vieja. La suite lo cazó (tres archivos en
+// rojo) y no se publicó nada, que es exactamente lo que tenía que pasar.
+paso("Cuadrando la versión en la documentación");
+const versionados = sincronizarVersiones({ raiz: RAIZ });
+if (!versionados.length) dato(`todo apuntaba ya a ${etiqueta}`);
+for (const v of versionados) dato(`${v.ruta} → ${v.despues}`);
+bien(`comandos de instalación de la documentación en ${etiqueta}`);
+
+const MAPA = path.join(AQUI, "..", "tools", "mapa.mjs");
+if (fs.existsSync(MAPA)) {
+  ejecutar(process.execPath, [MAPA], { permitirFallo: true });
+}
+
+// ─────────────────────────── 3. huella ───────────────────────────
+// Después de tocar `shin.sh`: la firma tiene que cubrir el archivo tal y como
+// se publica, no una versión previa.
 paso("Firmando el instalador");
 ejecutar(process.execPath, [path.join(AQUI, "firma-instalador.mjs")]);
 ejecutar(process.execPath, [path.join(AQUI, "firma-instalador.mjs"), "--check"]);
 bien(`SHA256SUMS y shin.sh apuntan a ${etiqueta}`);
 
-// ─────────────────────────── 3. pruebas ───────────────────────────
+// ─────────────────────────── 4. pruebas ───────────────────────────
 // La suite va ANTES de la documentación: deja el resumen real (cuántas
 // pruebas pasan) que la página y el README anuncian. Al revés, los números
 // publicados serían los de la corrida anterior.
@@ -294,7 +339,7 @@ if (!opciones.rapido) {
   aviso("suite saltada (--rapido): solo para pruebas, no para una release de verdad");
 }
 
-// ─────────────────────────── 4. documentación ───────────────────────────
+// ─────────────────────────── 5. documentación ───────────────────────────
 paso("Actualizando la documentación");
 const WEB = path.join(AQUI, "actualizar-web.mjs");
 if (fs.existsSync(WEB)) ejecutar(process.execPath, [WEB], { permitirFallo: true });
@@ -304,6 +349,12 @@ if (fs.existsSync(PASTEL) && hay("python3")) {
 }
 sincronizarNumerosReadme();
 bien("página de comandos, imágenes y números de pruebas al día");
+
+// Último control antes de firmar en git: si algún paso de arriba tocó el
+// instalador (o su SHA256SUMS) después de la firma, aquí se para. Es la
+// comprobación que faltaba el día en que la huella se publicó vieja.
+ejecutar(process.execPath, [path.join(AQUI, "firma-instalador.mjs"), "--check"]);
+bien("la huella sigue cuadrando con los archivos que se van a publicar");
 
 function sincronizarNumerosReadme() {
   if (!fs.existsSync(README) || !fs.existsSync(RESUMEN_SUITE)) return;
@@ -319,15 +370,10 @@ function sincronizarNumerosReadme() {
   const texto = fs.readFileSync(README, "utf8");
   // Tres formas en que el README dice el número: la insignia (299%2F299),
   // el texto del alt (299/299 pruebas) y el comentario de `npm test`.
-  const etiqueta = "v" + leerJson(PAQUETE).version;
   const nuevo = texto
     .replace(/\b\d+%2F\d+(?=%20)/g, `${pasan}%2F${total}`)
     .replace(/\b\d+\/\d+ pruebas\b/g, `${pasan}/${total} pruebas`)
-    .replace(/(# las )\d+( pruebas)/g, `$1${total}$2`)
-    // El comando de instalación lleva la versión DENTRO de la URL. Antes se
-    // quedaba con la anterior y el README mandaba a instalar una versión
-    // vieja justo después de publicar la nueva.
-    .replace(/(raw\.githubusercontent\.com\/[^/]+\/[^/]+\/)v\d+\.\d+\.\d+/g, `$1${etiqueta}`);
+    .replace(/(# las )\d+( pruebas)/g, `$1${total}$2`);
   if (nuevo !== texto) fs.writeFileSync(README, nuevo);
 }
 
@@ -365,15 +411,66 @@ ejecutar("git", ["push", "origin", etiqueta]);
 bien(`rama ${opciones.rama} y etiqueta ${etiqueta} en el remoto`);
 
 // ─────────────────────────── 6. GitHub Release ───────────────────────────
-if (!opciones.sinRelease && hayGh) {
-  paso("Publicando la release");
-  const args = ["release", "create", etiqueta, ...ACTIVOS,
-    "--title", `Shin-MD ${destino}`,
-    "--generate-notes",
-    "--verify-tag"];
-  if (opciones.borrador) args.push("--draft");
-  ejecutar("gh", args);
+// Sin `gh` pero con token: la API hace lo mismo que haría `gh`, y con las
+// mismas notas (GitHub las genera a partir de los commits y del tag).
+async function releasePorApi() {
+  const base = "https://api.github.com";
+  const cabeceras = {
+    Authorization: `Bearer ${TOKEN}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+  const pedir = async (url, init = {}) => {
+    const r = await fetch(url, { ...init, headers: { ...cabeceras, ...(init.headers || {}) } });
+    if (!r.ok) {
+      const texto = await r.text();
+      morir(`GitHub respondió ${r.status} en ${url}:\n${texto.slice(0, 600)}\n` +
+        (r.status === 401 ? "  El token no vale o ha caducado: exporta uno nuevo en GH_TOKEN." :
+         r.status === 403 ? "  Al token le falta permiso de `repo` (o `contents: write`)." :
+         r.status === 422 ? "  Puede que la release ya exista para esta etiqueta." : ""));
+    }
+    return r.json();
+  };
+  const release = await pedir(`${base}/repos/${repo()}/releases`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tag_name: etiqueta,
+      name: `Shin-MD ${destino}`,
+      generate_release_notes: true,
+      draft: Boolean(opciones.borrador),
+      prerelease: false,
+    }),
+  });
+  dato(`release creada: ${release.html_url}`);
+  for (const activo of ACTIVOS) {
+    const tipo = activo.endsWith(".sh") ? "text/x-shellscript" : "text/plain";
+    const subida = await pedir(`${release.upload_url.split("{")[0]}?name=${activo}`, {
+      method: "POST",
+      headers: { "Content-Type": tipo },
+      body: fs.readFileSync(path.join(RAIZ, activo)),
+    });
+    dato(`${activo} · ${subida.size} bytes · ${subida.state}`);
+  }
   bien(`release ${etiqueta} publicada con ${ACTIVOS.join(", ")}`);
+  return release.html_url;
+}
+
+let urlRelease = "";
+if (!opciones.sinRelease) {
+  if (hayGh) {
+    paso("Publicando la release");
+    const args = ["release", "create", etiqueta, ...ACTIVOS,
+      "--title", `Shin-MD ${destino}`,
+      "--generate-notes",
+      "--verify-tag"];
+    if (opciones.borrador) args.push("--draft");
+    ejecutar("gh", args);
+    bien(`release ${etiqueta} publicada con ${ACTIVOS.join(", ")}`);
+  } else if (hayApi) {
+    paso("Publicando la release (API, sin `gh`)");
+    urlRelease = await releasePorApi();
+  }
 }
 
 // ─────────────────────────── 7. resumen ───────────────────────────
@@ -413,13 +510,11 @@ function repoPublico() {
   }
   return "<usuario>/<repo>";
 }
-const repo = repoPublico();
 console.log(`
   ${c("1", `Shin-MD ${destino}`)} publicado.
 
   Instalar (una línea):
-    curl -fsSL https://raw.githubusercontent.com/${repo}/${etiqueta}/shin.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/${repo()}/${etiqueta}/shin.sh | sh
 
-  Comprobar lo que se subió:
-    gh release view ${etiqueta}
+  ${urlRelease ? `Release:\n    ${urlRelease}` : `Comprobar lo que se subió:\n    gh release view ${etiqueta}`}
 `);

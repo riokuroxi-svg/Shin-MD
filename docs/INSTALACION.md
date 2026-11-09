@@ -51,7 +51,7 @@ Si en algún momento pregunta algo, deja la opción por defecto (pulsa Enter).
 Copia esta línea, pégala en Termux y pulsa Enter:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/shin.sh | sh
 ```
 
 **Qué hace, en orden:**
@@ -75,7 +75,7 @@ Verás algo así, y al final un resumen:
 ```
   ✓ Node 26.4.0   npm 11.20.0
   ✓ git listo
-  ▸ descargando Shin-MD v3.7.0
+  ▸ descargando Shin-MD v3.7.1
   ✓ dependencias instaladas
   ✓ 8 parches del conector verificados
   ✓ wakelock activo
@@ -102,7 +102,7 @@ Si dice menos de 22.5 (o dice "command not found"), instálalo desde
 <https://nodejs.org> — versión LTS. Después, el mismo bloque de arriba:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/shin.sh | sh
 ```
 
 En un servidor donde quieras que siga corriendo sin tu sesión, mira
@@ -123,7 +123,7 @@ No hay que hacer nada: el instalador mira qué falta y lo resuelve.
 Si prefieres que nunca instale paquetes del sistema:
 
 ```sh
-SHIN_NO_INSTALAR=1 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+SHIN_NO_INSTALAR=1 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.1/shin.sh | sh
 ```
 
 Y si quieres autorizarlo sin que pregunte (para un script de aprovisionamiento):
@@ -168,7 +168,7 @@ Vincular con número de teléfono**, y tecleas el código.
 
 ╭ en línea ──────────────────────────────────────────────╮
 │ cuenta   Shin-MD                                       │
-│ versión  v3.8.0                                        │
+│ versión  v3.7.1                                        │
 │ comandos 213                                           │
 │ prefijo  .                                             │
 │ panel    http://127.0.0.1:3000                         │
@@ -187,6 +187,33 @@ Porque no funciona donde de verdad se instala esto: en la pantalla de un móvil
 código de 8 caracteres se teclea y funciona igual en un teléfono, en un VPS y
 en un contenedor. `--qr` se sigue aceptando por si algún guion viejo lo usa,
 pero hace exactamente lo mismo que `--code` y avisa de que ya no hace falta.
+
+### El número se pregunta una sola vez
+
+La pregunta la hace **la consola**, no el bot, y esto no es un detalle: el bot
+se lanza con la entrada cerrada para que el panel sea lo único que escribe en
+pantalla, así que dentro del bot no hay dónde preguntar. Por eso `shin` te pide
+el número antes de arrancar nada y se lo pasa ya resuelto.
+
+Después, ese número queda en la sesión y no se vuelve a preguntar. Si algún día
+quieres vincular otro, `shin --code` (o `shin --menu`) fuerza la pregunta.
+
+| Situación | Qué hace |
+| --- | --- |
+| Primera vez, con terminal | Pregunta el número y enseña el código |
+| Ya hay sesión buena | No pregunta nada |
+| Servicio, contenedor o `nohup` | **No arranca**: se detiene y dice la orden exacta |
+| Número en `--code 521…` o `PAIRING_NUMBER` | No pregunta; lo usa |
+
+En la última fila de la tabla está la clave para un VPS sin terminal:
+
+```bash
+PAIRING_NUMBER=5215512345678 shin
+```
+
+Y si sospecha que la sesión quedó a medias (un corte durante la vinculación,
+un `auth.db` copiado de otro sitio), lo dice con esas palabras en vez de
+arrancar y pedir un QR.
 
 ---
 
@@ -232,7 +259,7 @@ sobreviven a todo menos a `--purge`, que pregunta dos veces.
 | Quiero… | Comando |
 |---|---|
 | actualizar conservando mi sesión | `cd ~/Shin-MD && bash install.sh --update` |
-| pasar a una versión concreta | `bash install.sh --update --version v3.7.0` |
+| pasar a una versión concreta | `bash install.sh --update --version v3.7.1` |
 | seguir la rama `main` y dejar de estar fijado a una versión | `bash install.sh --update --branch main` |
 | arreglar una instalación rota | `bash install.sh --repair` |
 | saber si todo está bien | `bash install.sh --verify` |
@@ -261,7 +288,7 @@ cd ~/Shin-MD && npm start
 La instalación es más vieja que el comando. Actualiza:
 
 ```bash
-cd ~/Shin-MD && bash install.sh --update --version v3.7.0
+cd ~/Shin-MD && bash install.sh --update --version v3.7.1
 ```
 
 ### "Node 20 es demasiado antiguo"
