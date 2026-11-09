@@ -30,7 +30,7 @@ congelados: con ella, `pkg install` falla o instala Node viejo.
 ## 2. Abrir y pegar un comando
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.3/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.4/shin.sh | sh
 ```
 
 Ese archivo descarga el instalador de esa versión concreta y **comprueba su
