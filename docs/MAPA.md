@@ -32,13 +32,15 @@ para y dice la orden exacta que hay que escribir.
 | Carpeta | Archivos | Para qué |
 | --- | --- | --- |
 | `assets/` | 48 | Imágenes y sonidos que el bot envía (menús, avatares, portadas). |
+| `bin/` | — | Temporales de herramientas externas (`yt-dlp` y compañía). Vacía en el repositorio. |
 | `boot/` | 1 | El arranque: licencia, banner, vinculación y carga de servicios. Un solo archivo, en orden. |
 | `cmds/` | 219 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
-| `data/` | 2 | La base de datos del bot y su respaldo JSON. Se crea sola. |
+| `data/` | — | La base de datos del bot y su respaldo JSON. Se crea sola. |
 | `docs/` | 76 | Documentación para quien lee y para quien toca el código. |
-| `logs/` | 2 | El registro diario del bot. |
-| `media/` | 12 | Temporales de descargas y conversiones. Se vacían solos. |
+| `logs/` | — | El registro diario del bot. |
+| `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
 | `scripts/` | 19 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
+| `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
 | `src/` | 81 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
 | `test/` | 46 | Las pruebas. Una por tema; cada archivo corre solo. |
 | `tools/` | 11 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
@@ -50,8 +52,10 @@ para y dice la orden exacta que hay que escribir.
 | `src/storage/` | 5 | Dónde se guarda todo: SQLite, migraciones, caché y memoria de identidades. |
 | `src/web/` | 1 | El panel HTTP local del bot. |
 
-Las carpetas de datos (`data/`, `logs/`, `media/`, `Sessions/`, `bin/`) aparecen
-vacías en el repositorio a propósito: se llenan al correr y no se suben nunca.
+Las carpetas de datos (`bin/`, `data/`, `logs/`, `media/`, `Sessions/`) no llevan
+número a propósito: se llenan al correr el bot y al pasar las pruebas, así que
+contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
+y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
 Son **219 archivos de comando**, **51 utilidades** en `src/lib`, **10 servicios** y **45 archivos de prueba**.
 

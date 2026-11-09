@@ -29,6 +29,37 @@ const RAIZ = path.resolve(AQUI, "..");
 const { generarMapa } = await import(path.join(RAIZ, "tools", "mapa.mjs"));
 const MAPA = path.join(RAIZ, "docs", "MAPA.md");
 
+test("el mapa no depende de lo que haya corrido el bot", () => {
+  // El fallo que esto vigila, con nombre y apellidos: el recuento incluía
+  // `logs/` y `data/`, que se llenan al arrancar el bot y al pasar la suite.
+  // El mapa pasaba en local (2 archivos de registro) y fallaba en el CI y en
+  // un clon recién bajado (1). Ahora esas carpetas se listan sin número.
+  const antes = generarMapa();
+  const creados = [];
+  for (const carpeta of ["data", "logs", "media", "Sessions", "bin"]) {
+    const dir = path.join(RAIZ, carpeta);
+    fs.mkdirSync(dir, { recursive: true });
+    const f = path.join(dir, `prueba-${Date.now()}.tmp`);
+    fs.writeFileSync(f, "x");
+    creados.push(f);
+  }
+  try {
+    assert.equal(generarMapa(), antes, "un archivo temporal en data/ o logs/ no puede cambiar el mapa");
+  } finally {
+    for (const f of creados) fs.rmSync(f, { force: true });
+  }
+});
+
+test("las carpetas de ejecución se listan sin número, y con su explicación", () => {
+  const mapa = generarMapa();
+  for (const carpeta of ["bin", "data", "logs", "media", "Sessions"]) {
+    const fila = mapa.split("\n").find((l) => l.startsWith(`| \`${carpeta}/\``));
+    assert.ok(fila, `falta la fila de ${carpeta}/ en el mapa`);
+    assert.match(fila, /\| — \|/, `\`${carpeta}/\` no puede llevar un número que cambie al correr el bot`);
+    assert.doesNotMatch(fila, /_sin describir_/, `describe \`${carpeta}/\` en tools/mapa.mjs`);
+  }
+});
+
 test("el mapa está al día (si no, `npm run mapa`)", () => {
   assert.ok(fs.existsSync(MAPA), "falta docs/MAPA.md: ejecuta `npm run mapa`");
   const generado = generarMapa();

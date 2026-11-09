@@ -118,16 +118,15 @@ const existe = (p) => fs.existsSync(path.join(RAIZ, p));
  * Archivos de una carpeta, contados de verdad.
  *
  * Cuenta todo, no solo código: en `assets/` lo que hay son imágenes y en
- * `data/` una base de datos, y decir «0 archivos» ahí sería mentir.
- * Se saltan las carpetas ocultas y `node_modules`.
+ * `docs/` también hay SVG y HTML. Se saltan las carpetas ocultas, las de
+ * caché y `node_modules`.
  */
 function contar(carpeta) {
   const base = path.join(RAIZ, carpeta);
   if (!fs.existsSync(base)) return 0;
   let n = 0;
   // `__pycache__` y compañía se crean solos al ejecutar las herramientas:
-  // contarlos hacía que el mapa cambiara de número entre dos corridas (13 y
-  // 11 archivos en `tools/` sin tocar nada) y que su propia prueba fallara.
+  // contarlos hacía que el mapa cambiara de número entre dos corridas.
   const RUIDO = new Set(["node_modules", "__pycache__", ".cache", "dist", "build", "coverage"]);
   const andar = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -140,21 +139,43 @@ function contar(carpeta) {
   return n;
 }
 
-/** Carpetas de primer y segundo nivel que existen ahora mismo. */
+// ─────────────────────── qué se cuenta y qué no ───────────────────────
+// Las carpetas de ejecución (`data/`, `logs/`, `media/`, `Sessions/`,
+// `bin/`) se llenan al correr el bot y al pasar la suite: contar ahí hacía
+// que el mapa diera 2 archivos en `logs/` en una máquina con el bot
+// arrancado y 1 en un clon recién bajado. O sea, que su propia prueba
+// pasaba en local y fallaba en el CI, en el clon y en cualquier otra
+// máquina. Se listan, porque hay que saber qué son, pero sin número.
+const DE_EJECUCION = new Set(["bin", "data", "logs", "media", "Sessions"]);
+
+// Orden fijo: el mapa no debe cambiar porque el sistema de archivos
+// devuelva las entradas en otro orden.
+const ORDEN = [
+  "assets", "bin", "boot", "cmds", "data", "docs", "logs", "media",
+  "scripts", "Sessions", "src", "test", "tools",
+];
+
+/**
+ * Las carpetas que se listan.
+ *
+ * Las de ejecución se listan SIEMPRE, existan o no: en un clon recién
+ * bajado todavía no hay `Sessions/`, y callarlo dejaría al lector sin saber
+ * dónde acaban las credenciales. Las del repositorio se listan si están.
+ */
 function carpetasReales() {
-  const lista = [];
-  for (const e of fs.readdirSync(RAIZ, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-    if (!e.isDirectory() || e.name.startsWith(".") || e.name === "node_modules") continue;
-    lista.push(e.name);
-  }
-  for (const sub of ["src"]) {
-    const base = path.join(RAIZ, sub);
-    if (!fs.existsSync(base)) continue;
-    for (const e of fs.readdirSync(base, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (e.isDirectory()) lista.push(`${sub}/${e.name}`);
+  const lista = ORDEN.filter((c) => DE_EJECUCION.has(c) || fs.existsSync(path.join(RAIZ, c)));
+  const src = path.join(RAIZ, "src");
+  if (fs.existsSync(src)) {
+    for (const e of fs.readdirSync(src, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      if (e.isDirectory()) lista.push(`src/${e.name}`);
     }
   }
   return lista;
+}
+
+/** La celda de recuento: número si es contenido del repositorio, «—» si no. */
+function celda(carpeta) {
+  return DE_EJECUCION.has(carpeta.split("/")[0]) ? "—" : String(contar(carpeta));
 }
 
 const paquete = () => JSON.parse(leer("package.json"));
@@ -214,13 +235,15 @@ export function generarMapa() {
 
   for (const carpeta of carpetasReales()) {
     const descripcion = CARPETAS[carpeta] || CARPETAS[carpeta.split("/")[0]] || "";
-    push(`| \`${carpeta}/\` | ${contar(carpeta)} | ${descripcion || "_sin describir_"} |`);
+    push(`| \`${carpeta}/\` | ${celda(carpeta)} | ${descripcion || "_sin describir_"} |`);
   }
 
   push(
     "",
-    "Las carpetas de datos (`data/`, `logs/`, `media/`, `Sessions/`, `bin/`) aparecen",
-    "vacías en el repositorio a propósito: se llenan al correr y no se suben nunca.",
+    "Las carpetas de datos (`bin/`, `data/`, `logs/`, `media/`, `Sessions/`) no llevan",
+    "número a propósito: se llenan al correr el bot y al pasar las pruebas, así que",
+    "contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado",
+    "y otra en un clon recién bajado. Su contenido no forma parte del proyecto.",
     "",
     `Son **${comandos} archivos de comando**, **${libs} utilidades** en \`src/lib\`, ` +
       `**${servicios} servicios** y **${pruebas} archivos de prueba**.`,
