@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 300 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 353 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="300/300 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="353/353 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -159,20 +159,75 @@ npm run docs:web
 **Android (Termux).** Instala Termux desde [F-Droid](https://f-droid.org/packages/com.termux/)
 —la versión de Play Store está abandonada y rompe los paquetes— y pega esto:
 
+```sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+```
+
+Una línea, y el bot queda arrancado. Ese archivo descarga el instalador de
+**esa misma versión**, comprueba su huella SHA-256 y solo entonces lo ejecuta,
+en modo autónomo: mira qué falta (Node, git, dependencias), instala o actualiza
+lo que haga falta **sin duplicar nada**, deja el comando `shin` en el `PATH` y
+arranca el bot. No hay `npm start` que escribir, ni `cd`, ni `pkg update`.
+
+Es `| sh` a propósito, no `| bash`: el arranque está escrito en POSIX puro y se
+prueba con dash (Debian), ash de busybox (Alpine) y bash (macOS). Si el primer
+espejo no responde, prueba el segundo; si la red se corta a medias, reintenta
+con espera creciente en vez de empezar de cero.
+
+Si ya lo tenías instalado, volver a pegar ese mismo comando **no duplica**:
+reconoce la instalación, mira si hay algo nuevo y, si no lo hay, arranca y ya.
+Tus datos (`.env`, `Sessions/`, `data/`) no se tocan nunca.
+
+Después de la primera vez, el bot se arranca con una palabra:
+
+```bash
+shin
+```
+
+| Escribes | Pasa |
+|---|---|
+| `shin` | arranca el bot (panel + bot) |
+| `shin --code` · `shin --qr` | arranca pidiendo código de vinculación o con QR |
+| `shin update` | actualiza y arranca |
+| `shin repair` | reconstruye dependencias y arranca |
+| `shin doctor` | foto del estado, para pegar si pides ayuda |
+| `shin service` | lo deja como servicio de systemd (VPS) |
+| `shin verify` · `shin uninstall` | comprobar · desinstalar guardando tus datos |
+
+El lanzador son veinte líneas de shell que apuntan a `install.sh`; se puede leer
+entero con `cat "$(command -v shin)"`.
+
+**Si falta Node o git, los pone él.** En Termux con `pkg`; en un VPS con
+`apt`/`dnf`/`apk`/`pacman`/`brew` (**preguntando antes**, y nunca sin terminal:
+un `curl | sh` no decide eso por ti); y si no hay root, descarga Node oficial de
+nodejs.org, **comprueba la huella que publica nodejs.org** y lo descomprime en
+`~/.local/opt`, sin tocar el sistema.
+
+<details>
+<summary><b>Modo auditor: mirarlo antes de ejecutarlo</b></summary>
+
+El comando de arriba ejecuta lo que baja. Quien prefiera leerlo primero, o
+comprobarlo a mano, hace lo de siempre — con la diferencia de que ahora la
+huella cubre también el arranque:
+
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.5.1
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.7.0 --go
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
-concreta, no lo que haya en `main` ese día.
+concreta, no lo que haya en `main` ese día. `--go` arranca el bot al terminar;
+sin él, el instalador se queda en «instalado» y se arranca luego con `shin`.
 
-El instalador mira la versión de Node, instala lo que falte con `pkg`, descarga
-Shin-MD en `~/Shin-MD`, instala las dependencias, deja los ocho parches del
-conector puestos y comprueba que todo esté sano. Si ya tenías una instalación,
-**actualiza en vez de duplicar**, y nunca toca `.env`, `Sessions/` ni `data/`.
+¿Solo quieres saber si el archivo es el bueno, sin instalar nada?
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh -s -- --dry-run
+```
+
+</details>
 
 Antes de arrancarlo, para que Android no lo mate mientras duerme:
 
@@ -180,22 +235,15 @@ Antes de arrancarlo, para que Android no lo mate mientras duerme:
 2. Ajustes → Batería → Termux → **Sin restricciones**.
 3. Android 14 o más: Opciones de desarrollador → **Desactivar restricciones de procesos hijos**.
 
-Cuando el instalador termina, esto es lo único que queda por escribir:
-
-```bash
-cd ~/Shin-MD
-npm start -- --code
-```
-
-`--code` muestra un código de 8 caracteres. En WhatsApp: **Dispositivos
-vinculados → Vincular con número de teléfono → Vincular con número de
-teléfono** y lo escribes ahí. ¿Prefieres escanear un QR? `npm start -- --qr`.
+En el primer arranque, `shin --code` muestra un código de 8 caracteres. En
+WhatsApp: **Dispositivos vinculados → Vincular con número de teléfono** y lo
+escribes ahí. ¿Prefieres escanear un QR? `shin --qr`.
 
 > **Nada de esto hay que memorizarlo.** Está paso a paso, con lo que debes ver
 > en pantalla en cada momento y qué hacer cuando algo falla, en
 > **[docs/INSTALACION.md](docs/INSTALACION.md)**.
 
-**Un solo comando.** `npm start` levanta el bot y dibuja el panel:
+**Un solo comando.** `shin` levanta el bot y dibuja el panel:
 
 ```
 ╭ SHIN-MD 3.5.1 ──────────────────────────────────────╮
@@ -233,39 +281,71 @@ hacia fuera y solo habla con `127.0.0.1`.
 
 <img src="docs/assets/pastel/subbanner-2.svg" alt="Servidor o VPS" width="100%">
 
-**Servidor o VPS.** Los mismos comandos, con Node 22.5 o superior instalado:
+**Servidor o VPS.** El mismo comando, sin preparar nada antes:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.5.1
-cd ~/Shin-MD && npm start
+```sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+```
+
+Si falta Node o git, el instalador lo resuelve: con el gestor de paquetes del
+sistema si hay terminal y te deja preguntarte, o **sin root** descargando Node
+oficial en `~/.local/opt` con su huella comprobada. En un contenedor o en un
+`ssh -T` (sin terminal) no toca el sistema: va directo a la vía sin root.
+
+Para que sobreviva a un reinicio del servidor, hay una orden y no hay que
+escribir unidades a mano:
+
+```sh
+shin service              # unidad de systemd + arranque automático
+shin service --print      # verla antes, sin escribir nada
+```
+
+Queda `systemctl status shin-md` y `journalctl -u shin-md -f` para ver qué dice.
+En un servicio de usuario (sin root) avisa de lo único que falta:
+
+```sh
+sudo loginctl enable-linger $USER
 ```
 
 Sin terminal de verdad no hay panel: el bot escribe líneas normales, que es
-justo lo que quieres en un servidor. Y para que no se muera cuando cierres la
-sesión:
+justo lo que quieres en un servidor. Si prefieres pm2, sigue funcionando igual
+(`pm2 start index.js --name shin-md`). Detalle en **[docs/VPS.md](docs/VPS.md)**.
 
-```bash
-npm install -g pm2
-pm2 start index.js --name shin-md -- --code
-pm2 save && pm2 startup
+**Cuando algo no va.** Antes de tocar nada, pide la foto:
+
+```sh
+shin doctor
 ```
 
-`pm2 logs shin-md` para ver qué dice, `pm2 restart shin-md` para reiniciarlo.
-Detalle en **[docs/VPS.md](docs/VPS.md)**.
+Dice plataforma, versiones, de dónde salió Node, si los parches del conector
+están puestos, cuánto ocupa la sesión, espacio libre, si el bot corre y si hay
+servicio. No lee secretos (del `.env` solo cuenta las claves) y no cambia nada.
+Es el texto que hay que pegar cuando se pide ayuda.
 
 **Ya instalado.** Un solo archivo manda sobre todo:
 
 | Quiero… | Comando |
 |---|---|
-| actualizar conservando mi sesión | `bash ~/Shin-MD/install.sh --update` |
-| arreglar una instalación rota | `bash ~/Shin-MD/install.sh --repair` |
-| saber si todo está bien | `bash ~/Shin-MD/install.sh --verify` |
-| desinstalar y guardar mis datos | `bash ~/Shin-MD/install.sh --uninstall` |
+| arrancar el bot | `shin` |
+| actualizar conservando mi sesión | `shin update` |
+| arreglar una instalación rota | `shin repair` |
+| saber si todo está bien | `shin verify` |
+| ver qué pasa cuando algo falla | `shin doctor` |
+| que arranque solo tras un reinicio | `shin service` |
+| actualizar, arrancar o reparar sin el lanzador | `bash ~/Shin-MD/install.sh --update` · `--go` · `--repair` |
+| desinstalar y guardar mis datos | `shin uninstall` |
 
-Por qué se descarga y luego se ejecuta, en lugar de `curl … | bash`: así puedes
-leerlo antes de correrlo, y si falla a mitad sabes qué archivo estaba haciendo qué.
+`shin` es un archivo de veinte líneas que el instalador deja en `$PREFIX/bin`
+(en Android) o en `~/.local/bin`, apuntando a la instalación de verdad: si
+mueves la carpeta, vuelve a ejecutar `install.sh` y se reescribe solo.
+
+**Por qué el comando de una línea no es un `curl | bash` a ciegas.** `shin.sh`
+no descarga y ejecuta: descarga el instalador y su `SHA256SUMS`, calcula la
+huella y compara. Si no coincide —porque el archivo llegó cortado o porque
+alguien lo cambió— **no ejecuta nada** y lo dice. Lo único que ese esquema no
+puede comprobar es `shin.sh` mismo, que es de donde cuelga la cadena: por eso
+existe el modo auditor de arriba, y por eso el archivo va fijado a una etiqueta
+y no a `main`.
 
 ### Las guías
 
@@ -294,11 +374,28 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 300 pruebas
+npm test               # las 353 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot
 npm run docs:pastel    # regenera las imágenes de este README
+npm run publicar       # saca una versión: firma, suite, docs, commit, etiqueta, push y release
+```
+
+`npm run publicar` es la excepción de la lista: no es para tocar el código, es
+**el único comando que hace falta para publicar**. Sube la versión en
+`package.json` y `docs/assets/datos.json`, firma el instalador, pasa la suite
+—si algo está en rojo, se detiene ahí y no deja nada a medias—, regenera la web
+y las imágenes con los números reales de esa corrida, hace el commit, crea la
+etiqueta, sube la rama y la etiqueta por separado y publica la release con las
+notas que genera GitHub. Al terminar imprime la línea de instalación ya
+apuntando a la versión nueva:
+
+```bash
+npm run publicar                  # sube el parche: 3.7.0 → 3.7.1
+npm run publicar -- minor         # sube el menor:   3.7.0 → 3.8.0
+npm run publicar -- 4.0.0         # esa versión, tal cual
+npm run publicar -- --seco        # enseña el plan y no toca nada
 ```
 
 Nada de eso hace falta para usarlo: se instala con un comando y se arranca con

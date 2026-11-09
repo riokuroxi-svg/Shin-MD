@@ -1,0 +1,420 @@
+#!/usr/bin/env node
+/**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+// ═══════════════════════════════════════════════════════════════════
+//  publicar.mjs — una orden para sacar una versión.
+//
+//    npm run publicar                 sube el parche (3.7.0 → 3.7.1)
+//    npm run publicar -- 3.7.2        esa versión, tal cual
+//    npm run publicar -- minor        sube el menor (3.7.0 → 3.8.0)
+//    npm run publicar -- 3.8.0 --seco enseñar el plan, sin tocar nada
+//
+//  POR QUÉ EXISTE
+//  Publicar a mano son seis órdenes y cinco formas de equivocarse:
+//  olvidar `npm run firma` (la huella deja de cuadrar), olvidar subir la
+//  etiqueta (el comando de una línea da 404), o crear la release antes
+//  de que la etiqueta exista. Aquí va todo en el único orden que
+//  funciona, y si un paso falla no se sigue: o sale entera, o no sale.
+//
+//  LO QUE HACE, EN ORDEN
+//    1. Sube la versión en package.json (y en docs/assets/datos.json).
+//    2. `firma`: reescribe SHA256SUMS y pone la etiqueta nueva en shin.sh.
+//    3. Regenera la página de comandos y las imágenes del README, y
+//       cuadra los números de pruebas del README con la suite real.
+//    4. Pasa la suite completa. Si algo falla, se para aquí y no se
+//       ha subido nada.
+//    5. commit + etiqueta anotada + push de la rama y de la etiqueta.
+//    6. `gh release create` con install.sh, shin.sh y SHA256SUMS, con las
+//       notas que genera GitHub.
+//    7. Imprime el comando de instalación ya apuntando a la versión nueva.
+//
+//  OPCIONES
+//    --seco            enseñar el plan sin ejecutar nada
+//    --rapido          no pasar la suite (solo se salta en pruebas)
+//    --borrador        crear la release como borrador
+//    --sin-release     solo commit + etiqueta + push (sin GitHub Release)
+//    --rama RAMA       rama a publicar (por defecto main)
+//    --mensaje TEXTO   mensaje del commit (por defecto, el de siempre)
+//    --si / --yes      sin preguntas (para CI)
+// ═══════════════════════════════════════════════════════════════════
+
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const AQUI = path.dirname(fileURLToPath(import.meta.url));
+const RAIZ = path.resolve(AQUI, "..");
+const PAQUETE = path.join(RAIZ, "package.json");
+const DATOS = path.join(RAIZ, "docs", "assets", "datos.json");
+const RESUMEN_SUITE = path.join(RAIZ, "test", "resumen-suite.json");
+const BLOQUEO = path.join(RAIZ, "package-lock.json");
+const README = path.join(RAIZ, "README.md");
+const ACTIVOS = ["install.sh", "shin.sh", "SHA256SUMS"];
+
+// ─────────────────────────── consola ───────────────────────────
+const tty = process.stdout.isTTY && !process.env.NO_COLOR;
+const c = (codigo, texto) => (tty ? `\u001b[${codigo}m${texto}\u001b[0m` : texto);
+const paso = (t) => console.log(`\n${c("1;38;5;205", "▸")} ${c("1", t)}`);
+const bien = (t) => console.log(`  ${c("38;5;114", "✓")} ${t}`);
+const dato = (t) => console.log(`  ${c("38;5;245", "·")} ${t}`);
+const aviso = (t) => console.error(`  ${c("38;5;221", "!")} ${t}`);
+const morir = (t) => {
+  console.error(`\n  ${c("38;5;203", "✗")} ${t}\n`);
+  process.exit(1);
+};
+
+function ejecutar(orden, args, { permitirFallo = false, capturar = false } = {}) {
+  const r = spawnSync(orden, args, {
+    cwd: RAIZ,
+    encoding: "utf8",
+    stdio: capturar ? "pipe" : "inherit",
+    shell: false,
+  });
+  if (r.error && r.error.code === "ENOENT") return { falta: true, codigo: 127, salida: "" };
+  const salida = `${r.stdout || ""}${r.stderr || ""}`.trim();
+  if (!permitirFallo && r.status !== 0) {
+    morir(`falló \`${orden} ${args.join(" ")}\`${salida ? `:\n\n${salida}` : ""}`);
+  }
+  return { codigo: r.status, salida, stdout: (r.stdout || "").trim() };
+}
+
+const hay = (orden) =>
+  !ejecutar("sh", ["-c", `command -v ${orden}`], { capturar: true, permitirFallo: true }).codigo;
+const salida = (orden, args) => ejecutar(orden, args, { capturar: true }).stdout;
+
+// ─────────────────────────── argumentos ───────────────────────────
+const opciones = {
+  seco: false,
+  rapido: false,
+  borrador: false,
+  sinRelease: false,
+  rama: "main",
+  mensaje: "",
+  si: false,
+  version: "",
+};
+
+const crudos = process.argv.slice(2);
+for (let i = 0; i < crudos.length; i += 1) {
+  const a = crudos[i];
+  switch (a) {
+    case "--seco":
+    case "--dry-run":
+      opciones.seco = true;
+      break;
+    case "--rapido":
+      opciones.rapido = true;
+      break;
+    case "--borrador":
+    case "--draft":
+      opciones.borrador = true;
+      break;
+    case "--sin-release":
+      opciones.sinRelease = true;
+      break;
+    case "--si":
+    case "--yes":
+    case "-y":
+      opciones.si = true;
+      break;
+    case "--rama":
+      opciones.rama = crudos[++i];
+      if (!opciones.rama) morir("--rama necesita un nombre");
+      break;
+    case "--mensaje":
+    case "-m":
+      opciones.mensaje = crudos[++i];
+      if (!opciones.mensaje) morir("--mensaje necesita un texto");
+      break;
+    case "-h":
+    case "--help":
+    case "--ayuda":
+      console.log(`
+  npm run publicar                  sube el parche (3.7.0 → 3.7.1)
+  npm run publicar -- 3.7.2         esa versión
+  npm run publicar -- minor|major   sube menor o mayor
+  npm run publicar -- --seco        enseñar el plan, sin tocar nada
+
+  --rapido      no pasar la suite     --borrador   release como borrador
+  --sin-release solo commit/tag/push  --rama       rama a publicar (main)
+  --mensaje     mensaje del commit    --si         sin preguntas
+  --ayuda       esta ayuda
+`);
+      process.exit(0);
+      break;
+    default:
+      if (a.startsWith("-")) morir(`opción desconocida: ${a}`);
+      if (opciones.version) morir(`sobra un argumento: ${a}`);
+      opciones.version = a;
+  }
+}
+
+// ─────────────────────────── versiones ───────────────────────────
+const leerJson = (ruta) => JSON.parse(fs.readFileSync(ruta, "utf8"));
+const guardarJson = (ruta, datos) =>
+  fs.writeFileSync(ruta, `${JSON.stringify(datos, null, 2)}\n`);
+
+function calcularVersion(actual, pedido) {
+  if (!pedido) {
+    const [mayor, menor, parche] = actual.split(".").map(Number);
+    return `${mayor}.${menor}.${parche + 1}`;
+  }
+  const limpio = pedido.replace(/^v/, "");
+  if (/^\d+\.\d+\.\d+$/.test(limpio)) return limpio;
+  const [mayor, menor, parche] = actual.split(".").map(Number);
+  switch (limpio) {
+    case "major":
+      return `${mayor + 1}.0.0`;
+    case "minor":
+      return `${mayor}.${menor + 1}.0`;
+    case "patch":
+      return `${mayor}.${menor}.${parche + 1}`;
+    default:
+      morir(`no entiendo la versión "${pedido}": usa 3.7.1, major, minor o patch`);
+  }
+  return actual;
+}
+
+const actual = leerJson(PAQUETE).version;
+const destino = calcularVersion(actual, opciones.version);
+const etiqueta = `v${destino}`;
+
+// ─────────────────────────── comprobaciones previas ───────────────────────────
+paso("Comprobando que se puede publicar");
+
+if (!fs.existsSync(path.join(RAIZ, ".git"))) morir("esto no es un repositorio git");
+
+const ramaActual = salida("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
+if (ramaActual !== opciones.rama) {
+  morir(`estás en "${ramaActual}" y se publica desde "${opciones.rama}".
+  Cámbiate con: git checkout ${opciones.rama}`);
+}
+if (!salida("git", ["remote"]).split("\n").includes("origin")) {
+  morir("no hay remoto `origin`; sin él no hay dónde publicar");
+}
+const etiquetas = salida("git", ["tag", "--list", etiqueta]);
+if (etiquetas === etiqueta) {
+  morir(`la etiqueta ${etiqueta} ya existe.
+  Si quieres volver a publicarla: git tag -d ${etiqueta} && git push origin :${etiqueta}
+  Si quieres la siguiente: npm run publicar`);
+}
+
+// Sin `gh` no hay release, pero el código y la etiqueta sí se pueden subir.
+// Se mira aquí para poder anunciarlo en el plan, pero no se ejecuta nada de
+// `gh` hasta después del modo seco: `--seco` no llama a nada.
+const hayGh = hay("gh");
+if (!hayGh && !opciones.sinRelease) {
+  aviso("no encuentro `gh`: se subirá el código y la etiqueta, sin GitHub Release.");
+  aviso("para tener el comando de una línea, instálalo: https://cli.github.com");
+}
+
+const cambios = salida("git", ["status", "--porcelain"]);
+dato(`versión ${actual} → ${c("1", destino)}`);
+dato(`rama ${opciones.rama} · ${cambios ? "hay cambios sin commitear (entrarán)" : "árbol limpio"}`);
+
+const plan = [
+  `subir la versión a ${destino} (package.json, package-lock.json, datos.json)`,
+  "firma: SHA256SUMS nuevo y shin.sh apuntando a la etiqueta nueva",
+  "regenerar docs/web y las imágenes del README",
+  opciones.rapido ? "saltar la suite (--rapido)" : "pasar la suite completa",
+  `git commit + git tag ${etiqueta} + push de ${opciones.rama} y de la etiqueta`,
+  opciones.sinRelease || !hayGh
+    ? "sin GitHub Release"
+    : `gh release create ${etiqueta} ${ACTIVOS.join(" ")}${opciones.borrador ? " --draft" : ""} --generate-notes`,
+];
+
+if (opciones.seco) {
+  console.log("");
+  for (const linea of plan) dato(linea);
+  console.log(`\n  ${c("38;5;245", "modo seco: no se ha tocado nada.")}\n`);
+  process.exit(0);
+}
+
+if (!opciones.si && process.stdin.isTTY) {
+  process.stdout.write(`\n  ¿Publicar ${c("1", destino)}? [S/n] `);
+  const respuesta = leerTeclado().trim().toLowerCase();
+  if (!["", "s", "si", "sí", "y", "yes"].includes(respuesta)) morir("cancelado; no se tocó nada.");
+}
+
+// Se lee del descriptor 0 y no con un hijo: un `head` lanzado desde aquí no
+// hereda la terminal y devolvería fin de archivo, cancelando siempre.
+function leerTeclado() {
+  const bufer = Buffer.alloc(256);
+  try {
+    const leidos = fs.readSync(0, bufer, 0, bufer.length, null);
+    return bufer.subarray(0, leidos).toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+// ─────────────────────────── 1. versión ───────────────────────────
+paso(`Versión ${destino}`);
+const pkg = leerJson(PAQUETE);
+pkg.version = destino;
+guardarJson(PAQUETE, pkg);
+if (fs.existsSync(DATOS)) {
+  const datos = leerJson(DATOS);
+  datos.version = destino;
+  guardarJson(DATOS, datos);
+}
+// El `package-lock.json` se queda con la versión vieja si no se toca, y
+// entonces `npm ci` avisa de que no cuadra con `package.json`. Se escriben
+// las dos copias que guarda (la de arriba y la del paquete raíz).
+if (fs.existsSync(BLOQUEO)) {
+  const cerrojo = leerJson(BLOQUEO);
+  cerrojo.version = destino;
+  if (cerrojo.packages && cerrojo.packages[""]) cerrojo.packages[""].version = destino;
+  guardarJson(BLOQUEO, cerrojo);
+}
+bien("package.json, package-lock.json y docs/assets/datos.json al día");
+
+// ─────────────────────────── 2. huella ───────────────────────────
+paso("Firmando el instalador");
+ejecutar(process.execPath, [path.join(AQUI, "firma-instalador.mjs")]);
+ejecutar(process.execPath, [path.join(AQUI, "firma-instalador.mjs"), "--check"]);
+bien(`SHA256SUMS y shin.sh apuntan a ${etiqueta}`);
+
+// ─────────────────────────── 3. pruebas ───────────────────────────
+// La suite va ANTES de la documentación: deja el resumen real (cuántas
+// pruebas pasan) que la página y el README anuncian. Al revés, los números
+// publicados serían los de la corrida anterior.
+if (!opciones.rapido) {
+  paso("Pasando la suite");
+  ejecutar(process.execPath, [path.join(AQUI, "run-tests.mjs")]);
+  const resumen = leerJson(RESUMEN_SUITE);
+  bien(`${resumen.pasan}/${resumen.total} pruebas`);
+  if (resumen.fallos) morir("la suite no está limpia: no se publica nada");
+} else {
+  aviso("suite saltada (--rapido): solo para pruebas, no para una release de verdad");
+}
+
+// ─────────────────────────── 4. documentación ───────────────────────────
+paso("Actualizando la documentación");
+const WEB = path.join(AQUI, "actualizar-web.mjs");
+if (fs.existsSync(WEB)) ejecutar(process.execPath, [WEB], { permitirFallo: true });
+const PASTEL = path.join(RAIZ, "tools", "build_pastel.py");
+if (fs.existsSync(PASTEL) && hay("python3")) {
+  ejecutar("python3", [PASTEL], { permitirFallo: true });
+}
+sincronizarNumerosReadme();
+bien("página de comandos, imágenes y números de pruebas al día");
+
+function sincronizarNumerosReadme() {
+  if (!fs.existsSync(README) || !fs.existsSync(RESUMEN_SUITE)) return;
+  let resumen;
+  try {
+    resumen = leerJson(RESUMEN_SUITE);
+  } catch {
+    return;
+  }
+  const pasan = resumen.pasan;
+  const total = resumen.total;
+  if (!pasan || !total) return;
+  const texto = fs.readFileSync(README, "utf8");
+  // Tres formas en que el README dice el número: la insignia (299%2F299),
+  // el texto del alt (299/299 pruebas) y el comentario de `npm test`.
+  const nuevo = texto
+    .replace(/\b\d+%2F\d+(?=%20)/g, `${pasan}%2F${total}`)
+    .replace(/\b\d+\/\d+ pruebas\b/g, `${pasan}/${total} pruebas`)
+    .replace(/(# las )\d+( pruebas)/g, `$1${total}$2`);
+  if (nuevo !== texto) fs.writeFileSync(README, nuevo);
+}
+
+// La sesión de `gh` se comprueba aquí: después de que la suite haya pasado
+// (no se llama a la red por nada) y antes del push (si no hay sesión, mejor
+// saberlo antes de haber subido la etiqueta).
+if (hayGh && !opciones.sinRelease) {
+  const sesion = ejecutar("gh", ["auth", "status"], { capturar: true, permitirFallo: true });
+  if (sesion.codigo !== 0) {
+    morir(`\`gh\` no tiene sesión iniciada:
+${sesion.salida}
+  Inicia sesión con: gh auth login`);
+  }
+}
+
+// ─────────────────────────── 5. commit y etiqueta ───────────────────────────
+paso("Subiendo el código");
+const mensaje =
+  opciones.mensaje ||
+  `chore(release): ${etiqueta}\n\nInstalador firmado, arranque en un comando y documentación al día.`;
+ejecutar("git", ["add", "-A"]);
+const hayAlgo = salida("git", ["status", "--porcelain"]);
+if (hayAlgo) {
+  ejecutar("git", ["commit", "-m", mensaje]);
+  bien(`commit ${salida("git", ["rev-parse", "--short", "HEAD"])}`);
+} else {
+  dato("no había cambios que commitear");
+}
+ejecutar("git", ["tag", "-a", etiqueta, "-m", `Shin-MD ${destino}`]);
+bien(`etiqueta ${etiqueta} creada`);
+ejecutar("git", ["push", "origin", opciones.rama]);
+// La etiqueta aparte y no con --follow-tags: así se sabe exactamente qué se
+// subió y, si el push falla a medias, el mensaje siguiente lo dice.
+ejecutar("git", ["push", "origin", etiqueta]);
+bien(`rama ${opciones.rama} y etiqueta ${etiqueta} en el remoto`);
+
+// ─────────────────────────── 6. GitHub Release ───────────────────────────
+if (!opciones.sinRelease && hayGh) {
+  paso("Publicando la release");
+  const args = ["release", "create", etiqueta, ...ACTIVOS,
+    "--title", `Shin-MD ${destino}`,
+    "--generate-notes",
+    "--verify-tag"];
+  if (opciones.borrador) args.push("--draft");
+  ejecutar("gh", args);
+  bien(`release ${etiqueta} publicada con ${ACTIVOS.join(", ")}`);
+}
+
+// ─────────────────────────── 7. resumen ───────────────────────────
+paso("Hecho");
+// De dónde saldrá el comando de instalación. `origin` es lo normal, pero en
+// una copia con remoto local (o en un fork con otro nombre) eso no sirve:
+// se cae a `gh`, y luego al `repository` del package.json.
+function repoPublico() {
+  // Se lee la configuración tal cual, no `git remote get-url`: ese comando
+  // devuelve la URL ya reescrita por las reglas `url.<base>.insteadOf`, y
+  // entonces un espejo local se confundiría con el repositorio de verdad.
+  const url = salida("git", ["config", "--get", "remote.origin.url"]);
+  const limpio = url
+    .replace(/^git@github\.com:/, "")
+    .replace(/^ssh:\/\/git@github\.com\//, "")
+    .replace(/^https:\/\/github\.com\//, "")
+    .replace(/\.git$/, "");
+  if (/^[\w.-]+\/[\w.-]+$/.test(limpio)) return limpio;
+  // `gh` solo se consulta si de verdad se va a publicar una release: con
+  // --sin-release no hay motivo para llamar a GitHub.
+  if (hayGh && !opciones.sinRelease) {
+    const visto = ejecutar("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], {
+      capturar: true,
+      permitirFallo: true,
+    });
+    if (visto.codigo === 0 && /^[\w.-]+\/[\w.-]+$/.test(visto.stdout)) return visto.stdout;
+  }
+  const declarado = leerJson(PAQUETE).repository;
+  const texto = typeof declarado === "string" ? declarado : declarado && declarado.url;
+  if (texto) {
+    const otro = texto
+      .replace(/^git\+https:\/\/github\.com\//, "")
+      .replace(/^git@github\.com:/, "")
+      .replace(/^https:\/\/github\.com\//, "")
+      .replace(/\.git$/, "");
+    if (/^[\w.-]+\/[\w.-]+$/.test(otro)) return otro;
+  }
+  return "<usuario>/<repo>";
+}
+const repo = repoPublico();
+console.log(`
+  ${c("1", `Shin-MD ${destino}`)} publicado.
+
+  Instalar (una línea):
+    curl -fsSL https://raw.githubusercontent.com/${repo}/${etiqueta}/shin.sh | sh
+
+  Comprobar lo que se subió:
+    gh release view ${etiqueta}
+`);

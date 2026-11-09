@@ -340,7 +340,12 @@ que ya nacieron mal, y `test/economia.test.js` vigila que no vuelva a pasar.
 npm test            # toda la suite
 npm test -- saludo  # solo los archivos de prueba con "saludo" en el nombre
 npm run lint        # estilo
+npm run typecheck   # tipos con JSDoc
 ```
+
+Para sacar una versión no hay que encadenar nada a mano: `npm run publicar`
+hace la firma, la suite, la documentación, el commit, la etiqueta, el push y la
+release en el orden correcto. Está contado en **[FORK.md](FORK.md#6-publicar-tu-primera-versión)**.
 
 Una prueba nueva va en `test/` y suele ser tan corta como esto:
 

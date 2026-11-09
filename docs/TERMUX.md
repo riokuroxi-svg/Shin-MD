@@ -27,21 +27,17 @@ Descárgalo de [F-Droid](https://f-droid.org/packages/com.termux/). La versión
 de Play Store está sin mantenimiento desde hace años y sus paquetes están
 congelados: con ella, `pkg install` falla o instala Node viejo.
 
-## 2. Abrir y pegar tres comandos
+## 2. Abrir y pegar un comando
 
 ```bash
-pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS
-bash install.sh --version v3.5.1
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
 ```
 
-Los tres primeros comandos descargan una versión concreta y **comprueban su
-huella**; la cuarta ejecuta solo si el archivo es el que se publicó. Si
-`sha256sum` dice `OK`, ese `install.sh` es exactamente el de la release. Si
-prefieres lo más corto posible, `curl` desde `main` funciona, pero entonces no
-sabes qué versión te va a tocar.
+Ese archivo descarga el instalador de esa versión concreta y **comprueba su
+huella** antes de ejecutarlo: si el archivo no es el que se publicó, no se
+ejecuta nada. Como llega por una tubería, el propio arranque se baja primero
+`SHA256SUMS` y compara. Si prefieres leerlo antes tú mismo, el README tiene el
+"modo auditor" con los comandos sueltos.
 
 El instalador hace esto, en orden, y se detiene en el primer problema:
 

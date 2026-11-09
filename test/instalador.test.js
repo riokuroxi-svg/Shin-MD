@@ -104,6 +104,10 @@ function correr(script, args, { cwd, raiz, env = {}, entrada } = {}) {
     SHIN_NO_BORRAR: `${RAIZ}:${process.env.SHIN_NO_BORRAR || ""}`,
     // El entorno de pruebas es un tmpfs pequeño; el umbral real se prueba aparte.
     SHIN_ESPACIO_MIN_MB: "1",
+    // Ninguna prueba instala paquetes del sistema ni descarga Node: eso
+    // depende de la red y de la máquina, y no es lo que se está midiendo.
+    // Las que sí prueban esa ruta la habilitan con su propio stub.
+    SHIN_NO_INSTALAR: "1",
     HOME: hogar,
     // Ojo: no se pone SHIN_INSTALL_ROOT cuando no se pide, porque eso marca
     // el destino como explícito y desactiva la deducción desde la carpeta.
@@ -262,7 +266,7 @@ test("detecta Termux y avisa de lo que Android hace con el bot", () => {
   });
 
   assert.equal(r.status, 0, r.salida);
-  assert.match(r.salida, /Android \/ Termux detectado/);
+  assert.match(r.salida, /Termux \(Android\)/);
   assert.match(r.salida, /Acquire wakelock/);
   assert.match(r.salida, /procesos hijos/);
 
@@ -805,12 +809,14 @@ test("SHA256SUMS publicado coincide con install.sh (no se desincroniza)", () => 
   const resumen = path.join(RAIZ, "SHA256SUMS");
   assert.ok(fs.existsSync(resumen), "falta SHA256SUMS: genéralo con `npm run firma`");
 
-  const declarado = fs.readFileSync(resumen, "utf8").split("\n").find((l) => l.endsWith("  install.sh"));
-  assert.ok(declarado, "SHA256SUMS no menciona install.sh");
-
-  const real = crypto.createHash("sha256").update(fs.readFileSync(INSTALADOR)).digest("hex");
-  assert.equal(declarado.split(/\s+/)[0], real,
-    "install.sh cambió y SHA256SUMS no: ejecuta `npm run firma` antes de publicar");
+  const lineas = fs.readFileSync(resumen, "utf8").split("\n");
+  for (const nombre of ["install.sh", "shin.sh"]) {
+    const declarado = lineas.find((l) => l.endsWith(`  ${nombre}`));
+    assert.ok(declarado, `SHA256SUMS no menciona ${nombre}`);
+    const real = crypto.createHash("sha256").update(fs.readFileSync(path.join(RAIZ, nombre))).digest("hex");
+    assert.equal(declarado.split(/\s+/)[0], real,
+      `${nombre} cambió y SHA256SUMS no: ejecuta \`npm run firma\` antes de publicar`);
+  }
 });
 
 test("el flujo de release verifica la huella antes de ejecutar", () => {
@@ -818,12 +824,17 @@ test("el flujo de release verifica la huella antes de ejecutar", () => {
   const descarga = path.join(raiz, "install.sh");
   const sumas = path.join(raiz, "SHA256SUMS");
   fs.copyFileSync(INSTALADOR, descarga);
+  // El arranque de un comando se publica con la misma etiqueta y comprueba
+  // esta misma huella: si no viaja en SHA256SUMS, la cadena tiene un eslabón
+  // suelto y `sha256sum -c` falla en la carpeta de la release.
+  fs.copyFileSync(path.join(RAIZ, "shin.sh"), path.join(raiz, "shin.sh"));
   fs.copyFileSync(path.join(RAIZ, "SHA256SUMS"), sumas);
 
   // 1. La huella coincide: `sha256sum -c` sale bien.
   const bueno = spawnSync("sha256sum", ["-c", "SHA256SUMS"], { cwd: raiz, encoding: "utf8" });
   assert.equal(bueno.status, 0, bueno.stdout + bueno.stderr);
   assert.match(bueno.stdout, /install\.sh: OK/);
+  assert.match(bueno.stdout, /shin\.sh: OK/);
 
   // 2. Un byte distinto (un instalador manipulado) y la comprobación falla.
   fs.appendFileSync(descarga, "# línea añadida por un atacante\n");

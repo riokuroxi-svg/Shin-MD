@@ -48,24 +48,25 @@ Si en algún momento pregunta algo, deja la opción por defecto (pulsa Enter).
 
 ### 1.3 Instala Shin-MD
 
-Copia el bloque entero, pégalo en Termux y pulsa Enter:
+Copia esta línea, pégala en Termux y pulsa Enter:
 
 ```bash
-d=$(mktemp -d) && cd "$d" && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/install.sh -o install.sh && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/SHA256SUMS -o SHA256SUMS && sha256sum -c SHA256SUMS && bash install.sh --version v3.5.1
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
 ```
 
 **Qué hace, en orden:**
 
 | Paso | Qué es |
 |---|---|
-| `d=$(mktemp -d)` | Crea una carpeta temporal y entra en ella. No ensucia tu casa. |
-| `curl ... install.sh` | Descarga el instalador **de esa versión concreta**, no de lo último que haya. |
-| `curl ... SHA256SUMS` | Descarga la huella del archivo. |
-| `sha256sum -c` | Comprueba que el instalador es **exactamente** el que se publicó. Si no coincide, se para aquí. |
-| `bash install.sh` | Ejecuta la instalación. |
+| `shin.sh` | El arranque de **esa versión concreta**, no de lo último que haya en `main`. |
+| descarga | Baja en una carpeta temporal el instalador y su `SHA256SUMS`. |
+| huella | Calcula el SHA-256 y lo compara. Si no coincide —archivo cortado, o alguien lo cambió— **no ejecuta nada**. |
+| instalador | `--auto`: instala lo que falte, o actualiza, o repara, deja `shin` en el PATH y arranca el bot. |
 
-Ese `&&` no es decoración: si cualquier paso falla, los siguientes **no** se
-ejecutan. No vas a instalar un archivo a medio descargar.
+Lo único que ese esquema no puede comprobar es `shin.sh` mismo, que es de donde
+cuelga la cadena. Si quieres comprobarlo también, baja el archivo, míralo y
+ejecútalo tú: el README tiene los comandos sueltos en el apartado "modo
+auditor".
 
 ### 1.4 Qué esperar
 
@@ -74,13 +75,13 @@ Verás algo así, y al final un resumen:
 ```
   ✓ Node 26.4.0   npm 11.20.0
   ✓ git listo
-  ▸ descargando Shin-MD v3.5.1
+  ▸ descargando Shin-MD v3.7.0
   ✓ dependencias instaladas
   ✓ 8 parches del conector verificados
   ✓ wakelock activo
 
 ╭──────────────────────────────────────────────╮
-│  Shin-MD 3.5.0 instalado                     │
+│  Shin-MD 3.6.0 instalado                     │
 ╰──────────────────────────────────────────────╯
 ```
 
@@ -101,7 +102,7 @@ Si dice menos de 22.5 (o dice "command not found"), instálalo desde
 <https://nodejs.org> — versión LTS. Después, el mismo bloque de arriba:
 
 ```bash
-d=$(mktemp -d) && cd "$d" && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/install.sh -o install.sh && curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.5.1/SHA256SUMS -o SHA256SUMS && sha256sum -c SHA256SUMS && bash install.sh --version v3.5.1
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
 ```
 
 En un servidor donde quieras que siga corriendo sin tu sesión, mira
@@ -109,10 +110,32 @@ En un servidor donde quieras que siga corriendo sin tu sesión, mira
 
 ---
 
+## 2.5 Si falta Node o git
+
+No hay que hacer nada: el instalador mira qué falta y lo resuelve.
+
+| Situación | Qué hace |
+|---|---|
+| Termux | `pkg install nodejs-lts git` |
+| Debian/Ubuntu, Fedora, Alpine, Arch | lo pide al gestor de paquetes **y te pregunta antes** |
+| Sin root, o sin terminal (contenedor, `ssh -T`) | no toca el sistema: baja Node oficial de nodejs.org, comprueba la huella, lo deja en `~/.local/opt/node` y añade su `bin` al `PATH` (un bloque marcado, fácil de borrar) |
+
+Si prefieres que nunca instale paquetes del sistema:
+
+```sh
+SHIN_NO_INSTALAR=1 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.0/shin.sh | sh
+```
+
+Y si quieres autorizarlo sin que pregunte (para un script de aprovisionamiento):
+
+```sh
+SHIN_PERMITIR_PAQUETAS=1 curl … | sh
+```
+
 ## 3. Arrancar y vincular WhatsApp
 
 ```bash
-cd ~/Shin-MD && npm start -- --code
+shin --code
 ```
 
 Aparece el panel y, debajo, un **código de 8 dígitos**. En WhatsApp:
@@ -120,10 +143,10 @@ Aparece el panel y, debajo, un **código de 8 dígitos**. En WhatsApp:
 **Ajustes → Dispositivos vinculados → Vincular un dispositivo → Vincular con
 número de teléfono**
 
-Y tecleas el código. Si prefieres QR: `npm start -- --qr`.
+Y tecleas el código. Si prefieres QR: `shin --qr`.
 
 ```
-╭ SHIN-MD 3.5.1 ──────────────────────────────────────╮
+╭ SHIN-MD 3.6.0 ──────────────────────────────────────╮
 │ ● ACTIVO  0 grupos  ↑ 1m  pid 4242                   │
 │ web http://127.0.0.1:3000                            │
 ╰──────────────────────────────────────────────────────╯
@@ -187,7 +210,7 @@ sobreviven a todo menos a `--purge`, que pregunta dos veces.
 | Quiero… | Comando |
 |---|---|
 | actualizar conservando mi sesión | `cd ~/Shin-MD && bash install.sh --update` |
-| pasar a una versión concreta | `bash install.sh --update --version v3.5.1` |
+| pasar a una versión concreta | `bash install.sh --update --version v3.7.0` |
 | seguir la rama `main` y dejar de estar fijado a una versión | `bash install.sh --update --branch main` |
 | arreglar una instalación rota | `bash install.sh --repair` |
 | saber si todo está bien | `bash install.sh --verify` |
@@ -216,7 +239,7 @@ cd ~/Shin-MD && npm start
 La instalación es más vieja que el comando. Actualiza:
 
 ```bash
-cd ~/Shin-MD && bash install.sh --update --version v3.5.1
+cd ~/Shin-MD && bash install.sh --update --version v3.7.0
 ```
 
 ### "Node 20 es demasiado antiguo"
@@ -263,3 +286,26 @@ cd ~/Shin-MD && bash install.sh --verify
 
 Y si sigue igual, `bash install.sh --repair` reconstruye las dependencias sin
 tocar tus datos.
+
+---
+
+## 6. Cuando algo no va: `shin doctor`
+
+```sh
+shin doctor
+```
+
+Imprime, sin cambiar nada, todo lo que hace falta para diagnosticar: plataforma,
+versiones, de dónde salió Node, si los módulos y los parches del conector están,
+cuánto ocupa la sesión, espacio libre, si el bot corre y si hay servicio de
+systemd. Del `.env` solo dice cuántas claves tiene, nunca su contenido.
+
+## 7. Que arranque solo (servidor)
+
+```sh
+shin service            # systemd, con arranque automático
+shin service --print    # ver la unidad antes de escribirla
+shin service --user     # servicio de usuario (sin root) + aviso de linger
+```
+
+Después: `systemctl status shin-md` y `journalctl -u shin-md -f`.

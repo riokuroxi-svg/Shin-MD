@@ -255,41 +255,58 @@ código**. Las imágenes son para adornar, nunca para instruir.
 
 ## 6. Publicar tu primera versión
 
-El orden **importa**: `docs/web` y las imágenes se generan con lo que diga el
-repositorio en ese momento, y el instalador se firma al final. Si lo haces al
-revés, publicas una huella que corresponde a otro archivo:
+Una orden:
 
 ```bash
-# 1. versión nueva en package.json, package-lock.json y docs/assets/datos.json
-# 2. la suite en verde
-npm test
-
-# 3. regenerar la web y las imágenes con los números reales
-npm run docs:web
-npm run docs:pastel
-
-# 4. firmar el instalador
-node scripts/firma-instalador.mjs
-
-# 5. volver a pasar la suite
-npm test
-
-# 6. publicar
-git add -A
-git commit -m "feat: tu cambio"
-git tag -a v1.0.0 -m "TuBot 1.0.0"
-git push origin main --tags
+npm run publicar
 ```
 
-Del paso 3, la suite vigila tres cosas de verdad: que `docs/web/index.html`
+Eso es todo. El comando hace el ritual completo en el orden que importa —y el
+orden es justo lo que se olvida cuando se hace a mano:
+
+1. sube la versión en `package.json`, `package-lock.json` y `docs/assets/datos.json`;
+2. firma el instalador (`SHA256SUMS`) y comprueba que la huella cuadre;
+3. pasa **la suite entera** —si algo está en rojo, se detiene ahí, sin commit,
+   sin etiqueta y sin tocar GitHub;
+4. regenera `docs/web` y las imágenes con los números reales de esa corrida;
+5. hace el commit, crea la etiqueta anotada y sube la rama y la etiqueta;
+6. publica la release con las notas que genera GitHub;
+7. imprime la línea de instalación, ya apuntando a la versión nueva.
+
+```bash
+npm run publicar                  # sube el parche: 1.0.0 → 1.0.1
+npm run publicar -- minor         # sube el menor:   1.0.1 → 1.1.0
+npm run publicar -- major         # sube el mayor:   1.1.0 → 2.0.0
+npm run publicar -- 1.2.3         # esa versión, tal cual
+npm run publicar -- --seco        # enseña el plan y no toca nada
+npm run publicar -- --borrador    # deja la release en borrador, para revisarla antes
+npm run publicar -- --sin-release # código y etiqueta, sin release (y te da la orden que falta)
+npm run publicar -- --ayuda       # todas las opciones
+```
+
+Si el repositorio no es `riokuroxi-svg/Shin-MD`, cambia el `repository` de
+`package.json` (y el remoto) antes de publicar: de ahí sale la URL del comando
+de instalación que imprime el resumen. Si `gh` no está instalado o no tiene
+sesión, el script lo dice y te deja el `gh release create` escrito para que lo
+pegues tú; el resto del trabajo ya está hecho y subido.
+
+### Y por qué el orden importa
+
+`docs/web` y las imágenes se generan con lo que diga el repositorio en ese
+momento, y el instalador se firma antes de la suite. Si lo haces al revés,
+publicas una huella que corresponde a otro archivo, o anuncias en la portada los
+números de la corrida anterior. El script no puede equivocarse de orden porque
+el orden está escrito una sola vez.
+
+De todo eso, la suite vigila tres cosas de verdad: que `docs/web/index.html`
 tenga **exactamente** los comandos que carga el bot, que la página y el README
 anuncien **el mismo** número de pruebas, y que el número de archivos de prueba
 sea el real. Si añades un comando o una prueba y olvidas regenerar, el test
 falla y te lo dice antes de publicar.
 
 Lo que **no** comprueba nadie son las cifras que llevan las imágenes
-(`docs/assets/datos.json`): si te olvidas de regenerarlas, el dibujo enseña una
-cifra vieja y no hay aviso. Revísalo a mano.
+(`docs/assets/datos.json`): por eso `npm run publicar` las regenera siempre. Si
+lo haces a mano y te olvidas, el dibujo enseña una cifra vieja y no hay aviso.
 
 Tu instalador quedará accesible en:
 
@@ -299,6 +316,35 @@ https://raw.githubusercontent.com/TU-USUARIO/TU-REPO/v1.0.0/install.sh
 
 Pon **la etiqueta** en la URL, no `main`. Así quien instale recibe exactamente
 lo que probaste, y no lo que subas mañana a medias.
+
+<details>
+<summary><b>A mano, paso por paso (lo que hace <code>npm run publicar</code>)</b></summary>
+
+```bash
+# 1. versión nueva en package.json, package-lock.json y docs/assets/datos.json
+# 2. firmar el instalador
+node scripts/firma-instalador.mjs
+
+# 3. la suite en verde (con la huella ya recalculada)
+npm test
+
+# 4. regenerar la web y las imágenes con los números reales
+npm run docs:web
+npm run docs:pastel
+
+# 5. commit, etiqueta y push
+git add -A
+git commit -m "chore(release): v1.0.0"
+git tag -a v1.0.0 -m "TuBot 1.0.0"
+git push origin main
+git push origin v1.0.0
+
+# 6. la release, con los tres archivos que se descargan
+gh release create v1.0.0 install.sh shin.sh SHA256SUMS \
+  --title "TuBot 1.0.0" --generate-notes --verify-tag
+```
+
+</details>
 
 ---
 

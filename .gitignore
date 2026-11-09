@@ -46,6 +46,7 @@ audit/
 
 # Installer state (one per installation, never committed)
 .shin-install
+.npm-instalar.log
 
 # Python
 __pycache__/
