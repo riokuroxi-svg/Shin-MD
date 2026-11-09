@@ -130,6 +130,14 @@ function publicar(repo, args = [], { gh, env = {} } = {}) {
     // token lo pasa explícitamente.
     GH_TOKEN: "",
     GITHUB_TOKEN: "",
+    // La identidad va aquí y no solo en el helper de git: `publicar` hace su
+    // propio `git commit`, y en un runner de CI no hay `user.name` global.
+    // Sin esto, las trece pruebas de este archivo fallaban en GitHub Actions
+    // con «empty ident name» mientras pasaban en cualquier máquina ya usada.
+    GIT_AUTHOR_NAME: "prueba",
+    GIT_AUTHOR_EMAIL: "p@e.st",
+    GIT_COMMITTER_NAME: "prueba",
+    GIT_COMMITTER_EMAIL: "p@e.st",
     ...env,
   };
   // Se llama al script directamente: `npm run` añadiría ruido y su propio
@@ -298,6 +306,31 @@ test("sin gh y sin token, avisa en vez de fallar", () => {
   assert.equal(r.status, 0, r.salida);
   assert.match(r.salida, /sin GitHub Release/);
   assert.match(r.salida, /GH_TOKEN/, "tiene que decir cómo arreglarlo");
+});
+
+test("sin identidad de git se para con un mensaje que sirve de algo", () => {
+  // Un runner de CI, un contenedor o una máquina recién instalada no tienen
+  // `user.name`. Antes, `git commit` moría con «empty ident name» al final de
+  // todo, después de la suite entera. Ahora se comprueba antes de tocar nada.
+  const { trabajo } = copiaDelRepo("3.7.0");
+  const antes = git(trabajo, "rev-parse", "HEAD");
+  const vacio = temporal("shin-sin-identidad");
+  const r = publicar(trabajo, ["3.9.0", "--si"], {
+    env: {
+      HOME: vacio,
+      XDG_CONFIG_HOME: path.join(vacio, ".config"),
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_AUTHOR_NAME: "",
+      GIT_AUTHOR_EMAIL: "",
+      GIT_COMMITTER_NAME: "",
+      GIT_COMMITTER_EMAIL: "",
+    },
+  });
+  assert.notEqual(r.status, 0, "sin identidad no puede seguir");
+  assert.match(r.salida, /git no sabe quién eres/, r.salida);
+  assert.match(r.salida, /git config --global user\.name/, "tiene que decir cómo arreglarlo");
+  assert.equal(git(trabajo, "rev-parse", "HEAD"), antes, "y no puede dejar nada a medias");
 });
 
 test("el README queda con los números reales de la suite", () => {

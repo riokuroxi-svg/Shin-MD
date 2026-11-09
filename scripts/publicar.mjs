@@ -203,6 +203,25 @@ if (ramaActual !== opciones.rama) {
 if (!salida("git", ["remote"]).split("\n").includes("origin")) {
   morir("no hay remoto `origin`; sin él no hay dónde publicar");
 }
+// La identidad de git no viene puesta en un runner de CI, en un contenedor ni
+// en una máquina recién instalada. Sin esto, `git commit` muere con
+// «empty ident name», que no dice nada a quien lo lee y aparece justo al
+// final, después de haber pasado la suite entera.
+// `permitirFallo`: cuando la clave no existe, `git config` sale con 1 y no
+// imprime nada. Eso no es un error que deba cortar aquí: es justo lo que se
+// está mirando.
+const leerConfig = (clave) =>
+  ejecutar("git", ["config", clave], { capturar: true, permitirFallo: true }).stdout;
+const nombreGit = leerConfig("user.name") || process.env.GIT_AUTHOR_NAME || "";
+const correoGit = leerConfig("user.email") || process.env.GIT_AUTHOR_EMAIL || "";
+if (!nombreGit || !correoGit) {
+  morir(`git no sabe quién eres, así que no puede firmar el commit de la release.
+  Se arregla una vez:
+    git config --global user.name "Tu Nombre"
+    git config --global user.email "tu@correo"
+  (o exporta GIT_AUTHOR_NAME y GIT_AUTHOR_EMAIL para esta terminal sola)`);
+}
+
 const etiquetas = salida("git", ["tag", "--list", etiqueta]);
 if (etiquetas === etiqueta) {
   morir(`la etiqueta ${etiqueta} ya existe.

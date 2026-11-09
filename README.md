@@ -4,7 +4,7 @@
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="408/408 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="409/409 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
