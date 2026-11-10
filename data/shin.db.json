@@ -9,6 +9,11 @@
       "version": 2,
       "name": "economy-gacha-profiles",
       "applied_at": 1790744451935
+    },
+    "3": {
+      "version": 3,
+      "name": "users-numerico",
+      "applied_at": 1794307735397
     }
   },
   "settings": {},
@@ -19,5 +24,14 @@
   "characters": {},
   "user_characters": {},
   "group_warns": {},
-  "group_config": {}
+  "group_config": {},
+  "users_nuevo": {},
+  "__claves_primarias__": {
+    "migrations": [
+      "version"
+    ],
+    "users_nuevo": [
+      "jid"
+    ]
+  }
 }
