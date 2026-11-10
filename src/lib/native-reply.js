@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { randomBytes } from 'node:crypto';
-import { nodosInteractivos } from "#lib/wa-nodes";
+import { nodosInteractivosAsync } from "#lib/wa-nodes";
 
 /**
  * Envío de una tarjeta interactiva nativa con botones (quick_reply, cta_copy, cta_url).
@@ -27,13 +27,25 @@ function buildMessageContextInfo() {
   };
 }
 
-function isPrivateChat(jid = '') {
-  return jid.endsWith('@s.whatsapp.net') || jid.endsWith('@lid');
-}
-
 // El envoltorio vive en #lib/wa-nodes desde que la traducción se
 // quedó sin botones por tener su propia copia a medias.
-const buildBizNode = () => nodosInteractivos("")[0];
+
+/**
+ * Formato de la tarjeta.
+ *
+ *   moderno (por defecto) → `interactiveMessage` suelto, el más bonito.
+ *   plantilla             → el mismo interactivo dentro de
+ *                           `templateMessage.interactiveMessageTemplate`.
+ *                           Es el envoltorio que sí entienden los WhatsApp
+ *                           viejos: se ve más sobrio, pero no aparece el
+ *                           cartel de «actualiza WhatsApp».
+ *
+ * Se cambia con `BOTONES_FORMATO=plantilla` en el entorno, sin tocar código.
+ */
+function formatoBotones() {
+  const valor = String(process.env.BOTONES_FORMATO ?? '').trim().toLowerCase();
+  return ['plantilla', 'template', 'compatible'].includes(valor) ? 'plantilla' : 'moderno';
+}
 
 /**
  * Envía una tarjeta con botones nativos.
@@ -153,10 +165,18 @@ export async function sendNativeQuickReply({
       },
     };
 
-    const message = {
-      messageContextInfo: buildMessageContextInfo(),
-      interactiveMessage,
-    };
+    const message = formatoBotones() === 'plantilla'
+      ? {
+          messageContextInfo: buildMessageContextInfo(),
+          templateMessage: {
+            interactiveMessageTemplate: interactiveMessage,
+            templateId: `shin-${Date.now()}`,
+          },
+        }
+      : {
+          messageContextInfo: buildMessageContextInfo(),
+          interactiveMessage,
+        };
 
     const generated = generateWAMessageFromContent(jid, message, {
       userJid: sock.user?.id,
@@ -168,8 +188,12 @@ export async function sendNativeQuickReply({
       throw new Error('No se pudo generar la tarjeta nativa');
     }
 
-    const additionalNodes = [buildBizNode()];
-    if (isPrivateChat(jid)) additionalNodes.push({ tag: 'bot', attrs: { biz_bot: '1' } });
+    // El nodo `biz` lo arma la librería a partir del mensaje cuando sabe.
+    // El nuestro escrito a mano sustituye al suyo (ella no pone dos), así que
+    // si el nuestro se queda corto el mensaje sale peor que sin él.
+    const additionalNodes = await nodosInteractivosAsync(jid, {
+      contenido: generated.message,
+    });
 
     await sock.relayMessage(jid, generated.message, {
       messageId: generated.key.id,
