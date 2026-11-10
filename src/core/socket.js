@@ -20,6 +20,7 @@ import * as lid from "../lib/lid.js";
 import { panelCodigo } from "../services/consola.js";
 import { esLid as esJidLid } from "../lib/jid.js";
 import { resolveChannel } from "../lib/channel.js";
+import { analizarCortes, podarCortes } from "../lib/cortes.js";
 import db from "../services/ginko-db.js";
 import pino from "pino";
 import fs from "fs";
@@ -122,6 +123,12 @@ export function connectSocket(engine, opts) {
       log.warn("Sesión limpiada");
     } catch (e) { log.error("clearSession: " + (e.message || e)); }
   }
+
+  // Cortes de conexión recientes, para poder explicar una seguidilla en
+  // vez de dejarla en «reconectando...» para siempre.
+  const marcasDeCorte = [];
+  let pistaDeCortesDada = false;
+  let conectadoDesde = 0;
 
   function backoffDelay() {
     const exp = Math.min(60000, 3000 * Math.pow(1.6, Math.min(retries, 8)));
@@ -374,6 +381,14 @@ export function connectSocket(engine, opts) {
         try { await sc(); } catch {}
         saveTimer = null;
 
+        conectadoDesde = Date.now();
+        if (podarCortes(marcasDeCorte).length === 0) pistaDeCortesDada = false;
+
+        // Volvió la conexión: lo que se quedó en cola sale ahora, en orden.
+        // El motivo es "conexion" y no un resume() a secas para no quitarle
+        // la pausa al watchdog si la tiene puesta por riesgo.
+        try { engine.getSendQueue()?.resume?.("conexion"); } catch {}
+
         engine.transit(engine.LIFECYCLE.READY);
         engine.emit("connected", s.user);
         log.success("[ ✿ ] Conectado a: " + (s.user?.name || s.user?.id || "?"));
@@ -406,6 +421,12 @@ export function connectSocket(engine, opts) {
       }
 
       if (connection === "close") {
+        // La conexión se cayó: la cola se para SIN vaciarse. Todo lo que
+        // llegue mientras estamos fuera (una respuesta a un comando, un
+        // aviso) espera aquí y sale al reconectar. Antes no se pausaba:
+        // esos envíos morían contra el socket cerrado y se perdían.
+        try { engine.getSendQueue()?.pause?.("conexion"); } catch {}
+
         remove(s);
 
         const code = lastDisconnect?.error?.output?.statusCode || 0;
@@ -419,6 +440,21 @@ export function connectSocket(engine, opts) {
         // DEBUG: mostrar codigo exacto
         const reasonName = Object.keys(DisconnectReason).find(k => DisconnectReason[k] === code) || "unknown";
         log.gray("▸ Desconexion codigo: " + code + " (" + reasonName + ")");
+
+        // Cuánto duró la conexión y por qué se corta tanto. Un 428 no dice
+        // quién cerró: si van tres en diez minutos, casi siempre es Android
+        // durmiendo la app o una segunda instancia con la misma sesión.
+        if (conectadoDesde) {
+          const seg = Math.round((Date.now() - conectadoDesde) / 1000);
+          log.gray("▸ Duró " + (seg >= 60 ? Math.round(seg / 60) + " min" : seg + " s") + " conectada");
+          conectadoDesde = 0;
+        }
+        marcasDeCorte.push(Date.now());
+        const corte = analizarCortes(podarCortes(marcasDeCorte));
+        if (corte.pista && !pistaDeCortesDada) {
+          pistaDeCortesDada = true;
+          log.warn(corte.pista);
+        }
 
         if ([DisconnectReason.loggedOut, DisconnectReason.forbidden,
              DisconnectReason.multideviceMismatch].includes(code)) {

@@ -32,10 +32,40 @@ function withTimeout(promise, ms, label) {
   ]).finally(() => clearTimeout(t));
 }
 
+/**
+ * ¿Falló porque la conexión con WhatsApp está caída?
+ *
+ * Baileys no tiene un código para esto: el envío revienta con textos como
+ * «Connection Closed», «Connection Failure» o «Socket is not open». No es
+ * un fallo del bot ni del mensaje — el mensaje está perfecto, no hay por
+ * dónde mandarlo. Distinguirlo importa: un fallo de verdad se reintenta y,
+ * si vuelve a fallar, se descarta; este otro NO se descarta, se espera.
+ *
+ * @param {any} err
+ */
+export function esFalloDeConexion(err) {
+  if (!err) return false;
+  const e = /** @type {any} */ (err);
+  const texto = String(e.message || e);
+  // Las credenciales inválidas o el número desvinculado NO son transitorios:
+  // esperar la reconexión ahí sería esperar para siempre.
+  if (e.code === CODIGO_INCIERTO) return false;
+  return /connection closed|connection failure|connection terminated|socket is not open|not connected|sin conexión/i.test(texto);
+}
+
 export function createSendQueue(throttler, health, opts = {}) {
   const timeoutMs = opts.timeoutMs || SEND_TIMEOUT_MS;
+  // Cuánto puede esperar un mensaje a que vuelva la conexión antes de
+  // darse por perdido. 5 min cubre el corte típico de datos móviles; más
+  // allá de eso el que escribió ya se fue.
+  const esperaReconexionMs = opts.esperaReconexionMs || 300000;
   const queue = [];
   let processing = false;
+  // La pausa lleva MOTIVOS, no un booleano. Antes, cualquier `resume()`
+  // reanudaba la cola aunque hubiera otro motivo para tenerla parada: el
+  // watchdog la pausaba por riesgo alto y la reconexión la reanudaba tres
+  // segundos después, saltándose el freno anti-ban sin querer.
+  const motivosDePausa = new Set();
   let paused = false;
   // B1.4: ventana de prioridad. El router la abre alrededor de comandos
   // marcados `priority: true` (.menu/.ping/.owner); todo envío hecho
@@ -69,6 +99,19 @@ export function createSendQueue(throttler, health, opts = {}) {
   function enterPriority() { priorityDepth++; }
   function exitPriority() { priorityDepth = Math.max(0, priorityDepth - 1); }
   function inPriority() { return priorityDepth > 0; }
+
+  /**
+   * Espera a que la cola deje de estar pausada (es decir, a que vuelva la
+   * conexión). Devuelve `true` si volvió y `false` si se agotó el tiempo.
+   * @param {number} topeMs
+   */
+  async function esperarReanudacion(topeMs) {
+    const fin = Date.now() + topeMs;
+    while (paused && Date.now() < fin) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return !paused;
+  }
 
   function enqueue(fn, opts) {
     opts = opts || {};
@@ -147,6 +190,42 @@ export function createSendQueue(throttler, health, opts = {}) {
           continue;
         }
 
+        // ── Se cayó la conexión: el mensaje ESPERA, no se pierde ────
+        // El fallo que se veía en el móvil: llega un comando, justo ahí se
+        // cae la conexión (código 428 en datos móviles es de todos los
+        // días), el envío revienta con «Connection Closed», se reintenta a
+        // los 2-3 s —la conexión sigue caída—, vuelve a reventar y la
+        // respuesta se TIRA. Quien escribió el comando no recibe nada y el
+        // bot parece muerto aunque esté reconectando.
+        //
+        // Aquí ese reintento ciego se cambia por espera: el mensaje se
+        // queda en la cola (que está pausada por el mismo motivo) y sale
+        // en cuanto la conexión vuelve.
+        //
+        // ¿Y no se duplica? No: «Connection Closed» lo lanza Baileys al
+        // escribir sobre un websocket ya cerrado — el fotograma NO llegó a
+        // salir. Es el caso contrario del envío sin respuesta (ese sí es
+        // una incógnita y no se reintenta nunca).
+        if (esFalloDeConexion(err)) {
+          log.warn("Conexión caída: el mensaje queda en cola y sale al reconectar");
+          const volvio = await esperarReanudacion(esperaReconexionMs);
+          if (!volvio) {
+            log.warn("No volvió la conexión en " + Math.round(esperaReconexionMs / 60000) + " min: ese mensaje se pierde");
+            task.reject(err);
+            continue;
+          }
+          try {
+            const result3 = await withTimeout(task.fn(), timeoutMs, "envío tras reconectar");
+            if (throttler && gastaCuota) throttler.recordSent();
+            if (health) health.recordSend();
+            task.resolve(result3);
+          } catch (err3) {
+            if (health) health.recordSendFail(err3);
+            task.reject(err3);
+          }
+          continue;
+        }
+
         log.error("Send failed: " + (err.message || err), err);
         try {
           // Reintento que RESPETA el throttler (nunca 3s fijos a tope de
@@ -176,19 +255,38 @@ export function createSendQueue(throttler, health, opts = {}) {
     processing = false;
   }
 
-  function pause() { paused = true; }
-  function resume() { paused = false; if (!processing) process(); }
+  /**
+   * Pausa la cola. `motivo` permite que dos módulos distintos la paren sin
+   * pisarse: el watchdog por riesgo y la conexión por estar caída.
+   * @param {string} [motivo]
+   */
+  function pause(motivo = "manual") { motivosDePausa.add(motivo); paused = true; }
+
+  /**
+   * Quita un motivo de pausa. La cola solo vuelve a andar cuando no queda
+   * ninguno.
+   * @param {string} [motivo]
+   */
+  function resume(motivo = "manual") {
+    motivosDePausa.delete(motivo);
+    paused = motivosDePausa.size > 0;
+    if (!paused && !processing) process();
+  }
+
+  /** Por qué está parada la cola ahora mismo (vacío si anda). */
+  function motivos() { return [...motivosDePausa]; }
+
   function clear() { queue.length = 0; }
   function length() { return queue.length; }
   function isPaused() { return paused; }
 
   /** Cuántos envíos quedaron en el aire y cuándo fue el último. */
   function getStats() {
-    return { length: queue.length, paused, inciertos, ultimoIncierto };
+    return { length: queue.length, paused, motivos: [...motivosDePausa], inciertos, ultimoIncierto };
   }
 
   return {
-    enqueue, pause, resume, clear, length, isPaused,
+    enqueue, pause, resume, motivos, clear, length, isPaused,
     enterPriority, exitPriority, inPriority, getStats,
   };
 }
