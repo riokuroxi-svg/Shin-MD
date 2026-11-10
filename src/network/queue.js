@@ -55,6 +55,11 @@ export function esFalloDeConexion(err) {
 
 export function createSendQueue(throttler, health, opts = {}) {
   const timeoutMs = opts.timeoutMs || SEND_TIMEOUT_MS;
+  // El ritmo humano (conversaciones nuevas, reloj, tecleo). Es opcional: si no
+  // llega, la cola se comporta como siempre y nada de esto estorba.
+  const ritmo = opts.ritmo || null;
+  // Las piezas de sesión (calma tras reconectar, descanso diario). Opcionales.
+  const sesion = opts.sesion || null;
   // Cuánto puede esperar un mensaje a que vuelva la conexión antes de
   // darse por perdido. 5 min cubre el corte típico de datos móviles; más
   // allá de eso el que escribió ya se fue.
@@ -81,6 +86,8 @@ export function createSendQueue(throttler, health, opts = {}) {
   // una vez por minuto, para siempre, sin decir cuánto era el tope ni cuándo
   // se libera. Ahora se avisa UNA sola vez por episodio y con datos útiles.
   let avisoTopeDado = false;
+  let avisoRitmoDado = null;
+  let despertar = null;
   function avisarTopeDiario(th) {
     if (avisoTopeDado) return;
     avisoTopeDado = true;
@@ -117,8 +124,44 @@ export function createSendQueue(throttler, health, opts = {}) {
     opts = opts || {};
     return new Promise((resolve, reject) => {
       queue.push({ fn, opts, resolve, reject, ts: Date.now() });
+      // Si la cola está esperando (tope, ritmo o descanso), se despierta: una
+      // respuesta que sí podía salir no debe esperar detrás de un bloqueado.
+      if (despertar) {
+        const d = despertar;
+        despertar = null;
+        d();
+      }
       if (!processing) process();
     });
+  }
+
+  /**
+   * Duerme `ms` pero se despierta si entra una tarea nueva.
+   *
+   * Antes esto era un `setTimeout` largo: un chat desconocido bloqueado al
+   * frente de la cola retrasaba hasta un minuto la respuesta a alguien que sí
+   * estaba esperando. Ahora se duerme en tramos cortos (0,03 % de CPU, medido)
+   * y cada tramo vuelve a mirar la cola.
+   */
+  async function esperarTurno(ms) {
+    const fin = Date.now() + Math.max(50, ms);
+    while (Date.now() < fin) {
+      if (queue.length === 0) return;
+      const tramo = Math.min(250, fin - Date.now());
+      let despertado = false;
+      await new Promise((r) => {
+        // Al entrar una tarea nueva, esto se resuelve de inmediato (y se
+        // marca), para salir del todo: si solo se resolviera el tramo, la
+        // respuesta seguiría esperando al siguiente, y así hasta el final.
+        despertar = () => {
+          despertado = true;
+          r();
+        };
+        setTimeout(r, tramo);
+      });
+      despertar = null;
+      if (despertado) return;
+    }
   }
 
   async function process() {
@@ -134,19 +177,55 @@ export function createSendQueue(throttler, health, opts = {}) {
       // B2.2: lo mismo para las tareas que no gastan cuota (reacciones,
       // borrados, ediciones): no tiene sentido congelarlas 60s por un
       // tope que ni siquiera consumen.
-      let task;
       if (throttler && throttler.canSend()) avisoTopeDado = false;
-      if (throttler && !throttler.canSend()) {
-        const pIdx = queue.findIndex(t => t.opts && (t.opts.isPriority || t.opts.countsForQuota === false));
-        if (pIdx === -1) {
-          avisarTopeDiario(throttler);
-          await new Promise(r => setTimeout(r, 60000));
-          continue;
+      if (ritmo && ritmo.evaluar("", {}).ok) avisoRitmoDado = null;
+
+      // Quién puede salir ahora. Pasan siempre las de prioridad y las que no
+      // gastan cuota (reacciones, borrados, ediciones): si no, con la cola
+      // frenada el bot no podría ni quitar un mensaje.
+      const puedePasar = (t) => {
+        const o = t.opts || {};
+        if (o.isPriority || o.countsForQuota === false) return true;
+        // Descanso diario: los envíos normales duermen; lo urgente y las
+        // respuestas ya pasaron por el atajo de arriba.
+        if (sesion?.activo && sesion.descanso.enDescanso() && !o.esRespuesta) {
+          t.esperaDescanso = true;
+          return false;
         }
-        task = queue.splice(pIdx, 1)[0];
-      } else {
-        task = queue.shift();
+        if (throttler && !throttler.canSend()) return false;
+        if (ritmo) {
+          // Sin `ahora`: el ritmo tiene su propio reloj (inyectable en las
+          // pruebas). Pasarle Date.now() aquí rompía la calidez del chat.
+          const d = ritmo.evaluar(o.destino || "");
+          if (!d.ok) {
+            t.esperaRitmo = d;
+            return false;
+          }
+        }
+        return true;
+      };
+
+      const idx = queue.findIndex(puedePasar);
+      if (idx === -1) {
+        if (queue[0]?.esperaDescanso) {
+          // En descanso se revisa cada minuto: no hay nada que calcular.
+          await esperarTurno(60000);
+        } else if (throttler && !throttler.canSend()) {
+          avisarTopeDiario(throttler);
+          await esperarTurno(60000);
+        } else {
+          // El ritmo frena: se duerme lo que falta (el propio ritmo lo calcula)
+          // en vez de 60 s a ciegas, y con un mínimo para no girar en vacío.
+          const espera = queue[0]?.esperaRitmo || { motivo: null, esperarMs: 1000 };
+          if (avisoRitmoDado !== espera.motivo) {
+            avisoRitmoDado = espera.motivo;
+            if (typeof opts.avisarRitmo === "function") opts.avisarRitmo(espera.motivo);
+          }
+          await esperarTurno(Math.max(50, Math.min(60000, espera.esperarMs || 1000)));
+        }
+        continue;
       }
+      const task = queue.splice(idx, 1)[0];
 
       const delay = throttler ? throttler.calcDelay({
         isPriority: task.opts.isPriority || false,
@@ -154,13 +233,18 @@ export function createSendQueue(throttler, health, opts = {}) {
         isNewContact: task.opts.isNewContact || false,
       }) : 500;
 
-      await new Promise(r => setTimeout(r, delay));
+      // Calma tras reconectar: el pico de envíos justo después de volver es lo
+      // que más rápido dispara los límites. Arranca al 10 % del ritmo y vuelve
+      // al 100 % en un minuto.
+      const calma = sesion?.activo ? sesion.calma.factorDeEspera() : 1;
+      await new Promise(r => setTimeout(r, Math.round(delay * calma)));
 
       const gastaCuota = task.opts.countsForQuota !== false;
 
       try {
         const result = await withTimeout(task.fn(), timeoutMs, "envío");
         if (throttler && gastaCuota) throttler.recordSent();
+        if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
         if (health) health.recordSend();
         task.resolve(result);
       } catch (err) {
@@ -182,6 +266,7 @@ export function createSendQueue(throttler, health, opts = {}) {
           inciertos += 1;
           ultimoIncierto = Date.now();
           if (throttler && gastaCuota) throttler.recordSent(); // se envió trabajo real
+          if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
           log.warn(
             "Envío sin respuesta tras " + timeoutMs + "ms: NO lo repito para no duplicarlo. " +
               "Puede haber llegado o no; revisa el chat. (" + inciertos + " en esta sesión)",
@@ -217,6 +302,7 @@ export function createSendQueue(throttler, health, opts = {}) {
           try {
             const result3 = await withTimeout(task.fn(), timeoutMs, "envío tras reconectar");
             if (throttler && gastaCuota) throttler.recordSent();
+            if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
             if (health) health.recordSend();
             task.resolve(result3);
           } catch (err3) {
@@ -236,6 +322,7 @@ export function createSendQueue(throttler, health, opts = {}) {
           await new Promise(r => setTimeout(r, retryDelay));
           const result2 = await withTimeout(task.fn(), timeoutMs, "reintento");
           if (throttler && gastaCuota) throttler.recordSent();
+          if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
           task.resolve(result2);
           if (health) health.recordSend();
         } catch (err2) {

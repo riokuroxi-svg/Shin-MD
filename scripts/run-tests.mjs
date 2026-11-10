@@ -67,8 +67,13 @@ for (const archivo of archivos) {
   });
 
   const salida = (r.stdout || "") + (r.stderr || "");
+  // El formato del resumen cambió con Node: hasta 22 salía en TAP («# pass 12»)
+  // y desde 24 sale en spec («ℹ pass 12»). Leyendo solo uno, la suite entera
+  // contaba 0 pruebas aunque pasaran todas. Se aceptan los dos.
   const num = (etiqueta) => {
-    const m = salida.match(new RegExp(`^# ${etiqueta} (\\d+)$`, "m"));
+    const m =
+      salida.match(new RegExp(`^# ${etiqueta} (\\d+)$`, "m")) ||
+      salida.match(new RegExp(`^ℹ ${etiqueta} (\\d+)$`, "m"));
     return m ? Number(m[1]) : 0;
   };
   const p = num("pass");
