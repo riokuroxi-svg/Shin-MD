@@ -35,7 +35,7 @@ export default {
     }
     const bannedWords = PALABRAS_NSFW;
     const chat = db.getChat(msg.chat);
-    const nsfwEnabled = chat.nsfw === 1;
+    const nsfwEnabled = chat?.nsfw === 1;
     // Límites de palabra + normalización (ver src/lib/filtro-texto.js):
     // antes "cumpleaños" se bloqueaba por la palabra "cum".
     if (!nsfwEnabled && contienePalabraProhibida(text, bannedWords)) {
@@ -107,7 +107,7 @@ async function bingImageSearch(query) {
   const re = /class="iusc"[^>]*m="([^"]{20,})"/g;
   let m;
   while ((m = re.exec(data))) {
-    let raw = m[1].replace(/&quot;/g, '"').replace(/\\&quot;/g, '"').replace(/\\"/g, '"').replace(/&amp;/g, '&');
+    const raw = m[1].replace(/&quot;/g, '"').replace(/\\&quot;/g, '"').replace(/\\"/g, '"').replace(/&amp;/g, '&');
     let j;
     try { j = JSON.parse(raw); } catch { continue; }
     if (!j.murl) continue;
@@ -134,25 +134,24 @@ async function getImageSearchResults(query) {
   } catch {
     // cae a las APIs de respaldo
   }
-  // 2) APIs de respaldo (delirius, lempi/Ginko)
+  // 2) APIs de respaldo (delirius, Ginko)
   const apis = [
-    { endpoint: `${global.APIs.delirius.url}/search/gimage?query=${encodeURIComponent(query)}`, extractor: (res) => {
+    { endpoint: global.APIs?.delirius?.url ? `${global.APIs.delirius.url}/search/gimage?query=${encodeURIComponent(query)}` : null, extractor: (res) => {
         if (!res.status || !Array.isArray(res.data)) return [];
         return res.data.map(item => ({ url: item.url, title: item.origin?.title || null, domain: item.origin?.website?.domain || null, resolution: item.width && item.height ? `${item.width}x${item.height}` : null }));
       }
     },
-    { endpoint: `${global.APIs.Ginko.url}/search/image?q=${encodeURIComponent(query)}&api_key=${global.APIs.Ginko.key}`, extractor: (res) => {
+    { endpoint: global.APIs?.Ginko?.url ? `${global.APIs.Ginko.url}/search/image?q=${encodeURIComponent(query)}&api_key=${global.APIs.Ginko.key || ''}` : null, extractor: (res) => {
         if (!res.status || !Array.isArray(res.result)) return [];
         return res.result.map(item => ({ url: item.image, title: item.title || null, domain: item.url ? new URL(item.url).hostname : null, resolution: null }));
       }
     }
   ]
-    // Solo las APIs configuradas: una URL con «undefined» no se intenta.
-    .filter(({ endpoint }) => typeof endpoint === "string" && !endpoint.includes("undefined"));
+    .filter(({ endpoint }) => typeof endpoint === "string" && endpoint.length > 0 && !endpoint.includes("undefined"));
   if (!apis.length) return [];
   for (const { endpoint, extractor } of apis) {
     try {
-      const { data } = await axios.get(endpoint);
+      const { data } = await axios.get(endpoint, { timeout: 15000 });
       const results = extractor(data);
       if (results && results.length > 0) return results;
     } catch {

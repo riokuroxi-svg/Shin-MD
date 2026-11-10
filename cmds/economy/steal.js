@@ -4,24 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { economyGate } from "#lib/economy-guard";
 import { botJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
 import { randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 import { tiempoLargo as formatTime } from "#lib/tiempo";
+
 export default {
   command: ['robar', 'steal', 'rob'],
   category: 'economy',
   description: 'Intentar robar coins a un usuario.',
   run: async ({ msg, sock, usedPrefix, command }) => {
-    const chatData = db.getChat(msg.chat);
-    if (chatData.adminonly || !chatData.economy) {
-      return msg.reply(`ꕥ Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`);
-    }
+    const { blocked, message: avisoEconomia } = economyGate(msg.chat, usedPrefix);
+    if (blocked) return msg.reply(avisoEconomia);
     const botId = botJid(sock);
-    const bot = db.getSettings(botId);
-    const currency = bot.currency;
+    const bot = db.getSettings(botId) || {};
+    const currency = bot.currency || 'Coins';
     db.setCreate('chat_users', [msg.chat, msg.sender], 'laststeal', 0);
-    const user = db.getChatUser(msg.chat, msg.sender);
+    const user = db.getChatUser(msg.chat, msg.sender) || {};
     if (Date.now() < user.laststeal) {
       const restante = user.laststeal - Date.now();
       return sock.reply(msg.chat, `ꕥ Debes esperar *${formatTime(restante)}* para usar *${usedPrefix + command}* de nuevo.`, msg);
@@ -30,14 +31,15 @@ export default {
     if (!who) {
       return sock.reply(msg.chat, `❀ Debes mencionar a alguien para intentar robarle.`, msg);
     }
+    if (mismaPersona(who, msg.sender)) {
+      return sock.reply(msg.chat, '《✧》 No puedes robarte a ti mismo.', msg);
+    }
     const target = db.getChatUser(msg.chat, who);
     if (!target) {
       return sock.reply(msg.chat, `ꕥ El usuario no se encuentra en mi base de datos.`, msg);
     }
     const name = (db.getUser(who))?.name || who.split('@')[0];
     const lastCmd = target.lastCmd || 0;
-    // Se acota a cero: con una marca imposible (en el futuro) la resta sale
-    // negativa y el comando se negaba siempre, sin decir por qué.
     const tiempoInactivo = Math.max(0, Date.now() - Number(lastCmd || 0));
     if (tiempoInactivo < 3600000) {
       return sock.reply(msg.chat, `ꕥ Solo puedes robarle *${currency}* a un usuario si estuvo más de 1 hora inactivo.`, msg);
@@ -47,7 +49,7 @@ export default {
       let loss = randomInt(2000, 5000);
       const total = (user.coins || 0) + (user.bank || 0);
       if (total >= loss) {
-        if (user.coins >= loss) {
+        if ((user.coins || 0) >= loss) {
           db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) - loss);
         } else {
           const restanteLoss = loss - (user.coins || 0);
@@ -69,6 +71,6 @@ export default {
     db.setChatUser(msg.chat, msg.sender, 'coins', (user.coins || 0) + rob);
     db.setChatUser(msg.chat, who, 'coins', (target.coins || 0) - rob);
     db.setChatUser(msg.chat, msg.sender, 'laststeal', Date.now() + 3600000);
-    sock.reply(msg.chat, `❀ Le robaste *¥${rob.toLocaleString()} ${currency}* a *${name}*`, msg, { mentions: [who] });
+    await sock.reply(msg.chat, `❀ Le robaste *¥${rob.toLocaleString()} ${currency}* a *${name}*`, msg, { mentions: [who] });
   }
 };

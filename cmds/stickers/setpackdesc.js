@@ -26,7 +26,7 @@ export default {
         return msg.reply('《✧》La descripción no puede estar vacía.')
       }
       if (desc.length > 60) {
-        return msg.reply('《✧》La descripción no puede tener más de 50 caracteres.')
+        return msg.reply('《✧》La descripción no puede tener más de 60 caracteres.')
       }
       const stickerPackData = db.getStickersPack(msg.sender)
       const packs = stickerPackData.packs || []

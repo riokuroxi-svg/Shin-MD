@@ -6,18 +6,19 @@
  */
 import log from "#logger";
 import { botJid, normalizeJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
 import db from '../src/services/ginko-db.js';
-export async function before({ msg, sock, groupMetadata, participants, isAdmins, isBotAdmins }) {
+export async function before({ msg, sock, groupMetadata, isAdmins, isBotAdmins }) {
   if (!msg.isGroup) return;
   if (msg.isBot) return;
   const botId = botJid(sock);
   if (!groupMetadata) return;
-  const botSettings = db.getSettings(botId);
+  const botSettings = db.getSettings(botId) || {};
   const isSelf = botSettings.self ?? 0;
   if (isSelf) return;
-  const chat = db.getChat(msg.chat);
+  const chat = db.getChat(msg.chat) || {};
   const primaryBotId = chat?.primaryBot;
-  const isPrimary = !primaryBotId || primaryBotId === botId;
+  const isPrimary = !primaryBotId || mismaPersona(primaryBotId, botId);
   const isEstado = msg.quoted?.groupStatusMentionMessage || msg.quoted?.type === 'groupStatusMentionMessage' || msg.message?.groupStatusMentionMessage || (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.groupStatusMentionMessage);
   if (!isEstado || !chat?.antistatus || isAdmins || !isBotAdmins || !isPrimary) return;
   try {
@@ -55,7 +56,7 @@ export async function before({ msg, sock, groupMetadata, participants, isAdmins,
     }
     const targetId = msg.sender;
     db.setCreate('chat_users', [msg.chat, targetId], 'warnings', []);
-    let user = db.getChatUser(msg.chat, targetId);
+    const user = db.getChatUser(msg.chat, targetId);
     let warnings = user.warnings;
     if (typeof warnings === 'string') {
       try { warnings = JSON.parse(warnings); } catch { warnings = []; }

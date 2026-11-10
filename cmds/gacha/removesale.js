@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
+
 export default {
   command: ['removesale', 'removerventa'],
   category: 'gacha',
@@ -14,20 +16,20 @@ export default {
     const chatId = msg.chat;
     const userId = msg.sender;
     db.setCreate('chats', chatId, 'sales', {});
-    let chat = db.getChat(chatId);
-    if (chat.adminonly || !chat.gacha) {
-      return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con:\n» *${usedPrefix}gacha on*`);
+    const chat = db.getChat(chatId);
+    if (chat?.adminonly || !chat?.gacha) {
+      return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
     }
     if (chat.sales && typeof chat.sales === 'string') {
       try { chat.sales = JSON.parse(chat.sales); } catch { chat.sales = {}; }
     }
     if (!args.length) {
-      return msg.reply(`❀ Debes especificar un personaje para eliminar.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
+      return msg.reply(`❀ Debes especificar un personaje para eliminar.\n> Ejemplo » *${usedPrefix + command} Rem*`);
     }
     try {
       const nameRemove = args.join(' ').toLowerCase();
-      const idRemove = Object.keys(chat.sales).find(id => (chat.sales[id]?.name || '').toLowerCase() === nameRemove);
-      if (!idRemove || chat.sales[idRemove].user !== userId) {
+      const idRemove = Object.keys(chat.sales || {}).find(id => (chat.sales[id]?.name || '').toLowerCase() === nameRemove);
+      if (!idRemove || !mismaPersona(chat.sales[idRemove].user, userId)) {
         return msg.reply(`ꕥ El personaje *${args.join(' ')}* no está a la venta por ti.`);
       }
       delete chat.sales[idRemove];

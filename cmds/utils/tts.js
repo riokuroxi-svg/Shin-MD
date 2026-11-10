@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-// TTS (Texto a nota de voz) con voz femenina Dalia (Microsoft Edge, GRATIS, sin key).
-// Uso: .tts <texto>
 import { synthesize } from '#lib/edgeTTS';
-// Onda propia: WhatsApp dibuja la rayita plana cuando el audio no
-// trae waveform. Aquí se firma la onda a partir del propio texto, así
-// que cada nota de voz sale con un dibujo distinto y reconocible.
 import { sendVoiceArt } from '#lib/voice-art';
 import fs from 'fs';
 import path from 'path';
@@ -21,7 +16,7 @@ export default {
   description: 'Convierte texto a nota de voz con voz femenina en español.',
   run: async ({ msg, sock, args, usedPrefix }) => {
     if (!args[0]) {
-      return msg.reply(`🎙️ *Texto a nota de voz*\n\nEscribe: *${usedPrefix}tts <texto>*\n\nEjemplo: *${usedPrefix}tts Hola, soy Ginko MD*`);
+      return msg.reply(`🎙️ *Texto a nota de voz*\n\nEscribe: *${usedPrefix}tts <texto>*\n\nEjemplo: *${usedPrefix}tts Hola, soy Shin MD*`);
     }
 
     const raw = args.join(' ').trim();
@@ -29,11 +24,12 @@ export default {
 
     await msg.react('🎙️');
 
+    let tmp = null;
     try {
       const mp3Buf = await synthesize(raw);
       if (!mp3Buf || mp3Buf.length < 500) throw new Error('Audio vacío');
 
-      const tmp = path.join(os.tmpdir(), `ginko_tts_${Date.now()}.mp3`);
+      tmp = path.join(os.tmpdir(), `shin_tts_${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`);
       fs.writeFileSync(tmp, mp3Buf);
 
       const arte = await sendVoiceArt(sock, msg.chat, {
@@ -44,7 +40,6 @@ export default {
         quoted: msg.full || msg,
       });
       if (!arte.sent) {
-        // Si la onda no sale, la nota de voz se manda igual.
         await sock.sendMessage(msg.chat, {
           audio: { url: tmp },
           mimetype: 'audio/mpeg',
@@ -52,11 +47,12 @@ export default {
         }, { quoted: msg });
       }
 
-      fs.unlinkSync(tmp);
       await msg.react('✅');
     } catch (e) {
       await msg.reply(`❌ No pude generar el audio: ${e.message || e}`);
       await msg.react('❌');
+    } finally {
+      if (tmp) fs.rmSync(tmp, { force: true });
     }
   }
 };

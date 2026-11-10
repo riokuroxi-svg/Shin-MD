@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
+import { botJid } from "#serialize";
 import db from "../../src/services/ginko-db.js";
 
 const VARIANTS = {
@@ -47,13 +48,18 @@ export default {
     const args = (ctx.arg || "").toLowerCase().trim().split(/\s+/);
     const target = args[0];
 
-    const botJid = sock?.user?.id || "default";
+    const botId = botJid(sock) || "default";
 
     if (!target) {
+      let actual = 1;
+      try {
+        actual = Number(db.getSettings(botId)?.menu_variant || 1);
+      } catch {}
       let list = `🎨 *CONFIGURACIÓN DE ESTILO DE MENÚ*\n\n`;
-      list += `Uso: \`${ctx.usedPrefix}setmenu <variante>\`\n\n`;
+      list += `Actual: *V${actual}* · Uso: \`${ctx.usedPrefix}setmenu <variante>\`\n\n`;
       for (const [key, val] of Object.entries(VARIANTS)) {
-        list += `${val.emoji} *${key.toUpperCase()}* — *${val.name}*\n`;
+        const mark = val.id === actual ? " ✓" : "";
+        list += `${val.emoji} *${key.toUpperCase()}*${mark} — *${val.name}*\n`;
         list += `> _${val.desc}_\n\n`;
       }
       return list.trim();
@@ -65,7 +71,7 @@ export default {
     }
 
     try {
-      db.setSettings(botJid, "menu_variant", selected.id);
+      db.setSettings(botId, "menu_variant", selected.id);
       return `✅ *ESTILO DE MENÚ ACTUALIZADO*\n\n${selected.emoji} *Variante V${selected.id}: ${selected.name}*\n> ${selected.desc}`;
     } catch (err) {
       return `⚠️ Error al guardar la configuración: ${err.message}`;

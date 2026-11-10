@@ -18,34 +18,35 @@ export default {
   command: ['sticker', 's'],
   category: 'stickers',
   description: 'Convertir una imagen o video a sticker.',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
     return withLimit('media', 3, async () => {
     try {
       if (args[0] === '-list') {
-        let helpText = `ꕥ Lista de Formas y Efectos Disponibles para *imagen*:\n\n✦ *Formas:*\n- -c : Crea un sticker circular\n- -t : Crea un sticker triangular\n- -s : Crea un sticker con forma de estrella\n- -r : Crea un sticker con esquinas redondeadas\n- -h : Crea un sticker hexagonal\n- -d : Crea un sticker con forma de diamante\n- -f : Crea un sticker con un marco\n- -b : Crea un sticker con un borde\n- -w : Crea un sticker con forma de onda\n- -m : Crea un sticker espejado\n- -o : Crea un sticker octogonal\n- -y : Crea un sticker pentagonal\n- -e : Crea un sticker elíptico\n- -z : Crea un sticker en forma de cruz\n- -v : Crea un sticker con forma de corazón\n- -x : Crea un sticker expandido (cover)\n- -i : Crea un sticker expandido (contain)\n\n✧ *Efectos:*\n- -blur : Aplica un efecto de desenfoque\n- -sepia : Aplica un efecto sepia\n- -sharpen : Aplica un efecto de nitidez\n- -brighten : Aumenta el brillo\n- -darken : Disminuye el brillo\n- -invert : Invierte los colores\n- -grayscale : Aplica escala de grises\n- -rotate90 : Rota la imagen 90 grados\n- -rotate180 : Rota la imagen 180 grados\n- -flip : Invierte la imagen horizontalmente\n- -flop : Invierte la imagen verticalmente\n- -normalice : Normaliza la imagen\n- -negate : Negatiza la imagen\n- -tint : Aplica un tinte de color a la imagen (rojo por defecto)\n\n> Ejemplo: *${usedPrefix + command} -c -blur Pack | Autor*`;
+        const helpText = `ꕥ Lista de Formas y Efectos Disponibles para *imagen*:\n\n✦ *Formas:*\n- -c : Crea un sticker circular\n- -t : Crea un sticker triangular\n- -s : Crea un sticker con forma de estrella\n- -r : Crea un sticker con esquinas redondeadas\n- -h : Crea un sticker hexagonal\n- -d : Crea un sticker con forma de diamante\n- -f : Crea un sticker con un marco\n- -b : Crea un sticker con un borde\n- -w : Crea un sticker con forma de onda\n- -m : Crea un sticker espejado\n- -o : Crea un sticker octogonal\n- -y : Crea un sticker pentagonal\n- -e : Crea un sticker elíptico\n- -z : Crea un sticker en forma de cruz\n- -v : Crea un sticker con forma de corazón\n- -x : Crea un sticker expandido (cover)\n- -i : Crea un sticker expandido (contain)\n\n✧ *Efectos:*\n- -blur : Aplica un efecto de desenfoque\n- -sepia : Aplica un efecto sepia\n- -sharpen : Aplica un efecto de nitidez\n- -brighten : Aumenta el brillo\n- -darken : Disminuye el brillo\n- -invert : Invierte los colores\n- -grayscale : Aplica escala de grises\n- -rotate90 : Rota la imagen 90 grados\n- -rotate180 : Rota la imagen 180 grados\n- -flip : Invierte la imagen horizontalmente\n- -flop : Invierte la imagen verticalmente\n- -normalice : Normaliza la imagen\n- -negate : Negatiza la imagen\n- -tint : Aplica un tinte de color a la imagen (rojo por defecto)\n\n> Ejemplo: *${usedPrefix + command} -c -blur Pack | Autor*`;
         return sock.reply(msg.chat, helpText, msg);
       }
+      fs.mkdirSync('./tmp', { recursive: true });
       const quoted = msg.quoted || msg;
-      const mime = (quoted.msg || quoted).mimetype || '';
-      let user = db.getUser(msg.sender);
-      const name = user.name;
+      const mime = (quoted.msg || quoted).mimetype || quoted.mimetype || '';
+      const user = db.getUser(msg.sender) || {};
+      const name = user.name || msg.sender.split('@')[0];
       const meta1 = user.metadatos ? String(user.metadatos).trim() : '';
       const meta2 = user.metadatos2 ? String(user.metadatos2).trim() : '';
-      let texto1 = meta1 ? meta1 : (global.stickerBrand || '🍁 Ginko-MD');
-      let texto2 = meta1 ? (meta2 ? meta2 : '') : `@${name}`;
+      const texto1 = meta1 ? meta1 : (global.stickerBrand || 'Shin-MD');
+      const texto2 = meta1 ? (meta2 ? meta2 : '') : `@${name}`;
       let urlArg = null;
-      let argsWithoutUrl = [];
-      for (let arg of args) {
+      const argsWithoutUrl = [];
+      for (const arg of args) {
         if (isUrl(arg)) {
           urlArg = arg;
         } else {
           argsWithoutUrl.push(arg);
         }
       }
-      let filteredText = argsWithoutUrl.join(' ').replace(/-\w+/g, '').trim();
-      let marca = filteredText.split(/[\u2022|]/).map(part => part.trim());
-      let pack = marca[0] || texto1;
-      let author = marca.length > 1 ? marca[1] : (filteredText ? (meta1 ? texto2 : '') : texto2);
+      const filteredText = argsWithoutUrl.join(' ').replace(/-\w+/g, '').trim();
+      const marca = filteredText.split(/[\u2022|]/).map(part => part.trim());
+      const pack = marca[0] || texto1;
+      const author = marca.length > 1 ? marca[1] : (filteredText ? (meta1 ? texto2 : '') : texto2);
       const shapeArgs = { '-c': 'circle', '-t': 'triangle', '-s': 'star', '-r': 'roundrect', '-h': 'hexagon', '-d': 'diamond', '-f': 'frame', '-b': 'border', '-w': 'wave', '-m': 'mirror', '-o': 'octagon', '-y': 'pentagon', '-e': 'ellipse', '-z': 'cross', '-v': 'heart', '-x': 'cover', '-i': 'contain' };
       const effectArgs = { '-blur': 'blur', '-sepia': 'sepia', '-sharpen': 'sharpen', '-brighten': 'brighten', '-darken': 'darken', '-invert': 'invert', '-grayscale': 'grayscale', '-rotate90': 'rotate90', '-rotate180': 'rotate180', '-flip': 'flip', '-flop': 'flop', '-normalice': 'normalise', '-negate': 'negate', '-tint': 'tint' };
       const effects = [];
@@ -56,44 +57,52 @@ export default {
       const sendWebpWithExif = async (webpBuffer) => {
         const media = { mimetype: 'webp', data: webpBuffer };
         const metadata = { packname: pack, author: author, categories: [''] };
-        const stickerPath = await writeExif(media, metadata);
-        await sock.sendMessage(msg.chat, { sticker: { url: stickerPath } }, { quoted: msg });
-        fs.unlinkSync(stickerPath);
+        let stickerPath = null;
+        try {
+          stickerPath = await writeExif(media, metadata);
+          await sock.sendMessage(msg.chat, { sticker: { url: stickerPath } }, { quoted: msg });
+        } finally {
+          if (stickerPath) fs.rmSync(stickerPath, { force: true });
+        }
       };
       const convertToGif = async (inputPath) => {
-        const gifPath = `./tmp/conv-${Date.now()}.gif`;
+        const gifPath = `./tmp/conv-${Date.now()}-${Math.random().toString(36).slice(2)}.gif`;
         await new Promise((resolve, reject) => {
           const p = spawn('ffmpeg', ['-y', '-i', inputPath, '-vf', 'fps=10,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000', '-loop', '0', gifPath]);
           let err = '';
+          const timer = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} reject(new Error('ffmpeg timeout')); }, 60000);
           p.stderr.on('data', (d) => err += d.toString());
+          p.on('error', (e) => { clearTimeout(timer); reject(e); });
           p.on('close', (code) => {
+            clearTimeout(timer);
             if (code === 0) resolve();
             else reject(new Error(err));
           });
         });
         return gifPath;
       };
-      const processWithFFmpeg = async (inputPath, isVideo = false) => {
-        const outputPath = `./tmp/sticker-${Date.now()}.webp`;
+      const processWithFFmpeg = async (inputPath) => {
+        const outputPath = `./tmp/sticker-${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
         const vf = buildFFmpegFilters(effects);
-        let args = [];
-        if (isVideo) {
-          args = ['-y', '-i', inputPath, '-vf', vf, '-an', '-fps_mode', 'passthrough', '-c:v', 'libwebp_anim', '-preset', 'picture', '-compression_level', '6', '-q:v', '70', '-loop', '0', outputPath];
-        } else {
-          args = ['-y', '-i', inputPath, '-vf', vf, '-an', '-fps_mode', 'passthrough', '-c:v', 'libwebp_anim', '-preset', 'picture', '-compression_level', '6', '-q:v', '70', '-loop', '0', outputPath];
-        }
-        await new Promise((resolve, reject) => {
-          const p = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'] });
-          let err = '';
-          p.stderr.on('data', (d) => err += d.toString());
-          p.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(err));
+        const ffArgs = ['-y', '-i', inputPath, '-vf', vf, '-an', '-fps_mode', 'passthrough', '-c:v', 'libwebp_anim', '-preset', 'picture', '-compression_level', '6', '-q:v', '70', '-loop', '0', outputPath];
+        try {
+          await new Promise((resolve, reject) => {
+            const p = spawn('ffmpeg', ffArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+            let err = '';
+            const timer = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} reject(new Error('ffmpeg timeout')); }, 60000);
+            p.stderr.on('data', (d) => err += d.toString());
+            p.on('error', (e) => { clearTimeout(timer); reject(e); });
+            p.on('close', (code) => {
+              clearTimeout(timer);
+              if (code === 0) resolve();
+              else reject(new Error(err));
+            });
           });
-        });
-        const data = fs.readFileSync(outputPath);
-        fs.unlinkSync(outputPath);
-        await sendWebpWithExif(data);
+          const data = fs.readFileSync(outputPath);
+          await sendWebpWithExif(data);
+        } finally {
+          fs.rmSync(outputPath, { force: true });
+        }
       };
       const isAnimatedWebp = (buffer) => {
         if (!Buffer.isBuffer(buffer) || buffer.length < 32) return false;
@@ -101,64 +110,81 @@ export default {
       };
       const handleWebpBuffer = async (buffer) => {
         const animated = isAnimatedWebp(buffer);
-        const inputPath = `./tmp/in-${Date.now()}.webp`;
+        const inputPath = `./tmp/in-${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
         fs.writeFileSync(inputPath, buffer);
-        if (animated && effects.length > 0) {
-          try {
-            const gifPath = await convertToGif(inputPath);
-            await processWithFFmpeg(gifPath, true);
-            fs.unlinkSync(gifPath);
-          } catch (e) {
+        try {
+          if (animated && effects.length > 0) {
+            let gifPath = null;
+            try {
+              gifPath = await convertToGif(inputPath);
+              await processWithFFmpeg(gifPath);
+            } catch {
+              await sendWebpWithExif(buffer);
+            } finally {
+              if (gifPath) fs.rmSync(gifPath, { force: true });
+            }
+          } else if (animated && effects.length === 0) {
             await sendWebpWithExif(buffer);
+          } else {
+            await processWithFFmpeg(inputPath);
           }
-        } else if (animated && effects.length === 0) {
-          await sendWebpWithExif(buffer);
-        } else {
-          await processWithFFmpeg(inputPath);
+        } finally {
+          fs.rmSync(inputPath, { force: true });
         }
-        fs.unlinkSync(inputPath);
       };
       if (/image/.test(mime) || /webp/.test(mime)) {
-        let buffer = await quoted.download();
+        const buffer = await quoted.download();
         if (/webp/.test(mime)) {
           await handleWebpBuffer(buffer);
         } else {
           const ext = /png/i.test(mime) ? 'png' : /jpe?g/i.test(mime) ? 'jpg' : /gif/i.test(mime) ? 'gif' : 'img';
-          const inputPath = `./tmp/in-${Date.now()}.${ext}`;
+          const inputPath = `./tmp/in-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
           fs.writeFileSync(inputPath, buffer);
-          await processWithFFmpeg(inputPath, /gif/i.test(mime));
-          fs.unlinkSync(inputPath);
+          try {
+            await processWithFFmpeg(inputPath);
+          } finally {
+            fs.rmSync(inputPath, { force: true });
+          }
         }
       } else if (/video/.test(mime)) {
         if ((quoted.msg || quoted).seconds > 20) {
           return msg.reply('《✧》 El video no puede ser muy largo');
         }
-        let buffer = await quoted.download();
-        const inputPath = `./tmp/video-${Date.now()}.mp4`;
+        const buffer = await quoted.download();
+        const inputPath = `./tmp/video-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`;
         fs.writeFileSync(inputPath, buffer);
-        await processWithFFmpeg(inputPath, true);
-        fs.unlinkSync(inputPath);
+        try {
+          await processWithFFmpeg(inputPath);
+        } finally {
+          fs.rmSync(inputPath, { force: true });
+        }
       } else if (urlArg) {
         const url = urlArg;
         if (!url.match(/\.(jpe?g|png|gif|webp|mp4|mov|avi|mkv|webm)(\?.*)?$/i)) {
           return sock.reply(msg.chat, '《✧》 La URL debe ser de una imagen (jpg, png, gif, webp) o video (mp4, mov, avi, mkv, webm)', msg);
         }
-        const response = await fetch(url);
+        const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
         if (!response.ok) return sock.reply(msg.chat, '《✧》 No pude descargar ese archivo desde la URL.', msg);
         const buffer = Buffer.from(await response.arrayBuffer());
         if (url.match(/\.webp(\?.*)?$/i)) {
           await handleWebpBuffer(buffer);
         } else if (url.match(/\.(jpe?g|png|gif)(\?.*)?$/i)) {
           const ext = url.match(/\.gif/i) ? 'gif' : 'img';
-          const inputPath = `./tmp/url-${Date.now()}.${ext}`;
+          const inputPath = `./tmp/url-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
           fs.writeFileSync(inputPath, buffer);
-          await processWithFFmpeg(inputPath, /gif/i.test(url));
-          fs.unlinkSync(inputPath);
+          try {
+            await processWithFFmpeg(inputPath);
+          } finally {
+            fs.rmSync(inputPath, { force: true });
+          }
         } else if (url.match(/\.(mp4|mov|avi|mkv|webm)(\?.*)?$/i)) {
-          const inputPath = `./tmp/urlvid-${Date.now()}.mp4`;
+          const inputPath = `./tmp/urlvid-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`;
           fs.writeFileSync(inputPath, buffer);
-          await processWithFFmpeg(inputPath, true);
-          fs.unlinkSync(inputPath);
+          try {
+            await processWithFFmpeg(inputPath);
+          } finally {
+            fs.rmSync(inputPath, { force: true });
+          }
         }
       } else {
         return sock.reply(msg.chat, `《✧》 Por favor, envía una imagen, video, sticker o URL para hacer un sticker.\n> Usa *${usedPrefix + command} -list* para ver formas y efectos`, msg);

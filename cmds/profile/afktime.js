@@ -5,8 +5,10 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
 import { randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
+
 const formatTiempo = (ms) => {
   if (typeof ms !== 'number' || isNaN(ms)) return 'desconocido';
   const h = Math.floor(ms / 3600000);
@@ -20,15 +22,16 @@ const formatTiempo = (ms) => {
 };
 
 export async function before({ msg, sock }) {
+  if (!msg?.sender || !msg?.chat || msg.isBot) return;
   const jidBot = botJid(sock);
   const chatData = db.getChat(msg.chat);
-  const primaryBot = chatData.primaryBot;
-  if (primaryBot && jidBot !== primaryBot) return;
+  const primaryBot = chatData?.primaryBot;
+  if (primaryBot && !mismaPersona(jidBot, primaryBot)) return;
   const settings = db.getSettings(jidBot);
   const currency = settings?.currency || 'coins';
-  let user = db.getChatUser(msg.chat, msg.sender);
-  if (typeof user.afk === 'number' && user.afk > -1) {
-    const ms = Date.now() - user.afk;
+  const user = db.getChatUser(msg.chat, msg.sender);
+  if (user && typeof user.afk === 'number' && user.afk > 0) {
+    const ms = Math.max(0, Date.now() - user.afk);
     const minutos = Math.floor(ms / 60000);
     const horas = Math.floor(ms / 3600000);
     let coins = minutos * 8;
@@ -46,15 +49,15 @@ export async function before({ msg, sock }) {
     db.setChatUser(msg.chat, msg.sender, 'afkReason', '');
   }
   let jids = [...(msg.mentionedJid || []), ...(msg.quoted?.sender ? [msg.quoted.sender] : [])];
-  jids = [...new Set(jids.filter(j => j && j.endsWith('@s.whatsapp.net') && j !== 'status@broadcast'))];
+  jids = [...new Set(jids.filter(j => j && !j.endsWith('@g.us') && j !== 'status@broadcast' && !mismaPersona(j, msg.sender)))];
   for (const jid of jids) {
     const target = db.getChatUser(msg.chat, jid);
-    if (!target || typeof target.afk !== 'number' || target.afk < 0) continue;
-    const ms = Date.now() - target.afk;
+    if (!target || typeof target.afk !== 'number' || target.afk <= 0) continue;
+    const ms = Math.max(0, Date.now() - target.afk);
     const tiempo = formatTiempo(ms);
     const userData = db.getUser(jid);
     await sock.reply(msg.chat, `ꕥ El usuario *${userData?.name || 'Usuario'}* está AFK.\n> ○ Motivo » *${target.afkReason || 'sin especificar'}*\n> ○ Tiempo inactivo » *${tiempo}*`, msg);
     msg.isCommands = true;
   }
   return true;
-};
+}

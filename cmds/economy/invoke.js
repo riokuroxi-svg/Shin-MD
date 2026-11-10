@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { economyGate } from "#lib/economy-guard";
+import { botJid } from "#serialize";
 import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 import { tiempoLargo as msToTime } from "#lib/tiempo";
@@ -13,14 +14,14 @@ export default {
   category: 'economy',
   description: 'Hacer ritos de invocación.',
   run: async ({ msg, sock, usedPrefix }) => {
-    const { blocked, message: avisoEconomia, chat } = economyGate(msg.chat, usedPrefix);
+    const { blocked, message: avisoEconomia } = economyGate(msg.chat, usedPrefix);
     if (blocked) return msg.reply(avisoEconomia);
-    const botId = sock?.user?.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId);
     const monedas = botSettings?.currency || 'Coins';
     db.setCreate('chat_users', [msg.chat, msg.sender], 'inventory', {});
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastinvoke', 0);
-    let user = db.getChatUser(msg.chat, msg.sender);
+    const user = db.getChatUser(msg.chat, msg.sender);
     if (user.inventory && typeof user.inventory === 'string') {
       try { user.inventory = JSON.parse(user.inventory); } catch { user.inventory = {}; }
     }

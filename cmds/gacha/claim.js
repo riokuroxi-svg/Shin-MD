@@ -5,11 +5,9 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { loadCharacters } from "#lib/gacha-shared";
-import { promises as fs } from 'fs';
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-
-
 
 function getCharacterById(id, structure) {
   return Object.values(structure).flatMap(s => s.characters).find(c => String(c.id) === String(id));
@@ -19,15 +17,14 @@ export default {
   command: ['claim', 'c', 'reclamar'],
   category: 'gacha',
   description: 'Reclamar un personaje.',
-  run: async ({ msg, sock, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, usedPrefix, command }) => {
     try {
-      let chat = db.getChat(msg.chat);
-      if (chat.adminonly || !chat.gacha) {
-        return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con:\n» *${usedPrefix}gacha on*`);
+      const chat = db.getChat(msg.chat);
+      if (chat?.adminonly || !chat?.gacha) {
+        return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       db.setCreate('chat_users', [msg.chat, msg.sender], 'lastClaim', 0);
-      let user = db.getChatUser(msg.chat, msg.sender);
-      const me = user;
+      const me = db.getChatUser(msg.chat, msg.sender);
       const now = Date.now();
       const claimCooldown = 30 * 60 * 1000;
       if (me.lastClaim && now < me.lastClaim) {
@@ -39,11 +36,15 @@ export default {
         if (seconds > 0 || timeText === '') timeText += `${seconds} segundo${seconds !== 1 ? 's' : ''}`;
         return msg.reply(`ꕥ Debes esperar *${timeText.trim()}* para usar *${command}* de nuevo.`);
       }
+      let rolls = chat.rolls || {};
+      if (typeof rolls === 'string') {
+        try { rolls = JSON.parse(rolls); } catch { rolls = {}; }
+      }
       const quotedId = msg.quoted?.id;
-      if (!quotedId || !chat.rolls[quotedId]) {
+      if (!quotedId || !rolls[quotedId]) {
         return msg.reply(`❀ Debes citar un personaje válido para reclamar.`);
       }
-      const rollData = chat.rolls[quotedId];
+      const rollData = rolls[quotedId];
       const id = rollData.id;
       const charKey = rollData.charKey || (msg.chat + '__' + id);
 
@@ -55,7 +56,7 @@ export default {
       let character = db.getCharacter(charKey);
       if (!character) character = { name: sourceData.name, value: sourceData.value || 0, votes: 0 };
 
-      if (character.reservedBy && character.reservedBy !== msg.sender && now < character.reservedUntil) {
+      if (character.reservedBy && !mismaPersona(character.reservedBy, msg.sender) && now < character.reservedUntil) {
         const reserver = db.getUser(character.reservedBy);
         const reserverName = reserver?.name || character.reservedBy.split('@')[0];
         const remaining = ((character.reservedUntil - now) / 1000).toFixed(1);
@@ -80,14 +81,14 @@ export default {
       if (!me.characters.includes(id)) me.characters.push(id);
       db.setChatUser(msg.chat, msg.sender, 'characters', me.characters);
       db.setChatUser(msg.chat, msg.sender, 'lastClaim', now + claimCooldown);
-      chat.rolls[quotedId].claimed = true;
-      db.setChat(msg.chat, 'rolls', chat.rolls);
+      rolls[quotedId].claimed = true;
+      db.setChat(msg.chat, 'rolls', rolls);
       const userGlobal = db.getUser(msg.sender);
       const displayName = userGlobal?.name || msg.sender.split('@')[0];
       db.setCreate('users', msg.sender, 'claimMessage', '');
       const userWithMessage = db.getUser(msg.sender);
       const custom = userWithMessage?.claimMessage;
-      const duration = ((now - character.expiresAt + 60000) / 1000).toFixed(1);
+      const duration = character.expiresAt ? Math.max(0, (now - (character.expiresAt - 60000)) / 1000).toFixed(1) : '0.0';
       const finalMessage = custom
         ? custom.replace(/€user/g, `*${displayName}*`).replace(/€character/g, `*${character.name}*`)
         : `*${character.name}* ha sido reclamado por *${displayName}*`;

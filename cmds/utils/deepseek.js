@@ -44,6 +44,7 @@ export default {
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(20000),
           body: JSON.stringify({
             contents: [
               { role: 'user', parts: [{ text: `${sysPrompt}\n\nPregunta: ${query}` }] }

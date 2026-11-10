@@ -195,8 +195,15 @@ export async function actualizar({
   }
 
   let despues = antes;
+  let cambiosNucleo = [];
   try {
     despues = await git(raiz, ["rev-parse", "--short", "HEAD"]);
+    if (antes && despues && antes !== despues) {
+      const diff = await git(raiz, ["diff", "--name-only", antes, despues]);
+      cambiosNucleo = diff
+        .split("\n")
+        .filter((f) => /^(src|boot)\/|^index\.js$|^package(-lock)?\.json$/.test(f));
+    }
   } catch {
     /* nos quedamos con el de antes */
   }
@@ -220,6 +227,8 @@ export async function actualizar({
     antes,
     despues,
     datos,
+    necesitaReinicio: cambiosNucleo.length > 0,
+    cambiosNucleo,
     texto: antes === despues ? `ya estaba al día (*${antes}*)` : `*${antes}* → *${despues}*`,
     avisoDatos: perdidos > 0 ? "⚠️ no pude reescribir la base de datos (revisa data/)" : null,
   };

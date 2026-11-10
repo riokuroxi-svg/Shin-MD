@@ -5,13 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
-import { pickRandom } from "#lib/random";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { botJid } from "#serialize";
 import {
-  toSmallCaps,
-  toMathSansBold,
   readMore,
   createBracketBox,
   getCommandBadges,
@@ -22,106 +17,18 @@ import {
 import {
   getWeatherSummary,
   getChannelContext,
-  getVerifiedQuoted,
 } from "../../src/lib/contextBuilder.js";
 import { resolveChannel } from "../../src/lib/channel.js";
+import {
+  CAT_LABELS,
+  CAT_ORDER,
+  localVersion,
+  collectCategories,
+  getRandomBanner,
+  getVideoAsset,
+} from "#lib/menu-shared";
 import { sendInteractive, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
 import db from "../../src/services/ginko-db.js";
-import { pickBanner } from "#lib/theme";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/**
- * Obtiene un banner aleatorio de la colección shuffle o assets por defecto
- */
-function getRandomBanner() {
-  // Tanda 1 del sistema de diseño: banner según la hora (día/noche).
-  // media/banners/ manda sobre todo lo demás; si está vacía, se conserva
-  // exactamente el comportamiento anterior (shuffle → assets → MENU_IMAGE).
-  try {
-    const porHora = pickBanner();
-    if (porHora) return fs.readFileSync(porHora);
-  } catch {}
-
-  const shuffleDir = path.resolve(__dirname, "../../assets/image/shuffle");
-  try {
-    if (fs.existsSync(shuffleDir)) {
-      const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
-      if (files.length > 0) {
-        const chosen = pickRandom(files);
-        return fs.readFileSync(path.join(shuffleDir, chosen));
-      }
-    }
-  } catch {}
-
-  const fallbackPaths = [
-    process.env.MENU_IMAGE,
-    path.resolve(__dirname, "../../assets/image/anita-landscape.jpg"),
-    path.resolve(__dirname, "../../assets/image/anita.png"),
-    path.resolve(__dirname, "../../assets/banner-default.png"),
-    path.resolve(__dirname, "../../assets/bocchi-banner.png"),
-  ].filter(Boolean);
-
-  for (const p of fallbackPaths) {
-    try {
-      if (typeof p === "string" && fs.existsSync(p)) {
-        return fs.readFileSync(p);
-      }
-    } catch {}
-  }
-  return null;
-}
-
-/**
- * Obtiene el buffer del video animado para menús gifPlayback
- */
-function getVideoAsset() {
-  const videoPaths = [
-    process.env.MENU_VIDEO_PATH,
-    path.resolve(__dirname, "../../assets/video/anita-mp4.mp4"),
-  ].filter(Boolean);
-
-  for (const p of videoPaths) {
-    try {
-      if (typeof p === "string" && fs.existsSync(p)) {
-        return fs.readFileSync(p);
-      }
-    } catch {}
-  }
-  return null;
-}
-
-let __localVersion = null;
-function localVersion() {
-  if (__localVersion) return __localVersion;
-  try {
-    const pkgPath = path.join(__dirname, "..", "..", "package.json");
-    __localVersion = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version || "3.0.3";
-  } catch {
-    __localVersion = "3.0.3";
-  }
-  return __localVersion;
-}
-
-const CAT_LABELS = {
-  info: "INFORMACIÓN",
-  main: "PRINCIPAL",
-  utils: "UTILIDADES",
-  utility: "HERRAMIENTAS",
-  downloads: "DESCARGAS",
-  anime: "ANIME",
-  stickers: "STICKERS",
-  economy: "ECONOMÍA",
-  games: "JUEGOS",
-  fun: "DIVERSIÓN",
-  gacha: "GACHA & RPG",
-  group: "GRUPOS & ADMIN",
-  profile: "PERFIL",
-  socket: "SOCKETS & BOTS",
-  nsfw: "NSFW +18",
-  owner: "CREADOR / OWNER",
-  otros: "OTROS",
-};
 
 export default {
   name: "menu",
@@ -142,31 +49,16 @@ export default {
     const weather = await getWeatherSummary();
     const channelUrl = globalThis.links?.channel || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522";
 
-    // ── Clasificación de Comandos ──
-    const cats = new Map();
-    const seenNames = new Set();
-    for (const [, cmd] of commands || []) {
-      if (!cmd || seenNames.has(cmd.name) || cmd.name === "menu") continue;
-      seenNames.add(cmd.name);
-      const c = (cmd.category || "otros").toLowerCase();
-      if (!cats.has(c)) cats.set(c, []);
-      cats.get(c).push(cmd);
-    }
-
-    const catOrder = [
-      "info", "main", "downloads", "stickers", "anime", "utils", "utility",
-      "economy", "gacha", "games", "fun", "group", "profile", "socket", "nsfw", "owner", "otros"
-    ];
-
+    const { cats, seenNames } = collectCategories(commands, { exclude: ["menu"] });
     const sub = (ctx.arg || "").toLowerCase().trim();
 
-    // ── Submenú específico si se pasa argumento (.menu descargas) ──
+    // Submenú específico si se pasa argumento (.menu descargas)
     if (sub) {
       const matchedCat = Object.keys(CAT_LABELS).find(c => c === sub || sub.startsWith(c) || c.startsWith(sub)) || sub;
       const list = cats.get(matchedCat) || [];
 
       if (list.length === 0) {
-        return `❌ La categoría *${sub}* no existe o está vacía.\n\n💡 *Categorías disponibles:*\n> ${catOrder.filter(c => cats.has(c)).join(", ")}`;
+        return `❌ La categoría *${sub}* no existe o está vacía.\n\n💡 *Categorías disponibles:*\n> ${CAT_ORDER.filter(c => cats.has(c)).join(", ")}`;
       }
 
       const emoji = CATEGORY_EMOJIS[matchedCat] || "📁";
@@ -182,18 +74,18 @@ export default {
       return text;
     }
 
-    // ── Recuperar Variante de Menú Configurada ──
+    // Recuperar variante de menú configurada usando JID normalizado del bot
     let menuVariant = 1;
     try {
-      const botJid = sock?.user?.id || "default";
-      const settings = db.getSettings(botJid) || {};
+      const botId = botJid(sock) || "default";
+      const settings = db.getSettings(botId) || {};
       menuVariant = Number(settings.menu_variant || settings.menuVariant || 1);
     } catch {
       menuVariant = 1;
     }
 
-    // ── Ficha de Usuario y Estado del Bot ──
-    const userRole = ctx.isOwner ? "👑 Creador / Owner" : (ctx.isAdmin ? "🛡️ Administrador" : "👤 Usuario");
+    const ownerCheck = typeof ctx.isOwner === "function" ? ctx.isOwner() : !!ctx.isOwner;
+    const userRole = ownerCheck ? "👑 Creador / Owner" : (ctx.isAdmin ? "🛡️ Administrador" : "👤 Usuario");
     const pushName = ctx.pushName || "Usuario";
     const senderNumber = (ctx.senderId || "").split("@")[0].split(":")[0];
 
@@ -215,11 +107,10 @@ export default {
     headerText += `│ ◈ *Prefijo* : \`${prefix}\`\n`;
     headerText += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n`;
 
-    // ── Construcción de Lista de Categorías ──
     const categoryRows = [];
     let fullCategoriesList = "";
 
-    for (const catKey of catOrder) {
+    for (const catKey of CAT_ORDER) {
       const list = cats.get(catKey);
       if (!list || list.length === 0) continue;
       const emoji = CATEGORY_EMOJIS[catKey] || "📁";
@@ -235,11 +126,6 @@ export default {
       fullCategoriesList += createBracketBox(label, cmdLines, emoji);
     }
 
-    // ── Botonera ──────────────────────────────────────────────────
-    // WhatsApp solo dibuja TRES botones: el cuarto se caía sin avisar.
-    // Ahora los de más viajan en la hoja desplegable (bottom_sheet),
-    // y la lista lleva una primera sección destacada con lo que de
-    // verdad usa la gente, para no obligar a bajar por categorías.
     const POPULARES = [
       { cmd: "play", titulo: "🎵 Descargar música", desc: "Pásame un nombre o un enlace" },
       { cmd: "sticker", titulo: "🖼️ Hacer sticker", desc: "Responde a una foto o vídeo" },
@@ -247,9 +133,11 @@ export default {
       { cmd: "ia", titulo: "🤖 Preguntar a la IA", desc: "Escribe tu pregunta" },
     ];
     const existentes = new Set();
-    for (const list of cats.values()) for (const c of (list || [])) {
-      existentes.add(c.name);
-      for (const a of (c.aliases || [])) existentes.add(a);
+    for (const list of cats.values()) {
+      for (const c of list || []) {
+        existentes.add(c.name);
+        for (const a of c.aliases || []) existentes.add(a);
+      }
     }
     const popularRows = POPULARES
       .filter(p => existentes.has(p.cmd))
@@ -280,7 +168,29 @@ export default {
     const banner = getRandomBanner();
     const videoAsset = getVideoAsset();
 
-    // ── VARIANTES DE RENDERIZADO ──
+    // Variante 4: Compact Dashboard
+    if (menuVariant === 4) {
+      const ramMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
+      const compactBody =
+        `📊 *SHIN-MD v${version} · Panel Rápido*\n` +
+        `Hola *${pushName}* (${userRole})\n\n` +
+        `• *Uptime:* ${uptimeFormatted}\n` +
+        `• *RAM:* ${ramMb} MB · *Prefijo:* \`${prefix}\`\n` +
+        `• *Comandos:* ${seenNames.size} en ${cats.size} categorías\n` +
+        `• *Clima:* ${weather}\n\n` +
+        `_Usa el selector o los botones para navegar._`;
+
+      await sendInteractive(sock, ctx.chatId, {
+        title: `📊 SHIN-MD ${version}`,
+        body: compactBody,
+        footer: "Shin-MD · Dashboard Compacto",
+        buttons: menuButtons,
+        hoja: menuHoja,
+        quoted: ctx.full,
+        fallbackText: compactBody + `\n\n${prefix}allmenu · ${prefix}menucat · ${prefix}ping`,
+      });
+      return null;
+    }
 
     // Variante 3: Video Animado GifPlayback
     if (menuVariant === 3 && videoAsset) {
@@ -306,14 +216,7 @@ export default {
       return null;
     }
 
-    // Variante 2: menú en texto, sin botones.
-    //
-    // Antes esta rama se comía TAMBIÉN todos los grupos (`ctx.isGroup ||`),
-    // así que en un grupo el menú nunca llegaba a la tarjeta interactiva:
-    // daba igual cuántos botones se le pusieran, salía como imagen con
-    // texto. Ya no: el grupo recibe la tarjeta igual que un privado, y si
-    // el envío nativo fallara, sendInteractive cae solo a este mismo texto
-    // (va como fallbackText más abajo).
+    // Variante 2: Menú de texto completo con ReadMore (sin botones)
     if (menuVariant === 2) {
       const finalContent = headerText +
         `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
@@ -338,7 +241,7 @@ export default {
       return null;
     }
 
-    // Variante 1 (Por defecto en DM): Tarjeta Interactiva con Banner Rotativo
+    // Variante 1 (Por defecto): Tarjeta Interactiva con Banner Rotativo
     const interactiveBody = headerText +
       `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
       `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +

@@ -12,7 +12,7 @@ export default {
   command: ['lboard', 'lb', 'leaderboard'],
   category: 'profile',
   description: 'Top de usuarios con más experiencia.',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
     try {
       const allUsers = db.getUser();
       const users = allUsers.filter(user => (user.exp || 0) >= 1).map(user => {
@@ -28,7 +28,7 @@ export default {
         return msg.reply(`ꕥ No hay usuarios registrados con experiencia.`);
       }
       const sorted = users.sort((a, b) => (b.exp || 0) - (a.exp || 0));
-      const page = parseInt(args[0]) || 1;
+      const page = parseInt(args[0], 10) || 1;
       const pageSize = 10;
       const totalPages = Math.ceil(sorted.length / pageSize);
       if (isNaN(page) || page < 1 || page > totalPages) {
@@ -36,15 +36,15 @@ export default {
       }
       const start = (page - 1) * pageSize;
       const end = start + pageSize;
-      let text = `*✩ Top de usuarios con más experiencia ✩*\n\n`;
-      text += sorted.slice(start, end).map(({ name, exp, level, progreso, xp, porcentaje }, i) => {
+      let boardText = `*✩ Top de usuarios con más experiencia ✩*\n\n`;
+      boardText += sorted.slice(start, end).map(({ name, exp, level, progreso, xp, porcentaje }, i) => {
         return `✩ ${start + i + 1} › *${name}*\n     XP → *${exp.toLocaleString()}*  LVL → *${level}*\n     ➨ Progreso → *${progreso} => ${xp}* _(${porcentaje}%)_`;
       }).join('\n\n');
-      text += `\n\n> ⌦ Página *${page}* de *${totalPages}*`;
+      boardText += `\n\n> ⌦ Página *${page}* de *${totalPages}*`;
       if (page < totalPages) {
-        text += `\n> Para ver la siguiente página › *${usedPrefix + command} ${page + 1}*`;
+        boardText += `\n> Para ver la siguiente página › *${usedPrefix + command} ${page + 1}*`;
       }
-      await sock.sendMessage(msg.chat, { text }, { quoted: msg });
+      await sock.sendMessage(msg.chat, { text: boardText }, { quoted: msg });
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

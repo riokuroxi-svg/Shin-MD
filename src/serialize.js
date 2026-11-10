@@ -135,6 +135,11 @@ export function serializeMessage(msg, sock) {
     || unwrappedMessage?.imageMessage?.contextInfo
     || unwrappedMessage?.videoMessage?.contextInfo
     || unwrappedMessage?.documentMessage?.contextInfo
+    || unwrappedMessage?.stickerMessage?.contextInfo
+    || unwrappedMessage?.audioMessage?.contextInfo
+    || unwrappedMessage?.buttonsResponseMessage?.contextInfo
+    || unwrappedMessage?.templateButtonReplyMessage?.contextInfo
+    || unwrappedMessage?.interactiveResponseMessage?.contextInfo
     || null;
 
   if (contextInfo && Array.isArray(contextInfo.mentionedJid)) {
@@ -262,10 +267,11 @@ export function resolveParticipantJid(p) {
 export function resolveJidSync(raw) { return normalizeJid(raw); }
 export class BoundedMap extends Map {
   constructor(m, t) { super(); this.max = m; this.ttl = t || 0; }
-  set(k, v) { if (this.size >= this.max) this.delete(this.keys().next().value); return super.set(k, v); }
+  set(k, v) { if (!this.has(k) && this.size >= this.max) this.delete(this.keys().next().value); return super.set(k, v); }
 }
 export async function getBuffer(url) {
-  const r = await fetch(url);
+  const r = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return Buffer.from(await r.arrayBuffer());
 }
 export function getSelectedResponse() { return null; }

@@ -11,7 +11,7 @@ import { quickReply, sendInteractive } from '#interactive';
 
 const QUESTIONS = [
   { q: '¿Cuál es el planeta más grande del sistema solar?', opts: ['Marte', 'Júpiter', 'Saturno', 'Neptuno'], ans: 1 },
-  { q: '¿Quién escribió "Cien años de soledad"?', opts: ['Pablo Neruda', 'Gabriel García Márquez', 'Mario Vargas Llosa', 'Julio Cortázar'], ans: 2 },
+  { q: '¿Quién escribió "Cien años de soledad"?', opts: ['Pablo Neruda', 'Gabriel García Márquez', 'Mario Vargas Llosa', 'Julio Cortázar'], ans: 1 },
   { q: '¿En qué año llegó el hombre a la luna?', opts: ['1965', '1969', '1972', '1967'], ans: 1 },
   { q: '¿Cuál es el río más largo del mundo?', opts: ['Amazonas', 'Nilo', 'Misisipi', 'Yangtsé'], ans: 0 },
   { q: '¿Qué país tiene forma de bota?', opts: ['España', 'Francia', 'Italia', 'Grecia'], ans: 2 },
@@ -38,6 +38,15 @@ function shuffle(a) {
   return r;
 }
 
+function escapeXml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 async function renderTrivia(question, opts, score, qNum, total) {
   const colors = ['#ff4444', '#4488ff', '#44dd44', '#ff8844'];
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="${420 + opts.length * 10}">
@@ -48,12 +57,12 @@ async function renderTrivia(question, opts, score, qNum, total) {
     <text x="250" y="35" text-anchor="middle" font-family="monospace" font-size="18" font-weight="bold" fill="#00d2ff">🧠 TRIVIA</text>
     <text x="250" y="60" text-anchor="middle" font-family="monospace" font-size="13" fill="#888">${qNum}/${total} | 🏆 ${score}</text>
     <line x1="20" y1="72" x2="480" y2="72" stroke="#333" stroke-width="1"/>
-    <text x="20" y="110" font-family="monospace" font-size="16" fill="#fff">${question}</text>`;
+    <text x="20" y="110" font-family="monospace" font-size="16" fill="#fff">${escapeXml(question)}</text>`;
 
   for (let i = 0; i < opts.length; i++) {
     const oy = 130 + i * 48;
     svg += `<rect x="20" y="${oy}" width="460" height="38" rx="8" fill="${colors[i]}33" stroke="${colors[i]}" stroke-width="1.5"/>
-      <text x="40" y="${oy + 25}" font-family="monospace" font-size="14" fill="#fff">${String.fromCharCode(65 + i)}) ${opts[i]}</text>`;
+      <text x="40" y="${oy + 25}" font-family="monospace" font-size="14" fill="#fff">${String.fromCharCode(65 + i)}) ${escapeXml(opts[i])}</text>`;
   }
 
   svg += `</svg>`;

@@ -35,14 +35,25 @@ export default {
 
 async function gdriveScraper(url) {
   try {
-    let id = (url.match(/\/?id=(.+)/i) || url.match(/\/d\/(.*?)\//))[1]
+    const id = url.match(/[?&]id=([^&\s#]+)/i)?.[1] || url.match(/\/d\/([^/\s?#]+)/i)?.[1]
     if (!id) throw new Error('No se encontró ID de descarga')
-    let res = await fetch(`https://drive.google.com/uc?id=${id}&authuser=0&export=download`, { method: 'post', headers: { 'accept-encoding': 'gzip, deflate, br', 'content-length': 0, 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8', origin: 'https://drive.google.com', 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36', 'x-sock-data': 'CKG1yQEIkbbJAQiitskBCMS2yQEIqZ3KAQioo8oBGLeYygE=', 'x-drive-first-party': 'DriveWebUi', 'x-json-requested': 'true' }})
-    let { fileName, sizeBytes, downloadUrl } = JSON.parse((await res.text()).slice(4))
+    const res = await fetch(`https://drive.google.com/uc?id=${id}&authuser=0&export=download`, {
+      method: 'post',
+      signal: AbortSignal.timeout(15000),
+      headers: {
+        'accept-encoding': 'gzip, deflate, br',
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        origin: 'https://drive.google.com',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'x-drive-first-party': 'DriveWebUi',
+        'x-json-requested': 'true',
+      },
+    })
+    const { fileName, sizeBytes, downloadUrl } = JSON.parse((await res.text()).slice(4))
     if (!downloadUrl) throw new Error('Se excedió el número de descargas del link')
-    let data = await fetch(downloadUrl)
-    if (data.status !== 200) throw new Error(data.statusText)
-    return { status: true, data: { downloadUrl, fileName, fileSize: `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`, mimetype: data.headers.get('content-type') }}
+    const data = await fetch(downloadUrl, { method: 'HEAD', signal: AbortSignal.timeout(15000) })
+    if (!data.ok) throw new Error(data.statusText || `HTTP ${data.status}`)
+    return { status: true, data: { downloadUrl, fileName, fileSize: `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`, mimetype: data.headers.get('content-type') || 'application/octet-stream' }}
   } catch (error) {
     return { status: false, message: error.message }
   }

@@ -5,34 +5,13 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import fetch from 'node-fetch';
-import FormData from 'form-data';
 import { sendAiResponse } from '../../src/lib/aiFormatter.js';
 
-// Memoria por chat: { chatId: [ {role:'user'|'model', text:string} ] }
+// Memoria por chat: { chatId: [ {role:'user'|'model', parts:[{text}]} ] }
 const memoria = {};
 const MEM_MAX = 10;
 const URL_GEMINI = (key, model) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-
-async function subirLitterbox(buffer, mime) {
-  const ext = (mime || 'image/jpeg').split('/')[1]?.split(';')[0] || 'jpg';
-  const filename = `shin_${Date.now()}.${ext}`;
-  for (const t of ['1h', '12h', '24h', '72h']) {
-    try {
-      const form = new FormData();
-      form.append('reqtype', 'fileupload');
-      form.append('time', t);
-      form.append('fileToUpload', buffer, { filename, contentType: mime || 'image/jpeg' });
-      const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
-        method: 'POST',
-        body: form,
-      });
-      const text = await res.text();
-      if (text.startsWith('https://')) return text;
-    } catch (_) {}
-  }
-  return null;
-}
 
 async function geminiPedir(key, model, contents, sysPrompt) {
   const safetySettings = [
@@ -52,6 +31,7 @@ async function geminiPedir(key, model, contents, sysPrompt) {
   const res = await fetch(URL_GEMINI(key, model), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(25000),
     body: JSON.stringify({
       contents: arr,
       safetySettings,
@@ -60,9 +40,9 @@ async function geminiPedir(key, model, contents, sysPrompt) {
   });
 
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try { const err = await res.json(); msg = err?.error?.message || msg; } catch (_) {}
-    throw new Error(msg);
+    let errText = `HTTP ${res.status}`;
+    try { const err = await res.json(); errText = err?.error?.message || errText; } catch {}
+    throw new Error(errText);
   }
   const data = await res.json();
   const blocked = data?.promptFeedback?.blockReason
@@ -77,35 +57,35 @@ export default {
   command: ['ai', 'ia', 'chatgpt', 'gemini', 'chat'],
   category: 'utils',
   description: 'Chatear con la IA con memoria conversacional y formato Meta AI.',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, usedPrefix, text }) => {
     const key = global.geminiKey || process.env.GEMINI_KEY;
     const model = global.geminiModel || 'gemini-1.5-flash';
     const chatId = msg.chat;
 
     const comando = (text || '').trim().toLowerCase();
 
-    // Reset de memoria
     if (['reset', 'limpiar', 'clear', 'borrar'].includes(comando)) {
       delete memoria[chatId];
       return msg.reply('🧠 *Memoria conversacional borrada.* Empezamos de cero.');
     }
 
-    let texto = text?.trim() || '';
-    let imageUrl = null;
+    const texto = text?.trim() || '';
+    let imageBuf = null;
+    let imageMime = 'image/jpeg';
     const q = msg.quoted || null;
     const mimeCitado = q?.mimetype || '';
 
-    if (q && /^image\//.test(mimeCitado)) {
+    if (q && /^image\/(jpe?g|png|webp|gif)/i.test(mimeCitado)) {
       try {
         const buf = await q.download();
-        if (buf) {
-          const up = await subirLitterbox(buf, mimeCitado);
-          if (up) imageUrl = up;
+        if (buf?.length) {
+          imageBuf = buf;
+          imageMime = mimeCitado.split(';')[0].trim().toLowerCase();
         }
-      } catch (_) {}
+      } catch {}
     }
 
-    if (!texto && !imageUrl) {
+    if (!texto && !imageBuf) {
       return msg.reply(
         `╭──〔 🤖 *SHIN-MD AI* 〕──⬣\n` +
         `│ Escribe una pregunta o petición.\n` +
@@ -125,7 +105,7 @@ export default {
       );
     }
 
-    try { await msg.react('💭'); } catch (_) {}
+    try { await msg.react('💭'); } catch {}
     const startTime = Date.now();
 
     try {
@@ -136,14 +116,13 @@ export default {
         + 'Si te envían una imagen, descríbela con precisión.';
 
       const parts = [];
-      const reqText = texto || (imageUrl ? 'Describe esta imagen.' : '');
+      const reqText = texto || (imageBuf ? 'Describe esta imagen.' : '');
       parts.push({ text: reqText });
-      if (imageUrl) parts.push({ file_data: { mime_type: 'image/jpeg', file_uri: imageUrl } });
+      if (imageBuf) {
+        parts.push({ inline_data: { mime_type: imageMime, data: imageBuf.toString('base64') } });
+      }
 
-      const contenido = [];
-      contenido.push(...historial);
-      contenido.push({ role: 'user', parts });
-
+      const contenido = [...historial, { role: 'user', parts }];
       const respuesta = await geminiPedir(key, model, contenido, systemPrompt);
       const latencyMs = Date.now() - startTime;
 
@@ -154,7 +133,7 @@ export default {
         memoria[chatId] = memoria[chatId].slice(-MEM_MAX * 2);
       }
 
-      try { await msg.react('✨'); } catch (_) {}
+      try { await msg.react('✨'); } catch {}
 
       await sendAiResponse(sock, chatId, {
         model: "Gemini 1.5 Flash",
@@ -168,7 +147,7 @@ export default {
 
       return null;
     } catch (e) {
-      try { await msg.react('❌'); } catch (_) {}
+      try { await msg.react('❌'); } catch {}
       return msg.reply(`❌ *Error en la IA:* ${e.message}`);
     }
   },

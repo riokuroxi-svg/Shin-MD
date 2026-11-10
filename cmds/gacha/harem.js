@@ -4,18 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { promises as fs } from 'fs';
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
+
 export default {
   command: ['harem', 'waifus', 'claims'],
   category: 'gacha',
   description: 'Ver tus personajes reclamados.',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
     try {
       const chat = db.getChat(msg.chat);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       const userId = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
@@ -32,7 +33,7 @@ export default {
         ownedIDs = Array.isArray(userData.characters) ? userData.characters : [];
       }
       if (ownedIDs.length === 0) {
-        const isSelf = userId === msg.sender;
+        const isSelf = mismaPersona(userId, msg.sender);
         const replyText = isSelf ? 'ꕥ No tienes personajes reclamados.' : `ꕥ *${name}* no tiene personajes reclamados.`;
         return sock.sendMessage(msg.chat, { text: replyText, mentions: [userId] }, { quoted: msg });
       }
@@ -45,7 +46,8 @@ export default {
       }
       charactersWithValues.sort((a, b) => b.value - a.value);
       const sortedIDs = charactersWithValues.map(item => item.id);
-      const page = parseInt(args[1]) || 1;
+      const numArg = args.find(a => /^\d+$/.test(a));
+      const page = parseInt(numArg, 10) || 1;
       const perPage = 64;
       const totalPages = Math.ceil(sortedIDs.length / perPage);
       if (page < 1 || page > totalPages) {
@@ -67,8 +69,9 @@ export default {
       }
       message += `\n⌦ _Página *${page}* de *${totalPages}*_`;
       if (page < totalPages) {
-        const nameArgs = args.filter(arg => isNaN(parseInt(arg))).join(' ');
-        message += `\n> Usa *${usedPrefix}${command} ${nameArgs} ${page + 1}* para ver la siguiente página.`;
+        const nameArgs = args.filter(arg => !/^\d+$/.test(arg)).join(' ');
+        const prefixArgs = nameArgs ? `${nameArgs} ` : '';
+        message += `\n> Usa *${usedPrefix}${command} ${prefixArgs}${page + 1}* para ver la siguiente página.`;
       }
       await sock.sendMessage(msg.chat, { text: message.trim(), mentions: [userId] }, { quoted: msg });
     } catch (e) {

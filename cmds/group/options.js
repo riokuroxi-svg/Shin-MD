@@ -10,12 +10,13 @@ export default {
   command: ['welcome', 'bienvenida', 'goodbye', 'despedida', 'alerts', 'alertas', 'nsfw', 'antilink', 'antienlaces', 'antilinks', 'antistatus', 'antiestados', 'rpg', 'economy', 'economia', 'gacha', 'adminonly', 'onlyadmin'],
   category: 'group',
   description: 'Configurar opciones del grupo.',
+  groupOnly: true,
   isAdmin: true,
   run: async ({ msg, sock, args, usedPrefix, command }) => {
-    let chatData = db.getChat(msg.chat);
+    const chatData = db.getChat(msg.chat) || {};
     const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
-    const botname = botSettings.botname || 'Bot';
+    const botname = botSettings.botname || global.botname || 'Shin-MD';
     const stateArg = args[0]?.toLowerCase();
     const validStates = ['on', 'off', 'enable', 'disable'];
     const mapTerms = {

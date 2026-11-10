@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { tiempoCorto as formatTime } from "#lib/tiempo";
 const getLastActive = (usedTime) => {
@@ -22,13 +23,13 @@ const getDuration = start => { const ms = Date.now() - start; return ms < 1 ? 1 
 const normalizeNumber = jid => String(jid).replace(/\D/g, '');
 
 const isPrivileged = (jid, sender) => {
+  if (mismaPersona(jid, sender)) return true;
   const n = normalizeNumber(jid);
-  if (n === normalizeNumber(sender)) return true;
   for (const list of [global.owner]) {
     if (!list) continue;
     for (const o of list) {
       const id = typeof o === 'string' ? o : Array.isArray(o) ? o[0] : o?.jid;
-      if (normalizeNumber(id) === n) return true;
+      if (mismaPersona(jid, id) || (n && normalizeNumber(id) === n)) return true;
     }
   }
   return false;
@@ -38,19 +39,22 @@ export default {
   command: ['clear'],
   category: 'group',
   description: 'Limpiar usuarios inactivos del grupo.',
+  groupOnly: true,
   isAdmin: true,
   run: async ({ msg, sock }) => {
     const start = Date.now();
-    const chat = db.getChat(msg.chat);
+    const chat = db.getChat(msg.chat) || {};
     const textLower = (msg.text || '').toLowerCase();
     const isViewMode = textLower.includes('view') || textLower.includes('views');
     const isFullDeleteMode = textLower.includes('full') || textLower.includes('complete');
     const isDeleteMode = textLower.includes('delete') || textLower.includes('del');
-    const usersObj = chat?.users || {};
-    const allChatUsers = Object.entries(usersObj).map(([jid, u]) => ({ ...u, user_id: jid }));
+    const allChatUsers = db.getChatUsers(msg.chat);
     const LIMITE = 30 * 24 * 60 * 60 * 1000;
     const now = Date.now();
-    let userList = [], mentions = [], eliminados = 0, waifus = 0, dinero = 0, deletedUsers = [];
+    const userList = [];
+    const mentions = [];
+    const deletedUsers = [];
+    let eliminados = 0, waifus = 0, dinero = 0;
     for (const u of allChatUsers) {
       if (isPrivileged(u.user_id, msg.sender)) continue;
       const lastActive = getLastActive(u.usedTime) || (typeof u.lastCmd === 'number' ? u.lastCmd : 0);
@@ -75,12 +79,12 @@ export default {
       mentions.push(u.user_id); waifus += characters.length; dinero += totalCoins;
       if (isDeleteMode && !isViewMode) {
         for (const id of characters) {
-          let character = db.getCharacter(id);
-          if (character && character.user === u.user_id) {
+          const character = db.getCharacter(id);
+          if (character && mismaPersona(character.user, u.user_id)) {
             delete character.user; delete character.claimedAt;
             db.setCharacter(id, character);
           }
-          if (chat.sales && chat.sales[id]?.user === u.user_id) delete chat.sales[id];
+          if (chat.sales && mismaPersona(chat.sales[id]?.user, u.user_id)) delete chat.sales[id];
           if (u.favorite === id) {
             db.setChatUser(msg.chat, u.user_id, 'favorite', '');
             if (db.getUser(u.user_id)) db.setUser(u.user_id, 'favorite', '');

@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { downloadMediaMessage } from "baileys";
+import { getRealMessage } from "#serialize";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -21,8 +22,10 @@ const TARGET = path.join(ROOT, "cookies.txt");
 const MAX_BYTES = 256 * 1024;
 
 async function downloadDocument(msg) {
+  if (!msg?.message) return null;
   try {
-    const buf = await downloadMediaMessage(msg, "buffer", {});
+    const normalized = { ...msg, message: getRealMessage(msg.message) || msg.message };
+    const buf = await downloadMediaMessage(normalized, "buffer", {});
     return Buffer.isBuffer(buf) ? buf : null;
   } catch {
     return null;

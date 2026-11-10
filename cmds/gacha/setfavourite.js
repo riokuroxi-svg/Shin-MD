@@ -4,25 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
+
 export default {
   command: ['setfav', 'setfavourite'],
   category: 'gacha',
   description: 'Establecer tu claim favorito.',
   run: async ({ msg, args, usedPrefix, command }) => {
     const chat = db.getChat(msg.chat);
-    if (chat.adminonly || !chat.gacha) {
+    if (chat?.adminonly || !chat?.gacha) {
       return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
     }
     if (!args.length) {
-      return msg.reply(`❀ Debes especificar un personaje.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
+      return msg.reply(`❀ Debes especificar un personaje.\n> Ejemplo » *${usedPrefix + command} Rem*`);
     }
     db.setCreate('chat_users', [msg.chat, msg.sender], 'favorite', '');
     db.setCreate('users', msg.sender, 'favorite', '');
-    let user = db.getChatUser(msg.chat, msg.sender);
+    const user = db.getChatUser(msg.chat, msg.sender) || {};
     if (!Array.isArray(user.characters)) user.characters = [];
     try {
       const structure = await loadCharacters();

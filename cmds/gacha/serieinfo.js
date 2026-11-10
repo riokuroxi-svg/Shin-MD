@@ -5,11 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { loadCharacters } from "#lib/gacha-shared";
-import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-
-
 
 export default {
   command: ['serieinfo', 'ainfo', 'animeinfo'],
@@ -18,7 +15,7 @@ export default {
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     try {
       const chat = db.getChat(msg.chat);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       if (!args.length) {
@@ -27,8 +24,8 @@ export default {
       let page = 1;
       let seriesNameArgs = args;
       const lastArg = args[args.length - 1];
-      if (lastArg && !isNaN(lastArg) && parseInt(lastArg) > 0) {
-        page = parseInt(lastArg);
+      if (lastArg && !isNaN(lastArg) && parseInt(lastArg, 10) > 0 && args.length > 1) {
+        page = parseInt(lastArg, 10);
         seriesNameArgs = args.slice(0, -1);
       }
       const query = seriesNameArgs.join(' ').toLowerCase().trim();
@@ -39,9 +36,9 @@ export default {
       if (!seriesKey || !seriesData) {
         return msg.reply(`ꕥ No se encontró la serie *${query}*\n> Puedes sugerirlo usando el comando *${usedPrefix}suggest sugerencia de serie: ${query}*`);
       }
-      let list = Array.isArray(seriesData.characters) ? seriesData.characters : [];
+      const list = Array.isArray(seriesData.characters) ? [...seriesData.characters] : [];
       const total = list.length;
-      const allChatUsers = db.getChatUser(msg.chat);
+      const allChatUsers = db.getChatUsers(msg.chat);
       for (const u of allChatUsers) {
         if (u.characters && typeof u.characters === 'string') {
           try { u.characters = JSON.parse(u.characters); } catch { u.characters = []; }
@@ -58,7 +55,7 @@ export default {
       }
       list.sort((a, b) => b.value - a.value);
       const perPage = 50;
-      const totalPages = Math.ceil(list.length / perPage);
+      const totalPages = Math.max(1, Math.ceil(list.length / perPage));
       if (page < 1 || page > totalPages) {
         return msg.reply(`❀ Página no válida. Hay un total de *${totalPages}* páginas.`);
       }
@@ -67,7 +64,7 @@ export default {
       const pageCharacters = list.slice(startIndex, endIndex);
       let replyText = `*❀ Fuente: \`<${seriesData.name || seriesKey}>\`*\n\n`;
       replyText += `❏ Personajes » *\`${total}\`*\n`;
-      replyText += `♡ Reclamados » *\`${claimedList.length}/${total} (${((claimedList.length / total) * 100).toFixed(0)}%)\`*\n`;
+      replyText += `♡ Reclamados » *\`${claimedList.length}/${total} (${total ? ((claimedList.length / total) * 100).toFixed(0) : 0}%)\`*\n`;
       replyText += `❏ Lista de personajes:\n\n`;
       for (const c of pageCharacters) {
         const ownerEntry = allChatUsers.find(u => Array.isArray(u.characters) && u.characters.includes(c.id));

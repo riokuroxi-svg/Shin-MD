@@ -5,13 +5,9 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
-import { promises as fs } from 'fs';
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-
-const file = './core/characters.json';
-
-
 
 const getDisplayName = async (jid) => {
   const user = db.getUser(jid);
@@ -24,13 +20,14 @@ export default {
   command: ['trade', 'intercambiar'],
   category: 'gacha',
   description: 'Intercambiar un personaje con otro usuario.',
-  before: async ({ msg, sock }) => {
+  before: async ({ msg }) => {
+    if (!msg?.chat || msg.isBot) return;
     if (msg.text?.trim().toLowerCase() !== 'aceptar') return;
     const entry = Object.entries(pendingTrade).find(([_, d]) => d.chat === msg.chat);
     if (!entry) return;
     const [key, data] = entry;
     try {
-      if (msg.sender !== data.to) {
+      if (!mismaPersona(msg.sender, data.to)) {
         const receiverName = await getDisplayName(data.to);
         await msg.reply(`ꕥ Solo *${receiverName}* puede aceptar la solicitud de intercambio.`);
         return true;
@@ -38,10 +35,12 @@ export default {
       const chatId = msg.chat;
       const keyA = chatId + '__' + data.give;
       const keyB = chatId + '__' + data.get;
-      let pA = db.getCharacter(keyA);
-      let pB = db.getCharacter(keyB);
-      if (!pA || !pB || pA.user !== data.from || pB.user !== data.to) {
+      const pA = db.getCharacter(keyA);
+      const pB = db.getCharacter(keyB);
+      if (!pA || !pB || !mismaPersona(pA.user, data.from) || !mismaPersona(pB.user, data.to)) {
+        clearTimeout(data.timeout);
         delete pendingTrade[key];
+        db.setChat(chatId, 'timeTrade', 0);
         await msg.reply(`⚠︎ Uno de los personajes ya no está disponible para el intercambio.`);
         return true;
       }
@@ -49,8 +48,10 @@ export default {
       pB.user = data.from;
       db.setCharacter(keyA, pA);
       db.setCharacter(keyB, pB);
-      let sender = db.getChatUser(chatId, data.from);
-      let receiver = db.getChatUser(chatId, data.to);
+      const sender = db.getChatUser(chatId, data.from) || {};
+      const receiver = db.getChatUser(chatId, data.to) || {};
+      if (!Array.isArray(sender.characters)) sender.characters = [];
+      if (!Array.isArray(receiver.characters)) receiver.characters = [];
       if (!receiver.characters.includes(data.give)) receiver.characters.push(data.give);
       if (!sender.characters.includes(data.get)) sender.characters.push(data.get);
       sender.characters = sender.characters.filter(id => id !== data.give);
@@ -67,6 +68,7 @@ export default {
       }
       clearTimeout(data.timeout);
       delete pendingTrade[key];
+      db.setChat(chatId, 'timeTrade', 0);
       const nameFrom = await getDisplayName(data.from);
       const nameTo = await getDisplayName(data.to);
       await msg.reply(`「✿」 Intercambio aceptado!\n\n✦ *${nameTo}* » ${pA.name}\n✦ *${nameFrom}* » ${pB.name}`);
@@ -82,7 +84,7 @@ export default {
       db.setCreate('chats', chatId, 'intercambios', []);
       db.setCreate('chats', chatId, 'timeTrade', 0);
       const chat = db.getChat(chatId);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       if (chat.timeTrade && chat.timeTrade - Date.now() > 0) {
@@ -106,9 +108,9 @@ export default {
       const pA = db.getCharacter(keyA);
       const pB = db.getCharacter(keyB);
       if (!pA || !pB) return msg.reply(`ꕥ No se encontraron datos de los personajes.`);
-      if (pB.user === userId) return msg.reply(`ꕥ El personaje *${pB.name}* ya está reclamado por ti.`);
+      if (mismaPersona(pB.user, userId)) return msg.reply(`ꕥ El personaje *${pB.name}* ya está reclamado por ti.`);
       if (!pB.user) return msg.reply(`ꕥ El personaje *${pB.name}* no está reclamado por nadie.`);
-      if (!pA.user || pA.user !== userId) return msg.reply(`ꕥ *${pA.name}* no está reclamado por ti.`);
+      if (!pA.user || !mismaPersona(pA.user, userId)) return msg.reply(`ꕥ *${pA.name}* no está reclamado por ti.`);
       const receiverId = pB.user;
       const globalA = db.getCharacter(idA) || {};
       const globalB = db.getCharacter(idB) || {};
@@ -116,7 +118,17 @@ export default {
       const valueB = typeof globalB.value === 'number' ? globalB.value : pB.value || 0;
       const senderName = await getDisplayName(userId);
       const receiverName = await getDisplayName(receiverId);
-      pendingTrade[receiverId] = { from: userId, to: receiverId, chat: chatId, give: idA, get: idB, timeout: setTimeout(() => delete pendingTrade[receiverId], 60000) };
+      pendingTrade[receiverId] = {
+        from: userId,
+        to: receiverId,
+        chat: chatId,
+        give: idA,
+        get: idB,
+        timeout: setTimeout(() => {
+          delete pendingTrade[receiverId];
+          db.setChat(chatId, 'timeTrade', 0);
+        }, 60000),
+      };
       db.setChat(chatId, 'timeTrade', Date.now() + 60000);
       await sock.sendMessage(chatId, { text: `「✿」 *${receiverName}*, *${senderName}* te ha enviado una solicitud de intercambio.\n\n✦ [${receiverName}] *${pB.name}* (${valueB.toLocaleString()})\n✦ [${senderName}] *${pA.name}* (${valueA.toLocaleString()})\n\n✐ Para aceptar responde con *aceptar*, la solicitud expira en 60 segundos.`, mentions: [userId, receiverId] }, { quoted: msg });
     } catch (e) {

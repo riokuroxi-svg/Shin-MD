@@ -5,10 +5,11 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import { promises as fs } from 'fs';
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters, getSeriesNameByCharacter, loadCharacters } from "#lib/gacha-shared";
+
 export default {
   command: ['vote', 'votar'],
   category: 'gacha',
@@ -17,14 +18,14 @@ export default {
     try {
       const botId = botJid(sock);
       const settings = db.getSettings(botId);
-      const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
+      const isOficialBot = !!(botId && global.sock?.user?.id && mismaPersona(botId, botJid(global.sock)));
       const isPremiumBot = settings?.botprem === 1;
       const isModBot = settings?.botmod === 1;
       if (!isOficialBot && !isPremiumBot && !isModBot) {
         return sock.reply(msg.chat, `《✧》El comando *${command}* no está disponible en *Sub-Bots.*`, msg);
       }
       const chat = db.getChat(msg.chat);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       db.setCreate('users', msg.sender, 'lastVote', 0);

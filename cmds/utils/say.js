@@ -4,23 +4,22 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-
 import { state } from '#lib/theme';
+
 export default {
   command: ['say', 'decir'],
   category: 'utils',
   description: 'Repetir un mensaje como el bot.',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, args }) => {
     const groupMetadata = msg.isGroup ? await sock.groupMetadata(msg.chat).catch(() => null) : null;
     const groupParticipants = groupMetadata?.participants || [];
     const allMentions = groupParticipants.map(p => p.id).filter(Boolean);
     const userText = (args.join(' ') || '').trim();
     const src = msg.quoted || msg;
-    const hasImage = Boolean(src.message?.imageMessage || src.mtype === 'imageMessage');
-    const hasVideo = Boolean(src.message?.videoMessage || src.mtype === 'videoMessage');
-    const hasAudio = Boolean(src.message?.audioMessage || src.mtype === 'audioMessage');
-    const hasSticker = Boolean(src.message?.stickerMessage || src.mtype === 'stickerMessage');
-    const isQuoted = Boolean(msg.quoted);
+    const hasImage = Boolean(src.message?.imageMessage || src.mtype === 'imageMessage' || src.type === 'imageMessage');
+    const hasVideo = Boolean(src.message?.videoMessage || src.mtype === 'videoMessage' || src.type === 'videoMessage');
+    const hasAudio = Boolean(src.message?.audioMessage || src.mtype === 'audioMessage' || src.type === 'audioMessage');
+    const hasSticker = Boolean(src.message?.stickerMessage || src.mtype === 'stickerMessage' || src.type === 'stickerMessage');
     const originalText = (src.caption || src.text || src.body || '').trim();
     const textToCheck = (userText || originalText || '').trim();
     const explicitMentions = allMentions.filter(jid => textToCheck.includes(jid.split('@')[0]));
@@ -30,13 +29,12 @@ export default {
         const media = await src.download();
         if (hasImage) {
           return sock.sendMessage(msg.chat, { image: media, caption: textToCheck || '', ...options });
-        } else {
-          return sock.sendMessage(msg.chat, { video: media, mimetype: 'video/mp4', caption: textToCheck || '', ...options });
         }
+        return sock.sendMessage(msg.chat, { video: media, mimetype: 'video/mp4', caption: textToCheck || '', ...options });
       }
       if (hasAudio) {
         const media = await src.download();
-        return sock.sendMessage(msg.chat, { audio: media, mimetype: 'audio/mp4', fileName: 'hidetag.mp3', ...options });
+        return sock.sendMessage(msg.chat, { audio: media, mimetype: 'audio/mp4', fileName: 'say.mp3', ...options });
       }
       if (hasSticker) {
         const media = await src.download();

@@ -37,12 +37,12 @@ export default {
 
 async function getTwitterMedia(url) {
   const apis = [
-    { endpoint: `${global.APIs.delirius.url}/download/twitterdl?url=${encodeURIComponent(url)}`, extractor: (res) => {
+    { endpoint: global.APIs?.delirius?.url ? `${global.APIs.delirius.url}/download/twitterdl?url=${encodeURIComponent(url)}` : null, extractor: (res) => {
         if (!res.found || !res.media?.length) return null
         return { type: res.type || 'video', title: res.info?.text || null, author: res.info?.user_name || res.info?.user_screen_name || null, date: res.info?.date || null, url: res.media[0]?.url || null, likes: res.info?.likes || null, comments: res.info?.replies || null, retweets: res.info?.retweets || null }
       }
     },
-    { endpoint: `${global.APIs.Ginko.url}/dl/twitter?url=${encodeURIComponent(url)}&key=${global.APIs.Ginko.key}`, extractor: (res) => {
+    { endpoint: global.APIs?.Ginko?.url ? `${global.APIs.Ginko.url}/dl/twitter?url=${encodeURIComponent(url)}&key=${global.APIs.Ginko.key || ''}` : null, extractor: (res) => {
         if (!res.status || !res.data?.result?.length) return null
         const hd = res.data.result.find(x => x.quality === '1920p' || x.quality === '1280p')
         const sd = res.data.result.find(x => x.quality === '852p' || x.quality === '568p')
@@ -51,7 +51,7 @@ async function getTwitterMedia(url) {
         return { type: res.data.type || 'video', title: res.data.title || null, duration: res.data.duration || null, resolution: media.quality || null, url: media.url, thumbnail: res.data.thumbnail || null }
       }
     },
-    { endpoint: `${global.APIs.zenzxz.url}/download/twitter?url=${encodeURIComponent(url)}`, extractor: (res) => {
+    { endpoint: global.APIs?.zenzxz?.url ? `${global.APIs.zenzxz.url}/download/twitter?url=${encodeURIComponent(url)}` : null, extractor: (res) => {
         if (!res.status || !res.result?.length) return null
         const hd = res.result.find(x => x.quality.includes('1080') || x.quality.includes('HD'))
         const sd = res.result.find(x => x.quality.includes('720'))
@@ -61,13 +61,13 @@ async function getTwitterMedia(url) {
       }
     }
   ]
-  // Solo se intentan las APIs que estén configuradas: si falta la URL, se
-  // salta en vez de pedir «undefined/dl/…» y reventar con un TypeError.
-  .filter(({ endpoint }) => typeof endpoint === "string" && !endpoint.includes("undefined"))
+  .filter(({ endpoint }) => typeof endpoint === "string" && endpoint.length > 0 && !endpoint.includes("undefined"))
 
   for (const { endpoint, extractor } of apis) {
     try {
-      const res = await (await fetch(endpoint)).json()
+      const resp = await fetch(endpoint, { signal: AbortSignal.timeout(15000) })
+      if (!resp.ok) continue
+      const res = await resp.json()
       const result = extractor(res)
       if (result) return result
     } catch {}

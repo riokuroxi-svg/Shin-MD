@@ -5,6 +5,9 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { economyGate } from "#lib/economy-guard";
+import { botJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
+import { sendNativeQuickReply } from "#lib/native-reply";
 import { pickRandom, randomInt } from "#lib/random";
 import db from '../../src/services/ginko-db.js';
 import { geminiGenerate } from '#lib/geminiRole';
@@ -50,40 +53,61 @@ function registrarListener(sock) {
   });
 }
 
-// Normaliza un JID a su forma base (número@s.whatsapp.net o grupo@g.us)
-// para que no importe si viene :0@lid, :16@s.whatsapp.net, etc.
-function jidBase(jid) {
-  if (!jid) return '';
-  let s = String(jid);
-  // Quitar cualquier cosa después de ':' en la parte del usuario (salvo el @)
-  s = s.replace(/^(\d+):\d+@/, '$1@');
-  // Convertir @lid a @s.whatsapp.net (formato antiguo usado en algunas versiones)
-  if (s.endsWith('@lid')) {
-    s = s.replace(/@lid$/, '@s.whatsapp.net');
+function extraerBotonMine(m) {
+  const msg = m?.message;
+  if (!msg) return null;
+  if (msg.buttonsResponseMessage?.selectedButtonId) {
+    return {
+      bid: String(msg.buttonsResponseMessage.selectedButtonId),
+      stanzaId: msg.buttonsResponseMessage.contextInfo?.stanzaId,
+    };
   }
-  return s;
+  if (msg.templateButtonReplyMessage?.selectedId) {
+    return {
+      bid: String(msg.templateButtonReplyMessage.selectedId),
+      stanzaId: msg.templateButtonReplyMessage.contextInfo?.stanzaId,
+    };
+  }
+  const nfr = msg.interactiveResponseMessage?.nativeFlowResponseMessage;
+  if (nfr?.paramsJson) {
+    try {
+      const parsed = JSON.parse(nfr.paramsJson);
+      if (parsed?.id) {
+        return {
+          bid: String(parsed.id),
+          stanzaId: msg.interactiveResponseMessage?.contextInfo?.stanzaId,
+        };
+      }
+    } catch {}
+  }
+  return null;
 }
 
 async function procesarRespuesta(sock, m) {
   const pending = getPendingMap(sock);
   if (pending.size === 0) return;
 
-  const brm = m.message?.buttonsResponseMessage;
-  const bid = brm?.selectedButtonId;
-  if (!bid || !String(bid).startsWith(BTN_PREFIX)) return;
-  const stanzaId = brm.contextInfo?.stanzaId;
-  if (!stanzaId) return;
-  const job = pending.get(stanzaId);
+  const info = extraerBotonMine(m);
+  if (!info?.bid || !info.bid.startsWith(BTN_PREFIX)) return;
+
+  let job = info.stanzaId ? pending.get(info.stanzaId) : null;
+  if (!job) {
+    for (const [k, candidate] of pending) {
+      if (candidate.token && info.bid.endsWith(`_${candidate.token}`)) {
+        job = candidate;
+        info.stanzaId = k;
+        break;
+      }
+    }
+  }
   if (!job) return;
-  if (jidBase(m.key.remoteJid) !== jidBase(job.chatId)) return;
-  // Solo el usuario que minó puede responder (compara números base)
-  const quienResponde = jidBase(m.key.participant || m.key.remoteJid);
-  const dueno = jidBase(job.userId);
-  if (m.key.remoteJid.endsWith('@g.us') && quienResponde !== dueno) {
+  if (!mismaPersona(m.key.remoteJid, job.chatId)) return;
+  const quienResponde = m.key.participant || m.key.remoteJid;
+  if (m.key.remoteJid.endsWith('@g.us') && !mismaPersona(quienResponde, job.userId)) {
     return sock.sendMessage(job.chatId, { text: '✖ Este evento no es tuyo.' }, { quoted: m }).catch(() => {});
   }
-  pending.delete(stanzaId);
-  const eligeSi = String(bid).startsWith(BTN_PREFIX + 'si_');
+  pending.delete(info.stanzaId);
+  const eligeSi = info.bid.startsWith(BTN_PREFIX + 'si_');
   await resolverEvento(sock, job, eligeSi, m);
 }
 
@@ -226,14 +250,14 @@ export default {
   category: 'economy',
   description: 'Realizar trabajos de minería y ganar coins.',
   run: async ({ msg, sock, usedPrefix }) => {
-    const { blocked, message: avisoEconomia, chat } = economyGate(msg.chat, usedPrefix);
+    const { blocked, message: avisoEconomia } = economyGate(msg.chat, usedPrefix);
     if (blocked) return msg.reply(avisoEconomia);
-    const botId = sock?.user?.id.split(':')[0] + '@s.whatsapp.net';
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId);
     const monedas = botSettings?.currency || 'Coins';
     db.setCreate('chat_users', [msg.chat, msg.sender], 'tools', {});
     db.setCreate('chat_users', [msg.chat, msg.sender], 'lastmine', 0);
-    let user = db.getChatUser(msg.chat, msg.sender);
+    const user = db.getChatUser(msg.chat, msg.sender);
     if (user.tools && typeof user.tools === 'string') {
       try { user.tools = JSON.parse(user.tools); } catch { user.tools = {}; }
     }
@@ -316,24 +340,23 @@ export default {
     // ── Evento aleatorio con botones ──
     registrarListener(sock);
     const evento = pickRandom(eventos);
-    const botones = [
-      { buttonId: `${BTN_PREFIX}si_${evento.id}`, buttonText: { displayText: evento.txtSi }, type: 1 },
-      { buttonId: `${BTN_PREFIX}no_${evento.id}`, buttonText: { displayText: evento.txtNo }, type: 1 },
-    ];
-
+    const token = Math.random().toString(36).slice(2, 8);
     const textoEvento = `\n\n📦 *${evento.titulo}*\n${evento.descripcion}`;
 
-    const payload = {
-      text: caption + textoEvento,
-      footerText: '❦ Toca un botón para decidir',
-      buttons: botones,
-      headerType: 1,
-    };
+    const res = await sendNativeQuickReply({
+      sock,
+      jid: msg.chat,
+      title: '⛏️ Evento en la mina',
+      body: caption + textoEvento,
+      footer: '❦ Toca un botón para decidir',
+      buttons: [
+        { text: evento.txtSi, id: `${BTN_PREFIX}si_${evento.id}_${token}` },
+        { text: evento.txtNo, id: `${BTN_PREFIX}no_${evento.id}_${token}` },
+      ],
+      quoted: msg.full || msg,
+    });
 
-    let card;
-    try {
-      card = await sock.sendMessage(msg.chat, payload, { quoted: msg });
-    } catch {
+    if (!res?.sent || !res?.key?.id) {
       await sock.sendMessage(msg.chat, {
         text: caption + textoEvento + '\n\n_(No se pudieron mostrar botones, eliges aleatoriamente...)_'
       }, { quoted: msg });
@@ -341,15 +364,14 @@ export default {
       return;
     }
 
-    if (card?.key?.id) {
-      getPendingMap(sock).set(card.key.id, {
-        ts: Date.now(),
-        userId: msg.sender,
-        evento,
-        user,
-        monedas,
-        chatId: msg.chat,
-      });
-    }
+    getPendingMap(sock).set(res.key.id, {
+      ts: Date.now(),
+      token,
+      userId: msg.sender,
+      evento,
+      user,
+      monedas,
+      chatId: msg.chat,
+    });
   },
 };

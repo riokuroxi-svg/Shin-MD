@@ -5,11 +5,12 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
 import { pickRandom } from "#lib/random";
-import fs from 'node:fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
+
 export default {
   command: ['robwaifu', 'robarwaifu'],
   category: 'gacha',
@@ -18,19 +19,19 @@ export default {
     try {
       const botId = botJid(sock);
       const settings = db.getSettings(botId);
-      const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
+      const isOficialBot = !!(botId && global.sock?.user?.id && mismaPersona(botId, botJid(global.sock)));
       const isPremiumBot = settings?.botprem === 1;
       const isModBot = settings?.botmod === 1;
       if (!isOficialBot && !isPremiumBot && !isModBot) {
         return sock.reply(msg.chat, `《✧》El comando *${command}* no está disponible en *Sub-Bots.*`, msg);
       }
       const chat = db.getChat(msg.chat);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       db.setCreate('chat_users', [msg.chat, msg.sender], 'lastrobwaifu', 0);
       db.setCreate('chat_users', [msg.chat, msg.sender], 'robVictims', {});
-      let userData = db.getChatUser(msg.chat, msg.sender);
+      const userData = db.getChatUser(msg.chat, msg.sender);
       if (userData.robVictims && typeof userData.robVictims === 'string') {
         try { userData.robVictims = JSON.parse(userData.robVictims); } catch { userData.robVictims = {}; }
       }
@@ -50,25 +51,26 @@ export default {
       }
       const target = msg.mentionedJid?.[0] || msg.quoted?.sender || null;
       if (!target) return msg.reply(`❀ Por favor, cita o menciona al usuario a quien quieras robarle una waifu.`);
-      if (target === msg.sender) {
+      if (mismaPersona(target, msg.sender)) {
         const robberName = (db.getUser(msg.sender))?.name?.trim() || msg.sender.split('@')[0];
         return msg.reply(`ꕥ No puedes robarte a ti mismo, *${robberName}*.`);
       }
       const targetUser = db.getChatUser(msg.chat, target);
       const lastCmd = targetUser?.lastCmd || 0;
-      const tiempoInactivo = now - lastCmd;
+      const tiempoInactivo = Math.max(0, now - lastCmd);
       if (tiempoInactivo < 3600000) {
         const targetName = (db.getUser(target))?.name?.trim() || target.split('@')[0];
         return msg.reply(`ꕥ *${targetName}* estuvo activo recientemente. Solo puedes robarle waifus si ha estado inactivo más de 1 hora.`);
       }
       db.setCreate('chat_users', [msg.chat, target], 'favorite', '');
-      let victim = db.getChatUser(msg.chat, target);
+      const victim = db.getChatUser(msg.chat, target);
       if (!Array.isArray(victim.characters) || victim.characters.length === 0) {
         const targetName = (db.getUser(target))?.name?.trim() || target.split('@')[0];
         return msg.reply(`ꕥ *${targetName}* no tiene waifus que puedas robar.`);
       }
       if (!userData.robVictims) userData.robVictims = {};
-      const last = userData.robVictims[target];
+      const lastKey = Object.keys(userData.robVictims).find(k => mismaPersona(k, target));
+      const last = lastKey ? userData.robVictims[lastKey] : 0;
       if (last && now - last < 24 * 60 * 60 * 1000) {
         const targetName = (db.getUser(target))?.name?.trim() || target.split('@')[0];
         return msg.reply(`ꕥ Ya robaste a *${targetName}* hoy. Solo puedes robarle a alguien una vez cada 24 horas.`);
@@ -103,6 +105,7 @@ export default {
       db.setCharacter(charKey, characterData);
       victim.characters = victim.characters.filter(id => id !== stolenId);
       db.setChatUser(msg.chat, target, 'characters', victim.characters);
+      if (!Array.isArray(userData.characters)) userData.characters = [];
       if (!userData.characters.includes(stolenId)) {
         userData.characters.push(stolenId);
         db.setChatUser(msg.chat, msg.sender, 'characters', userData.characters);

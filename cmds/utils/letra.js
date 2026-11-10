@@ -12,7 +12,7 @@ export default {
   command: ['letra', 'lyrics', 'lyric'],
   category: 'utils',
   description: 'Buscar la letra de una canción.',
-  run: async ({ msg, usedPrefix, command, text }) => {
+  run: async ({ msg, usedPrefix, text }) => {
     if (!text) {
       return msg.reply(
         `《✧》 Escribe el *artista* y *canción*.\n`
@@ -26,15 +26,10 @@ export default {
       artista = partes[0];
       cancion = partes.slice(1).join('/');
     } else {
-      // Si el usuario pasa "Bad Bunny Diles" intentamos partir en 2 (primera palabra = artista es arriesgado;
-      // intentamos lo más simple: artista es la primera palabra hasta el espacio y canción el resto, pero para casos
-      // de artistas con 2+ nombres no funciona; por eso preferimos /)
-      // Probamos primero si es "artista cancion" separando por el primer espacio; si no, avisamos que use /.
       const parts = text.trim().split(/\s+/);
       if (parts.length < 2) {
         return msg.reply(`《✧》 Usa el formato *artista/canción*.\n> Ej: ${usedPrefix}letra Bad Bunny/Diles`);
       }
-      // Heurística: artista = primera palabra, canción = resto (pobre, pero lyrics.ovh suele encontrar)
       artista = parts[0];
       cancion = parts.slice(1).join(' ');
     }
@@ -44,7 +39,7 @@ export default {
     try {
       await msg.react('🎵');
       const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(artista)}/${encodeURIComponent(cancion)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.lyrics) {
         await msg.react('❌');

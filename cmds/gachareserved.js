@@ -15,11 +15,15 @@ const limpiarRolls = async () => {
     for (const chat of allChats) {
       if (!chat.rolls) continue;
       let rolls = chat.rolls;
+      if (typeof rolls === 'string') {
+        try { rolls = JSON.parse(rolls); } catch { continue; }
+      }
+      if (!rolls || typeof rolls !== 'object') continue;
       let cambios = false;
       for (const msgId of Object.keys(rolls)) {
         const roll = rolls[msgId];
-        const expirado = roll.expiresAt && now > roll.expiresAt;
-        const reclamado = roll.claimed === true;
+        const expirado = roll?.expiresAt && now > roll.expiresAt;
+        const reclamado = roll?.claimed === true;
         if (expirado || reclamado) {
           delete rolls[msgId];
           cambios = true;
@@ -29,11 +33,11 @@ const limpiarRolls = async () => {
         db.setChat(chat.id, 'rolls', rolls);
       }
     }
-  } catch (e) {
+  } catch {
     log.info(chalk.gray('Error limpiando rolls'));
   }
 };
 
-// .unref(): no debe impedir la salida limpia del proceso (tests/shutdown)
+// .unref(): no debe impedir la salida limpia del proceso ni mutar DB al importar
 setInterval(limpiarRolls, 1800000).unref?.();
-limpiarRolls();
+setTimeout(limpiarRolls, 10000).unref?.();

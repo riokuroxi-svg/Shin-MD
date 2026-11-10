@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
+
 export default {
   command: ['favtop', 'favoritetop', 'favboard'],
   category: 'gacha',
   description: 'Ver el top de personajes favoritos.',
-  run: async ({ msg, sock, args, usedPrefix, command }) => {
+  run: async ({ msg, sock, args, usedPrefix }) => {
     const chat = db.getChat(msg.chat);
-    if (chat.adminonly || !chat.gacha) {
+    if (chat?.adminonly || !chat?.gacha) {
       return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
     }
     try {
@@ -33,7 +33,7 @@ export default {
         enriched.push({ name, favorites: counts[c.id] || 0 });
       }
       const filtered = enriched.filter(e => e.favorites > 0);
-      const page = parseInt(args[0]) || 1;
+      const page = parseInt(args[0], 10) || 1;
       const perPage = 10;
       const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
       if (page < 1 || page > totalPages) {
@@ -47,7 +47,7 @@ export default {
         replyText += `   ♡ ${char.favorites} favorito${char.favorites !== 1 ? 's' : ''}.\n`;
       });
       replyText += `\n> Página ${page} de ${totalPages}`;
-      await sock.reply(msg.chat, msg.trim(), msg);
+      await sock.reply(msg.chat, replyText.trim(), msg);
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

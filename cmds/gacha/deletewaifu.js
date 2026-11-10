@@ -4,27 +4,31 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { promises as fs } from 'fs';
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
+
 export default {
   command: ['delchar', 'deletewaifu', 'delwaifu'],
   category: 'gacha',
   description: 'Eliminar un personaje reclamado.',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
     try {
       const chat = db.getChat(msg.chat);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       db.setCreate('chat_users', [msg.chat, msg.sender], 'favorite', '');
-      let user = db.getChatUser(msg.chat, msg.sender);
+      const user = db.getChatUser(msg.chat, msg.sender) || {};
+      if (typeof user.characters === 'string') {
+        try { user.characters = JSON.parse(user.characters); } catch { user.characters = []; }
+      }
       if (!Array.isArray(user.characters) || !user.characters.length) {
         return msg.reply(`❀ No tienes personajes reclamados en tu harem.`);
       }
       if (!args.length) {
-        return msg.reply(`❀ Debes especificar un personaje para eliminar.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
+        return msg.reply(`❀ Debes especificar un personaje para eliminar.\n> Ejemplo » *${usedPrefix + command} Rem*`);
       }
       const inputName = args.join(' ').toLowerCase().trim();
       const structure = await loadCharacters();
@@ -37,8 +41,8 @@ export default {
         return msg.reply(`ꕥ *${character.name}* no está reclamado por ti.`);
       }
       const charKey = msg.chat + '__' + character.id;
-      let characterData = db.getCharacter(charKey);
-      if (characterData && characterData.user === msg.sender) {
+      const characterData = db.getCharacter(charKey);
+      if (characterData && mismaPersona(characterData.user, msg.sender)) {
         delete characterData.user;
         delete characterData.claimedAt;
         db.setCharacter(charKey, characterData);

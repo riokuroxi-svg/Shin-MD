@@ -228,7 +228,8 @@ const gdb = {
   },
 
   getChatUser(chatId, userId) {
-    if (!chatId || !userId) return null;
+    if (!chatId) return null;
+    if (!userId) return this.getChatUsers(chatId);
     const uid = claveUsuario(userId);
     const key = ck("cu", chatId + ":" + uid);
     const ca = gC(key);
@@ -304,6 +305,7 @@ const gdb = {
     const m = methods[tableKey];
     if (!m) return value;
     const key = tableKey === "g_chat_users" ? identifier : singleId;
+    if (tableKey === "g_chat_users" && (!Array.isArray(key) || !key[0] || !key[1])) return value;
     const current = m.get(key);
     if (!current || current[field] === undefined || current[field] === null) {
       m.set(key, field, value);
@@ -423,6 +425,59 @@ const gdb = {
   // (LID -> teléfono) hay que vaciarla o se seguiría sirviendo la copia
   // vieja. La llama #storage/identities al terminar una fusión.
   limpiarCache() { mem.clear(); },
+
+  /**
+   * @param {{ chatId?: string, senderId?: string, botId?: string, pushName?: string, isGroup?: boolean, isCommand?: boolean, now?: number }} [opts]
+   */
+  recordActivity({ chatId = "", senderId = "", botId = "", pushName = "", isGroup = false, isCommand = false, now = Date.now() } = {}) {
+    if (!senderId) return;
+    try {
+      const uid = claveUsuario(senderId);
+      const u = this.getUser(uid);
+      const cleanName = typeof pushName === "string" ? pushName.trim() : "";
+      const nextExp = (u?.exp || 0) + (isCommand ? 15 : 8);
+      const nextCmds = (u?.usedcommands || 0) + (isCommand ? 1 : 0);
+      dC(ck("u", uid));
+      if (cleanName && cleanName !== u?.name) {
+        r("UPDATE g_users SET name = ?, exp = ?, usedcommands = ? WHERE id = ?", cleanName, nextExp, nextCmds, uid);
+      } else {
+        r("UPDATE g_users SET exp = ?, usedcommands = ? WHERE id = ?", nextExp, nextCmds, uid);
+      }
+
+      if (isGroup && chatId) {
+        const cu = this.getChatUser(chatId, uid);
+        const today = new Date(now).toISOString().slice(0, 10);
+        const stats = cu?.stats && typeof cu.stats === "object" && !Array.isArray(cu.stats) ? { ...cu.stats } : {};
+        const day = stats[today] || { msgs: 0, cmds: 0 };
+        day.msgs = (day.msgs || 0) + 1;
+        if (isCommand) day.cmds = (day.cmds || 0) + 1;
+        stats[today] = day;
+        const keys = Object.keys(stats).sort();
+        if (keys.length > 35) {
+          for (const old of keys.slice(0, keys.length - 35)) delete stats[old];
+        }
+        dC(ck("cu", chatId + ":" + uid));
+        if (isCommand) {
+          r(
+            "UPDATE g_chat_users SET stats = ?, lastCmd = ?, usedTime = ? WHERE chat_id = ? AND user_id = ?",
+            JSON.stringify(stats),
+            now,
+            String(now),
+            chatId,
+            uid
+          );
+        } else {
+          r("UPDATE g_chat_users SET stats = ? WHERE chat_id = ? AND user_id = ?", JSON.stringify(stats), chatId, uid);
+        }
+      }
+
+      if (isCommand && botId) {
+        const st = this.getSettings(botId);
+        dC(ck("s", botId));
+        r("UPDATE g_settings SET commandsejecut = ? WHERE id = ?", (st?.commandsejecut || 0) + 1, botId);
+      }
+    } catch {}
+  },
 };
 
 export default gdb;

@@ -10,8 +10,10 @@ export default {
   command: ['todos', 'tagall', 'mencionar'],
   category: 'group',
   description: 'Enviar un mensaje mencionando a todos los usuarios del grupo.',
+  groupOnly: true,
   isAdmin: true,
-  run: async ({ msg, sock, args, groupMetadata, participants }) => {
+  run: async ({ msg, sock, args, participants }) => {
+    const lista = participants || [];
     const prefixArg = args.find(a => /^\+\d{1,4}$/.test(a));
     const reasonArgs = args.filter(a => a !== prefixArg);
     const pesan = reasonArgs.join(' ');
@@ -19,7 +21,7 @@ export default {
       const digits = prefixArg.replace('+', '');
       let pais = 'país desconocido';
       for (let l = Math.min(digits.length, 4); l >= 1; l--) { if (PAISES[digits.slice(0, l)]) { pais = PAISES[digits.slice(0, l)]; break; } }
-      const memberJids = participants.map(p => p.id).filter(jid => jid && jid.split('@')[0].startsWith(digits));
+      const memberJids = lista.map(p => p.id).filter(jid => jid && jid.split('@')[0].startsWith(digits));
       if (!memberJids.length) return msg.reply(`《✧》 No hay miembros con el prefijo *+${digits}* (${pais}) en este grupo.`);
       let teks = `﹒⌗﹒🌱 .ৎ˚₊‧  ${pesan || 'Revivan 🪴'}\n\n𐚁 ֹ ִ \`GROUP TAG\` ! ୧ ֹ ִ🍃\n\n🍄 \`Miembros :\` ${memberJids.length}\n🌍 \`País :\` ${pais}\n🌿 \`Solicitado por :\` @${msg.sender.split('@')[0]}\n\n` +
         `╭┄ ꒰ \`Lista de usuarios:ׄ\` ꒱ ┄\n`;
@@ -27,8 +29,8 @@ export default {
       teks += `╰⸼ ┄ ┄ ꒰ \`@latest\` ꒱ ┄ ┄⸼`;
       return sock.reply(msg.chat, teks, msg, { mentions: [msg.sender, ...memberJids] });
     }
-    const memberJids = participants.map(p => p.id).filter(Boolean);
-    let teks = `﹒⌗﹒🌱 .ৎ˚₊‧  ${pesan || 'Revivan 🪴'}\n\n𐚁 ֹ ִ \`GROUP TAG\` ! ୧ ֹ ִ🍃\n\n🍄 \`Miembros :\` ${participants.length}\n🌿 \`Solicitado por :\` @${msg.sender.split('@')[0]}\n\n` +
+    const memberJids = lista.map(p => p.id).filter(Boolean);
+    let teks = `﹒⌗﹒🌱 .ৎ˚₊‧  ${pesan || 'Revivan 🪴'}\n\n𐚁 ֹ ִ \`GROUP TAG\` ! ୧ ֹ ִ🍃\n\n🍄 \`Miembros :\` ${lista.length}\n🌿 \`Solicitado por :\` @${msg.sender.split('@')[0]}\n\n` +
       `╭┄ ꒰ \`Lista de usuarios:ׄ\` ꒱ ┄\n`;
     for (const jid of memberJids) teks += `┊ꕥ @${jid.split('@')[0]}\n`;
     teks += `╰⸼ ┄ ┄ ꒰ \`@latest\` ꒱ ┄ ┄⸼`;
