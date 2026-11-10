@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import log from "#logger";
 /**
  * .carbon  (citando un mensaje con código o con texto) → imagen bonita de código (estilo carbon.now.sh).
  * Usa carbonara.solopov.dev, API gratuita sin key.
@@ -26,7 +25,7 @@ export default {
   command: ['carbon', 'codigoimg', 'codeimg'],
   category: 'utils',
   description: 'Convertir código en una imagen bonita (carbon).',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, args, usedPrefix, text }) => {
     const temaRaw = args[0]?.toLowerCase();
     const color = TEMAS[temaRaw] || null;
     const codigo = color
@@ -47,6 +46,7 @@ export default {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(20000),
       }));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
@@ -56,13 +56,13 @@ export default {
         caption: `🎨 *Carbon*${color ? ` · tema ${temaRaw}` : ''}`,
       }, { quoted: msg });
       if (statusMsg?.key) {
-        try { await sock.sendMessage(msg.chat, { text: '', edit: statusMsg.key, delete: true }); } catch (_) {}
+        try { await sock.sendMessage(msg.chat, { text: '', edit: statusMsg.key, delete: true }); } catch {}
       }
       await msg.react('✔️');
     } catch (e) {
       await msg.react('❌');
       if (statusMsg?.key) {
-        try { await sock.sendMessage(msg.chat, { text: `《✧》 No pude generar la imagen.\n> ${e.message}`, edit: statusMsg.key }); return; } catch (_) {}
+        try { await sock.sendMessage(msg.chat, { text: `《✧》 No pude generar la imagen.\n> ${e.message}`, edit: statusMsg.key }); return; } catch {}
       }
       await msg.reply(`《✧》 No pude generar la imagen.\n> ${e.message}`);
     }

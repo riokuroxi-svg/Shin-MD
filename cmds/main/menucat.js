@@ -6,19 +6,8 @@
  */
 // ═══════════════════════════════════════════════════════════════════
 //  menucat.js — Menú de categoría con eventMessage nativo + interactivo
-//
-//  Envía DOS mensajes apilados:
-//    1. eventMessage nativo (etiqueta 🏷️ con saludo, fecha, crédito)
-//    2. Tarjeta interactiva con imagen, lista de comandos, botones
-//
-//  El eventMessage usa la primitiva proto.Message.EventMessage de
-//  Baileys, igual que el comando .evento — se renderiza como la
-//  tarjeta nativa de evento de WhatsApp con su ícono 🏷️.
 // ═══════════════════════════════════════════════════════════════════
 
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   getCommandBadges,
   CATEGORY_EMOJIS,
@@ -31,77 +20,14 @@ import {
   singleSelect,
 } from "../../src/commands/interactive.js";
 import { getChannelContext } from "../../src/lib/contextBuilder.js";
+import {
+  CAT_LABELS,
+  CAT_ICONS,
+  collectCategories,
+  getRandomMenuImage,
+} from "#lib/menu-shared";
 import log from "#logger";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const CAT_LABELS = {
-  info: "INFORMACIÓN",
-  main: "PRINCIPAL",
-  utils: "UTILIDADES",
-  utility: "HERRAMIENTAS",
-  downloads: "DESCARGAS",
-  anime: "ANIME",
-  stickers: "STICKERS",
-  economy: "ECONOMÍA",
-  games: "JUEGOS",
-  fun: "DIVERSIÓN",
-  gacha: "GACHA & RPG",
-  group: "GRUPOS & ADMIN",
-  profile: "PERFIL",
-  socket: "SOCKETS & BOTS",
-  nsfw: "NSFW +18",
-  owner: "CREADOR / OWNER",
-  otros: "OTROS",
-};
-
-const CAT_ICONS = {
-  info: "ℹ️",
-  main: "⭐",
-  utils: "🔧",
-  utility: "🛠️",
-  downloads: "📥",
-  anime: "🎌",
-  stickers: "🎨",
-  economy: "💰",
-  games: "🎮",
-  fun: "🎉",
-  gacha: "🎰",
-  group: "👥",
-  profile: "👤",
-  socket: "🔌",
-  nsfw: "🔞",
-  owner: "👑",
-  otros: "📁",
-};
-
-// ── Helpers ────────────────────────────────────────────────────────
-
-/**
- * Busca imágenes en el pool local. Devuelve un Buffer aleatorio o null.
- */
-function getRandomMenuImage() {
-  const pools = [
-    path.resolve(__dirname, "../../assets/menus"),
-    path.resolve(__dirname, "../../assets/image/shuffle"),
-    path.resolve(__dirname, "../../assets"),
-  ];
-  const candidates = [];
-  for (const dir of pools) {
-    try {
-      if (!fs.existsSync(dir)) continue;
-      const files = fs.readdirSync(dir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
-      for (const f of files) candidates.push(path.join(dir, f));
-    } catch {}
-  }
-  if (candidates.length === 0) return null;
-  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-  try { return fs.readFileSync(chosen); } catch { return null; }
-}
-
-/**
- * Construye la lista de comandos decorada.
- */
 function buildCommandList(commands, prefix) {
   const lines = [];
   for (const cmd of commands) {
@@ -113,17 +39,10 @@ function buildCommandList(commands, prefix) {
   return lines;
 }
 
-/**
- * Envía el eventMessage nativo (etiqueta 🏷️).
- * Usa generateWAMessageFromContent + relayMessage, igual que .evento.
- * Lleva la etiqueta verde del canal si hay canal configurado. El
- * "reenviado muchas veces" (forwardingScore alto) solo con RICH_EXTRA=1,
- * igual que en el resto del bot, porque es una señal de bot detectable.
- */
 async function sendEventHeader(sock, chatId, { name, description, startTime }) {
   try {
     const { generateWAMessageFromContent } = await import("baileys");
-    const endTime = startTime + 2 * 60 * 60; // +2 horas
+    const endTime = startTime + 2 * 60 * 60;
     const channelCtx = getChannelContext({ mentionedJid: [] });
 
     const contenido = {
@@ -137,7 +56,6 @@ async function sendEventHeader(sock, chatId, { name, description, startTime }) {
       },
     };
 
-    // Inyectar contextInfo con etiqueta verde al eventMessage
     if (channelCtx.forwardedNewsletterMessageInfo) {
       contenido.eventMessage.contextInfo = {
         isForwarded: true,
@@ -161,8 +79,6 @@ async function sendEventHeader(sock, chatId, { name, description, startTime }) {
   }
 }
 
-// ── Handler ────────────────────────────────────────────────────────
-
 export default {
   name: "menucat",
   aliases: ["mc", "category", "cat"],
@@ -175,42 +91,20 @@ export default {
   async handler(sock, ctx, engine, commands) {
     const prefix = ctx.usedPrefix || ".";
     const sub = (ctx.arg || "").toLowerCase().trim();
+    const { cats, pluginCount, caseCount, totalCommands } = collectCategories(commands, {
+      exclude: ["menu", "menucat"],
+    });
 
-    // ── Recopilar comandos por categoría ──
-    const cats = new Map();
-    const seenNames = new Set();
-    let pluginCount = 0;
-    let caseCount = 0;
-
-    for (const [, cmd] of commands || []) {
-      if (!cmd || seenNames.has(cmd.name) || cmd.name === "menu" || cmd.name === "menucat") continue;
-      seenNames.add(cmd.name);
-      const c = (cmd.category || "otros").toLowerCase();
-      if (!cats.has(c)) cats.set(c, []);
-      cats.get(c).push(cmd);
-      if (typeof cmd.handler === "function") pluginCount++;
-      else caseCount++;
-    }
-
-    const totalCommands = pluginCount + caseCount;
-
-    // ── Calcular timestamps para eventMessage ──
-    const now = new Date();
-    const expirationTime = Math.floor((now.getTime() + 24 * 60 * 60 * 1000) / 1000);
+    const expirationTime = Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000);
     const greeting = getTimeGreeting();
 
-    // ════════════════════════════════════════════════════════════════
-    //  SIN ARGUMENTO → Lista de categorías
-    // ════════════════════════════════════════════════════════════════
     if (!sub) {
-      // ── 1. Enviar eventMessage nativo (etiqueta 🏷️) ──
       await sendEventHeader(sock, ctx.chatId, {
         name: greeting,
         description: `反魂 ${totalCommands} comandos · Creado por riokuroxi-svg`,
         startTime: expirationTime,
       });
 
-      // ── 2. Enviar tarjeta interactiva con imagen + categorías ──
       const image = getRandomMenuImage();
       const categoryRows = [];
       const sortedCats = Array.from(cats.entries()).sort((a, b) => b[1].length - a[1].length);
@@ -255,9 +149,6 @@ export default {
       return null;
     }
 
-    // ════════════════════════════════════════════════════════════════
-    //  CON ARGUMENTO → Comandos de la categoría
-    // ════════════════════════════════════════════════════════════════
     const matchedCat = Object.keys(CAT_LABELS).find(
       c => c === sub || sub.startsWith(c) || c.startsWith(sub)
     ) || sub;
@@ -274,14 +165,12 @@ export default {
     const emoji = CAT_ICONS[matchedCat] || CATEGORY_EMOJIS[matchedCat] || "📁";
     const label = CAT_LABELS[matchedCat] || matchedCat.toUpperCase();
 
-    // ── 1. Enviar eventMessage nativo (etiqueta 🏷️) ──
     await sendEventHeader(sock, ctx.chatId, {
       name: `${greeting} · ${emoji} ${label}`,
       description: `反魂 ${list.length} comandos · Creado por riokuroxi-svg`,
       startTime: expirationTime,
     });
 
-    // ── 2. Enviar tarjeta interactiva con imagen + comandos ──
     const image = getRandomMenuImage();
     const cmdLines = buildCommandList(list, prefix);
 

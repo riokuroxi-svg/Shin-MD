@@ -123,7 +123,7 @@ export default {
       contextInfo: channelCtx,
     }, { quoted: ctx.full });
 
-    let key = waitMsg?.key;
+    const key = waitMsg?.key;
 
     try {
       // 1. Intentar APIs remotas rápidas

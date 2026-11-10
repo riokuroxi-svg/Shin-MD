@@ -5,23 +5,21 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import moment from 'moment-timezone';
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
-import defaultAvatar from "#lib/default-avatar";
 import { generateProfileCard } from '../../src/lib/cardGenerator.js';
 import { sendInteractive } from "#interactive";
 import { atajo } from "#lib/ui-kit";
 import { xpRange } from "#lib/xp";
 
-
 export default {
   command: ['profile', 'perfil'],
   category: 'profile',
   description: 'Ver tu perfil con tarjeta gráfica personalizada de estadísticas.',
-  run: async ({ msg, sock, usedPrefix, command }) => {
+  run: async ({ msg, sock, usedPrefix }) => {
     const userId = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     db.setCreate('chat_users', [msg.chat, userId], 'favorite', '');
-    let user = db.getChatUser(msg.chat, userId);
+    const user = db.getChatUser(msg.chat, userId);
     if (!user) {
       return msg.reply('✎ El usuario *mencionado* no está *registrado* en el bot');
     }
@@ -75,7 +73,7 @@ export default {
     const sortedLevel = users.sort((a, b) => (b.level || 0) - (a.level || 0));
 
     try {
-      const rankPos = sortedLevel.findIndex((u) => u.jid === userId) + 1;
+      const rankPos = sortedLevel.findIndex((u) => mismaPersona(u.jid, userId)) + 1;
       const { min, max, xp } = xpRange(nivel, global.multiplier);
       const progreso = Math.max(0, exp - min);
       const porcentaje = xp > 0 ? Math.min(100, Math.floor((progreso / xp) * 100)) : 0;

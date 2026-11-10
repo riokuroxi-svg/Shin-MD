@@ -6,7 +6,7 @@
  */
 import log from "#logger";
 // ============================================================
-//  ytdlp.js (v2.1 · turbo + AUTO-UPDATE) — Plugin para Ginko-MD-Lab
+//  ytdlp.js (v2.1 · turbo + AUTO-UPDATE) — Plugin para Shin-MD
 //  Descarga video/canciones con yt-dlp LOCAL
 //
 //  NOVEDADES v2.1 (cero mantenimiento):
@@ -145,11 +145,11 @@ export default {
           if (esVideo) {
             // Para video seguimos usando el método anterior, pero con archivo temporal para no corromper
             const os = await import('os');
-            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ginko-vid-'));
+            const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shin-vid-'));
             const outTemplate = path.join(tmpDir, 'video.%(ext)s');
             const maxBuf = MAX_MB_VIDEO * MB;
             try {
-              let argsVid = [...argsDesc, '-o', outTemplate, '--', url];
+              const argsVid = [...argsDesc, '-o', outTemplate, '--', url];
               try {
                 await exec(YTDLP, argsVid, { timeout: 12 * 60 * 1000, windowsHide: true, cwd: tmpDir });
               } catch (e) {

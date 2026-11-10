@@ -8,20 +8,15 @@ import log from "#logger";
 import fetch from "node-fetch";
 import db from '../../src/services/ginko-db.js';
 
-// nekos.life — sin API key, sin límites, devuelve JSON { url }
-const ENDPOINTS = {
-  waifu: 'https://nekos.life/api/v2/img/waifu',
-  neko: 'https://nekos.life/api/v2/img/neko',
-  // Fallbacks para NSFW (solo si el grupo tiene NSFW activado)
-  // nekos.life no tiene endpoint NSFW, así que en ese caso intentamos waifu.im con UA
-  nsfw_waifu: null
-};
-
 async function fetchJson(url, opts = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 15000);
   try {
-    const r = await fetch(url, { ...opts, signal: ctrl.signal, headers: { 'user-agent': 'Mozilla/5.0', 'accept': 'application/json', ...(opts.headers||{}) } });
+    const r = await fetch(url, {
+      ...opts,
+      signal: ctrl.signal,
+      headers: { 'user-agent': 'Mozilla/5.0', 'accept': 'application/json', ...(opts.headers || {}) },
+    });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return await r.json();
   } finally {
@@ -38,26 +33,34 @@ export default {
       await msg.react('🕒');
       const chat = db.getChat(msg.chat);
       const isNsfw = !!chat?.nsfw;
-      let endpoint;
-      if (command === 'neko') endpoint = ENDPOINTS.neko;
-      else if (isNsfw) endpoint = 'https://nekos.life/api/v2/img/lewd' + (command === 'neko' ? '_neko' : '');
-      else endpoint = ENDPOINTS.waifu;
+      const tipo = command === 'neko' ? 'neko' : 'waifu';
 
       let imgUrl = null;
 
-      // Intento 1: nekos.life
+      // Intento 1: waifu.pics (soporta SFW y NSFW)
       try {
-        const j = await fetchJson(endpoint);
+        const scope = isNsfw ? 'nsfw' : 'sfw';
+        const j = await fetchJson(`https://api.waifu.pics/${scope}/${tipo}`);
         imgUrl = j?.url;
       } catch (e) {
-        log.info('[waifu] nekos.life falló:', e.message);
+        log.info('[waifu] waifu.pics falló:', e.message);
       }
 
-      // Intento 2: nekos.best con UA correcto
-      if (!imgUrl) {
+      // Intento 2 (SFW): nekos.life
+      if (!imgUrl && !isNsfw) {
         try {
-          const j = await fetchJson(`https://nekos.best/api/v2/${command}`, {
-            headers: { 'user-agent': 'Ginko-MD/1.0 (discord:ginko)' }
+          const j = await fetchJson(`https://nekos.life/api/v2/img/${tipo}`);
+          imgUrl = j?.url;
+        } catch (e) {
+          log.info('[waifu] nekos.life falló:', e.message);
+        }
+      }
+
+      // Intento 3 (SFW): nekos.best
+      if (!imgUrl && !isNsfw) {
+        try {
+          const j = await fetchJson(`https://nekos.best/api/v2/${tipo}`, {
+            headers: { 'user-agent': 'Shin-MD/3.7' },
           });
           imgUrl = j?.results?.[0]?.url;
         } catch (e) {

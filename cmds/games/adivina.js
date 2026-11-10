@@ -10,11 +10,27 @@ import sharp from 'sharp';
 import { quickReply, sendInteractive } from '#interactive';
 
 const games = new Map();
+const GAME_TTL_MS = 10 * 60 * 1000;
+
+function setGame(userId, state) {
+  if (state.timer) clearTimeout(state.timer);
+  state.timer = setTimeout(() => {
+    if (games.get(userId) === state) games.delete(userId);
+  }, GAME_TTL_MS);
+  state.timer.unref?.();
+  games.set(userId, state);
+}
+
+function clearGame(userId) {
+  const s = games.get(userId);
+  if (s?.timer) clearTimeout(s.timer);
+  games.delete(userId);
+}
 
 async function renderGuess(clue, attempts, max) {
   const bars = Math.max(1, max - attempts);
   const color = bars > 5 ? '#44dd44' : bars > 2 ? '#ffdd44' : '#ff4444';
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="300">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="300">
     <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#1a1a2e"/><stop offset="100%" stop-color="#0f3460"/>
     </linearGradient></defs>
@@ -38,33 +54,34 @@ export default {
   usage: ".adivina",
   cooldown: 5,
 
-  async handler(sock, ctx, engine) {
+  async handler(sock, ctx) {
     const userId = ctx.senderId || ctx.sender;
     let state = games.get(userId);
 
     if (ctx.arg === 'stop' || ctx.arg === 'salir') {
-      if (state) games.delete(userId);
+      if (state) clearGame(userId);
       return '🚪 Juego terminado.';
     }
 
     if (!state) {
-      state = { target: Math.floor(Math.random() * 100) + 1, attempts: 0, max: 7 };
-      games.set(userId, state);
+      state = { target: Math.floor(Math.random() * 100) + 1, attempts: 0, max: 7, lastGuess: 50, timer: null };
+      setGame(userId, state);
       return showClue(sock, ctx, state, '🎯 Piensa en un número del 1 al 100');
     }
 
-    const guess = parseInt(ctx.arg);
+    const guess = parseInt(ctx.arg, 10);
     if (isNaN(guess) || guess < 1 || guess > 100) {
       return 'Ingresa un número del 1 al 100, o "stop" para salir.';
     }
 
     state.attempts++;
+    state.lastGuess = guess;
     let clue;
     if (guess === state.target) {
-      games.delete(userId);
+      clearGame(userId);
       return `🎯 *CORRECTO!* El número era *${state.target}*\n\n🏆 Lo adivinaste en *${state.attempts}* intentos!\n${state.attempts === 1 ? '🤯 ¡INCREÍBLE!' : state.attempts <= 3 ? '🌟 Excelente!' : state.attempts <= 5 ? '👍 Bien hecho!' : '🤔 Lo lograste!'}`;
     } else if (state.attempts >= state.max) {
-      games.delete(userId);
+      clearGame(userId);
       return `😞 *Se acabaron los intentos!*\n\nEl número era *${state.target}*\n\nIntenta de nuevo con .adivina`;
     } else if (guess < state.target) {
       clue = `⬆️ El número es MAYOR que ${guess}`;
@@ -72,18 +89,18 @@ export default {
       clue = `⬇️ El número es MENOR que ${guess}`;
     }
 
-    games.set(userId, state);
+    setGame(userId, state);
     return showClue(sock, ctx, state, clue);
   }
 };
 
 async function showClue(sock, ctx, state, clue) {
   const img = await renderGuess(clue, state.attempts, state.max);
+  const base = state.lastGuess ?? 50;
 
-  // Botones rápidos: sugerencias
   const buttons = [
-    quickReply('⬆️ +10', `adivina:${Math.min(100, (state.target + 10))}`),
-    quickReply('⬇️ -10', `adivina:${Math.max(1, (state.target - 10))}`),
+    quickReply('⬆️ +10', `adivina:${Math.min(100, base + 10)}`),
+    quickReply('⬇️ -10', `adivina:${Math.max(1, base - 10)}`),
     quickReply('🎲 Aleatorio', `adivina:${Math.floor(Math.random() * 100) + 1}`),
     quickReply('❌ Salir', 'adivina:stop'),
   ];
@@ -94,6 +111,7 @@ async function showClue(sock, ctx, state, clue) {
     footer: `🎯 Intento ${state.attempts + 1}/${state.max}`,
     buttons,
     quoted: ctx.full,
+    fallbackText: `${clue}\n🎯 Intento ${state.attempts + 1}/${state.max}`,
   });
   return null;
 }

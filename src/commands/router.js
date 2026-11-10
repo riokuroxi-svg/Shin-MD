@@ -6,18 +6,19 @@
  */
 // ═══════════════════════════════════════════════════════════════════
 //  router.js — Router de comandos
-//  Pipeline: mensaje → middlewares before → serializar →
-//            detectar prefijo/comando → cooldown → permisos → handler
+//  Pipeline: mensaje → serializar → hooks before → prefijo/permisos →
+//            cooldown → handler
 //  Todo envío pasa por la cola anti-ban del engine.
 // ═══════════════════════════════════════════════════════════════════
 
 import log from "#logger";
 import { loadCommands, reloadCommand } from "#commands";
-import { serializeMessage } from "#serialize";
+import { botJid, isAdmin, serializeMessage } from "#serialize";
 import { buildCommandContext } from "./context.js";
 import createCooldown from "#cooldown";
 import checkPermissions from "#permissions";
 import { parseButtonResponse } from "#interactive";
+import { mismaPersona } from "#lib/lid";
 import db from "../services/ginko-db.js";
 
 export const BOT_PREFIXES = process.env.BOT_PREFIX
@@ -26,20 +27,20 @@ export const BOT_PREFIXES = process.env.BOT_PREFIX
 
 export const BOT_PREFIX = BOT_PREFIXES[0] || ".";
 
-let selfMode = { value: false, ts: 0 };
+  const selfModeRef = { value: false, ts: 0 };
 function isSelfMode(sock) {
   const now = Date.now();
-  if (now - selfMode.ts < 30000) return selfMode.value;
-  selfMode.ts = now;
+  if (now - selfModeRef.ts < 30000) return selfModeRef.value;
+  selfModeRef.ts = now;
   try {
-    const botJid = sock?.user?.id;
-    if (!botJid) { selfMode.value = false; return false; }
-    const settings = db.getSettings(botJid) || {};
-    selfMode.value = !!settings.self;
+    const botId = botJid(sock);
+    if (!botId) { selfModeRef.value = false; return false; }
+    const settings = db.getSettings(botId) || {};
+    selfModeRef.value = !!settings.self;
   } catch {
-    selfMode.value = false;
+    selfModeRef.value = false;
   }
-  return selfMode.value;
+  return selfModeRef.value;
 }
 
 export function createRouter(engine, opts) {
@@ -55,7 +56,7 @@ export function createRouter(engine, opts) {
   function countUnique() {
     if (!commands) return 0;
     const seen = new Set();
-    for (const [name, cmd] of commands) seen.add(cmd.name);
+    for (const [, cmd] of commands) seen.add(cmd.name);
     return seen.size;
   }
 
@@ -87,9 +88,11 @@ export function createRouter(engine, opts) {
    */
   async function runBefores(sock, ctx) {
     if (!commands?.befores?.length) return;
-    // Un solo constructor de contexto para hooks y comandos (context.js).
     const { msg, groupMetadata, participants, isAdmins, isBotAdmins, isOwner } =
-      await buildCommandContext(sock, ctx, engine, { commandName: ctx.commandName });
+      await buildCommandContext(sock, ctx, engine, {
+        commandName: ctx.commandName,
+        isCommands: !!ctx.isCommands,
+      });
 
     for (const hook of commands.befores) {
       try {
@@ -108,13 +111,15 @@ export function createRouter(engine, opts) {
       // Respuesta de botón (clic en un botón interactivo)
       const btnId = parseButtonResponse(msg);
       if (btnId) {
-        const [btnCmd, ...btnArgs] = btnId.split(":");
-        const btnArg = btnArgs.join(" ");
-        const virtualMsg = {
-          ...msg,
-          message: { conversation: BOT_PREFIX + btnCmd + (btnArg ? " " + btnArg : "") },
-        };
-        return handle(sock, virtualMsg);
+        const m = String(btnId).trim().match(/^([^\s:]+)(?:[:\s]+([\s\S]*))?$/);
+        if (m) {
+          const [, btnCmd, btnArg = ""] = m;
+          const virtualMsg = {
+            ...msg,
+            message: { conversation: BOT_PREFIX + btnCmd + (btnArg ? " " + btnArg : "") },
+          };
+          return handle(sock, virtualMsg);
+        }
       }
 
       const ctx = serializeMessage(msg, sock);
@@ -131,24 +136,38 @@ export function createRouter(engine, opts) {
 
       ctx.usedPrefix = usedPrefix;
 
-      // Nombre tecleado por el usuario (normalizado). Se calcula aquí
-      // porque los hooks `before` reciben `msg.command`: antilink lo usa
-      // para no expulsar a quien invoca el comando de invitación.
-      const typed = ctx.text.slice(usedPrefix.length).trim().split(/\s+/)[0] || "";
+      const typed = usedPrefix
+        ? (ctx.text.slice(usedPrefix.length).trim().split(/\s+/)[0] || "")
+        : "";
       ctx.commandName = typed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-      // Log visual en terminal para todo mensaje recibido (estilo Ginko-MD)
+      const cmd = usedPrefix && ctx.commandName ? getCommand(ctx.commandName) : null;
+      ctx.isCommands = !!cmd;
+
       if (typeof opts.onMessage === "function") {
         try { opts.onMessage(ctx, usedPrefix); } catch {}
       }
 
-      // ── Ejecutar middlewares 'before' (anti-link, anti-status, afk...) ──
+      // Ejecutar middlewares 'before' (anti-link, anti-status, afk...)
       await runBefores(sock, ctx);
 
       // Si está en self mode (solo dueño), rechazar a cualquiera que no sea el owner
       const ownerJid = engine?.getOwnerJid?.();
       const isOwnerUser = ctx.isOwner ? ctx.isOwner(ownerJid) : false;
       if (isSelfMode(sock) && !isOwnerUser && !ctx.fromMe) return;
+
+      // Registrar actividad pasiva (nombre, XP, stats diarios del grupo)
+      const botId = botJid(sock);
+      if (!ctx.fromMe && !ctx.isBot && ctx.senderId && !usedPrefix) {
+        db.recordActivity({
+          chatId: ctx.chatId,
+          senderId: ctx.senderId,
+          botId,
+          pushName: ctx.pushName,
+          isGroup: ctx.isGroup,
+          isCommand: false,
+        });
+      }
 
       // Si no tiene prefijo, no procesar como comando
       if (!usedPrefix) return;
@@ -157,14 +176,26 @@ export function createRouter(engine, opts) {
       if (ctx.fromMe && !isSelfMode(sock) && !isOwnerUser) return;
 
       const raw = ctx.text.slice(usedPrefix.length).trim();
-      if (!raw) return;
+      if (!raw || !cmd) return;
 
-      const cmd = getCommand(ctx.commandName);
-      if (!cmd) return;
+      // Reglas de grupo (primaryBot, bot off / isBanned, adminonly)
+      if (ctx.isGroup) {
+        let chat = null;
+        try { chat = db.getChat(ctx.chatId); } catch {}
+        if (chat) {
+          if (chat.primaryBot && botId && !mismaPersona(chat.primaryBot, botId) && cmd.name !== "setprimary") {
+            return;
+          }
+          if (chat.isBanned && cmd.name !== "bot" && !isOwnerUser) {
+            return;
+          }
+          if (chat.adminonly && !isOwnerUser && !(await isAdmin(sock, ctx.chatId, ctx.senderId))) {
+            return;
+          }
+        }
+      }
 
-      // Doble palomita azul: el usuario ve que el bot leyó su comando.
-      // Solo en comandos reales (no en cada mensaje del grupo) para no
-      // mandar tráfico de más. Nunca frena ni rompe el comando.
+      // Doble palomita azul: solo en comandos reales que pasan los filtros
       if (!ctx.fromMe && process.env.READ_RECEIPTS !== "0" && typeof sock.readMessages === "function") {
         try { sock.readMessages([msg.key]).catch(() => {}); } catch {}
       }
@@ -177,6 +208,18 @@ export function createRouter(engine, opts) {
       if (denied) {
         await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
         return;
+      }
+
+      // Registrar ejecución del comando en DB (XP, stats, lastCmd, commandsejecut)
+      if (!ctx.fromMe && !ctx.isBot && ctx.senderId) {
+        db.recordActivity({
+          chatId: ctx.chatId,
+          senderId: ctx.senderId,
+          botId,
+          pushName: ctx.pushName,
+          isGroup: ctx.isGroup,
+          isCommand: true,
+        });
       }
 
       // Ejecutar
@@ -208,7 +251,9 @@ export function createRouter(engine, opts) {
     }
   }
 
-  return { init, handle, reload, getCommand, commandList, countUnique, PREFIX: BOT_PREFIX, PREFIXES: BOT_PREFIXES };
+  const router = { init, handle, reload, getCommand, commandList, countUnique, PREFIX: BOT_PREFIX, PREFIXES: BOT_PREFIXES };
+  globalThis.__shinRouter = router;
+  return router;
 }
 
 export default createRouter;

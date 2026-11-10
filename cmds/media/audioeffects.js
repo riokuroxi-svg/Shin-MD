@@ -60,6 +60,7 @@ export default {
     try {
       const audioBuffer = await q.download();
       if (!audioBuffer || audioBuffer.length === 0) {
+        await msg.react("❌");
         return msg.reply("❌ No se pudo descargar el audio para procesarlo.");
       }
 
@@ -68,12 +69,19 @@ export default {
       const args = ["-y", "-i", inputPath, ...filterArgs, "-b:a", "128k", outputPath];
 
       await new Promise((resolve, reject) => {
-        const proc = spawn(ffmpegBin, args);
+        const proc = spawn(ffmpegBin, args, { stdio: ["ignore", "ignore", "pipe"] });
+        let stderr = "";
+        const timer = setTimeout(() => {
+          try { proc.kill("SIGKILL"); } catch {}
+          reject(new Error("FFmpeg tardó demasiado (timeout)"));
+        }, 60_000);
+        proc.stderr?.on("data", (d) => { stderr += d.toString(); });
         proc.on("close", (code) => {
+          clearTimeout(timer);
           if (code === 0) resolve();
-          else reject(new Error(`FFmpeg finalizó con código de error ${code}`));
+          else reject(new Error(stderr.trim() || `FFmpeg finalizó con código de error ${code}`));
         });
-        proc.on("error", reject);
+        proc.on("error", (err) => { clearTimeout(timer); reject(err); });
       });
 
       const processedBuffer = await fs.promises.readFile(outputPath);
@@ -90,10 +98,11 @@ export default {
 
       await msg.react("✅");
     } catch (err) {
+      await msg.react("❌").catch(() => {});
       await msg.reply(`❌ Error al aplicar efecto de audio: ${err.message}`);
     } finally {
-      if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-      if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+      fs.rmSync(inputPath, { force: true });
+      fs.rmSync(outputPath, { force: true });
     }
   },
 };

@@ -13,7 +13,7 @@ export default {
   command: ['get', 'fetch'],
   category: 'utils',
   description: 'Realizar solicitudes GET a páginas web.',
-  run: async ({ msg, sock, args, usedPrefix, command }) => {
+  run: async ({ msg, sock, args }) => {
     const text = args[0];
     if (!text) return msg.reply('《✧》 Ingresa un enlace para realizar la solicitud.');
     if (!/^https?:\/\//.test(text)) {
@@ -23,16 +23,19 @@ export default {
       const _url = new URL(text);
       const params = new URLSearchParams(_url.searchParams);
       const url = `${_url.origin}${_url.pathname}${params.toString() ? '?' + params.toString() : ''}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
       const contentType = res.headers.get('content-type') || '';
-      const contentLength = parseInt(res.headers.get('content-length') || '0');
+      const contentLength = parseInt(res.headers.get('content-length') || '0', 10);
       if (contentLength > 100 * 1024 * 1024) {
         return msg.reply(`《✧》 El archivo es demasiado grande.\nContent-Length: ${contentLength} bytes`);
       }
-      if (/text|json/.test(contentType)) {
-        const buffer = await res.buffer();
-        const content = buffer.toString();
-        if (content.length > 500 && /html|css|javascript|json|xml|plain/.test(contentType)) {
+      const buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.length > 100 * 1024 * 1024) {
+        return msg.reply(`《✧》 El archivo es demasiado grande (${buffer.length} bytes).`);
+      }
+      if (/text|json|xml|javascript/i.test(contentType)) {
+        const content = buffer.toString('utf8');
+        if (content.length > 500 && /html|css|javascript|json|xml|plain/i.test(contentType)) {
           const ext = getExtension(contentType, url);
           await sock.sendCodeMessage(msg.chat, `code_${Date.now()}${ext}`, content, msg);
         } else {
@@ -44,7 +47,6 @@ export default {
           }
         }
       } else {
-        const buffer = await res.buffer();
         return sock.sendFile(msg.chat, buffer, 'file', text, msg);
       }
     } catch (e) {
@@ -57,6 +59,7 @@ export default {
 function getExtension(contentType, url) {
   const match = url.match(/\.(\w+)(?:\?|$)/);
   if (match) return `.${match[1]}`;
-  const map = { 'text/html': '.html', 'text/css': '.css', 'text/javascript': '.js', 'application/javascript': '.js', 'application/json': '.json', 'text/xml': '.xml', 'text/plain': '.txt' };
-  return map[contentType] || '.txt';
+  const mime = (contentType || '').split(';')[0].trim().toLowerCase();
+  const map = { 'text/html': '.html', 'text/css': '.css', 'text/javascript': '.js', 'application/javascript': '.js', 'application/json': '.json', 'text/xml': '.xml', 'application/xml': '.xml', 'text/plain': '.txt' };
+  return map[mime] || '.txt';
 }

@@ -5,13 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { flattenCharacters, getSeriesNameByCharacter, loadCharacters } from "#lib/gacha-shared";
-import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-
-
-
-
 
 function formatElapsed(ms) {
   if (!ms || ms <= 0) return '—';
@@ -34,14 +29,14 @@ export default {
   command: ['charinfo', 'winfo', 'waifuinfo'],
   category: 'gacha',
   description: 'Ver información de un personaje.',
-  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
     try {
       const chat = db.getChat(msg.chat);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       if (!args.length) {
-        return msg.reply(`❀ Por favor, proporciona el nombre de un personaje.\n> Ejemplo » *${usedPrefix + command} Ginko-MD*`);
+        return msg.reply(`❀ Por favor, proporciona el nombre de un personaje.\n> Ejemplo » *${usedPrefix + command} Rem*`);
       }
       const structure = await loadCharacters();
       const allCharacters = flattenCharacters(structure);
@@ -56,7 +51,7 @@ export default {
         characterData = { name: character.name, value: Number(character.value) || 100, votes: 0 };
         db.setCharacter(character.id, characterData);
       }
-      const allChatUsers = db.getChatUser(msg.chat);
+      const allChatUsers = db.getChatUsers(msg.chat);
       for (const u of allChatUsers) {
         if (u.characters && typeof u.characters === 'string') {
           try { u.characters = JSON.parse(u.characters); } catch { u.characters = []; }

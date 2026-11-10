@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { generateProfileCard } from '../../src/lib/cardGenerator.js';
 import { sendInteractive } from "#interactive";
 import { atajo } from "#lib/ui-kit";
 import { xpRange } from "#lib/xp";
 
-
 export default {
   command: ['level', 'lvl', 'nivel', 'xp'],
   category: 'profile',
   description: 'Ver tu nivel y experiencia actual con tarjeta gráfica.',
-  run: async ({ msg, sock, text, usedPrefix }) => {
+  run: async ({ msg, sock, usedPrefix }) => {
     const chatId = msg.chat;
     const who = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     const user = db.getUser(who);
@@ -26,7 +26,7 @@ export default {
     const allUsers = db.getUser() || [];
     const users = Array.isArray(allUsers) ? allUsers.map(u => ({ ...u, jid: u.id })) : [];
     const sortedLevel = users.sort((a, b) => (b.level || 0) - (a.level || 0));
-    const rank = sortedLevel.findIndex(u => u.jid === who) + 1;
+    const rank = sortedLevel.findIndex(u => mismaPersona(u.jid, who)) + 1;
     const { min, max, xp } = xpRange(user.level || 0, global.multiplier);
     const progresoActual = Math.max(0, (user.exp || 0) - min);
     const porcentaje = xp > 0 ? Math.min(100, Math.floor((progresoActual / xp) * 100)) : 0;

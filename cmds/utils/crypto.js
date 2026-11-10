@@ -26,7 +26,7 @@ export default {
   command: ['btc', 'crypto', 'precio'],
   category: 'utils',
   description: 'Precio de criptomonedas (BTC, ETH, SOL...).',
-  run: async ({ msg, args, usedPrefix, command }) => {
+  run: async ({ msg, args }) => {
     const raw = (args.join(' ') || '').trim().toLowerCase();
     let ids = PREDETERMINADOS;
     if (raw) {
@@ -35,7 +35,10 @@ export default {
     }
     try {
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd,mxn`;
-      const res = await runGuarded('coingecko', async () => fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } }));
+      const res = await runGuarded('coingecko', async () => fetch(url, {
+        headers: { 'User-Agent': 'Shin-MD/3.7', Accept: 'application/json' },
+        signal: AbortSignal.timeout(15000),
+      }));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (!data || Object.keys(data).length === 0) {

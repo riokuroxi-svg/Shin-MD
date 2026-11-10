@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import defaultAvatar from "#lib/default-avatar";
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { tiempoLargo as msToTime, esperaRestante } from "#lib/tiempo";
 
@@ -28,14 +28,12 @@ export default {
   description: 'Invitar el bot a un grupo.',
   run: async ({ msg, sock, args }) => {
     db.setCreate('users', [msg.sender], 'jointime', 0);
-    let user = db.getUser(msg.sender);
+    const user = db.getUser(msg.sender);
     const grupo = msg.isGroup ? await getGroupName(sock, msg.chat) : 'Chat privado';
     const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
     const botname = botSettings.botname || 'Bot';
     const dueño = botSettings.owner || '';
-    // El mismo cuidado que en el resto: un dato imposible no puede convertirse
-    // en una espera de años.
     const { esperaMs } = esperaRestante(user.jointime, ESPERA_INVITAR_MS);
     if (esperaMs > 0) {
       return msg.reply(`ꕥ Espera *${msToTime(esperaMs)}* para volver a enviar otra invitacion.`);
@@ -48,9 +46,8 @@ export default {
     if (!match || !match[1]) {
       return msg.reply('《✧》 El enlace ingresado no es válido o está incompleto.');
     }
-    const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
+    const isOficialBot = !!(botId && global.sock?.user?.id && mismaPersona(botId, botJid(global.sock)));
     const botType = isOficialBot ? 'Principal/Owner' : 'Sub Bot';
-    const pp = await sock.profilePictureUrl(msg.sender, 'image').catch(() => defaultAvatar());
     const userName = user?.name || 'Usuario';
     const sugg = `❀ 𝗦𝗢𝗟𝗜𝗖𝗜𝗧𝗨𝗗 𝗥𝗘𝗖𝗜𝗕𝗜𝗗𝗔
 

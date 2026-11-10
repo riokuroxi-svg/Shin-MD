@@ -5,9 +5,10 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
-import defaultAvatar from "#lib/default-avatar";
 import { tiempoLargo as msToTime } from "#lib/tiempo";
+
 export default {
   command: ['report', 'reporte', 'sug', 'suggest'],
   category: 'main',
@@ -20,7 +21,7 @@ export default {
     const cooldownMs = cooldownHours * 60 * 60 * 1000;
     const userKey = esReporte ? 'reportCooldown' : 'sugCooldown';
     db.setCreate('users', msg.sender, userKey, 0);
-    let user = db.getUser(msg.sender);
+    const user = db.getUser(msg.sender);
     const cooldown = user[userKey] || 0;
     const restante = cooldown - now;
     if (restante > 0) {
@@ -35,15 +36,12 @@ export default {
     const fecha = new Date();
     const fechaLocal = fecha.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const tipo = esReporte ? '🆁ҽ𝕡σɾƚҽ' : '🆂մց𝕖ɾҽ𝚗cíᥲ';
-    const tipo2 = esReporte ? 'ꕥ Reporte' : 'ꕥ Sugerencia';
     const name = user?.name || msg.pushName || 'Usuario desconocido';
     const numero = msg.sender.split('@')[0];
-    const pp = await sock.profilePictureUrl(msg.sender, 'image').catch(() => defaultAvatar());
     const botId = botJid(sock);
-    const botSettings = db.getSettings(botId) || {};
-    const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
+    const isOficialBot = !!(botId && global.sock?.user?.id && mismaPersona(botId, botJid(global.sock)));
     const botType = isOficialBot ? 'Principal/Owner' : 'Sub Bot';
-    let reportMsg = `🫗۫᷒ᰰ⃘ׅ᷒  ۟　\`${tipo}\`　ׅ　ᩡ\n\n𖹭  ׄ  ְ ❖ *Nombre*\n> ${name}\n\n𖹭  ׄ  ְ ❖ *Número*\n> wa.me/${numero}\n\n𖹭  ׄ  ְ ❖ *Fecha*\n> ${fechaLocal}\n\n𖹭  ׄ  ְ ❖ *Socket*\n> ${botType}\n\n𖹭  ׄ  ְ ❖ *Mensaje*\n> ${texto}\n\n`;
+    const reportMsg = `🫗۫᷒ᰰ⃘ׅ᷒  ۟　\`${tipo}\`　ׅ　ᩡ\n\n𖹭  ׄ  ְ ❖ *Nombre*\n> ${name}\n\n𖹭  ׄ  ְ ❖ *Número*\n> wa.me/${numero}\n\n𖹭  ׄ  ְ ❖ *Fecha*\n> ${fechaLocal}\n\n𖹭  ׄ  ְ ❖ *Socket*\n> ${botType}\n\n𖹭  ׄ  ְ ❖ *Mensaje*\n> ${texto}\n\n`;
     for (const num of global.owner) {
       try {
         await sock.sendMessage(`${num}@s.whatsapp.net`, { text: reportMsg });

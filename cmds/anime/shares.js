@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { pickRandom } from "#lib/random";
+import { mismaPersona } from "#lib/lid";
 import fetch from 'node-fetch';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
@@ -167,18 +168,22 @@ export default {
     const toName = db.getUser(who)?.name || '@' + who.split('@')[0];
     const genero = db.getUser(msg.sender)?.genre || 'Oculto';
     const captionText = captions[currentCommand](fromName, toName, genero);
-    const caption = who !== msg.sender ? `\`${fromName}.\` ${captionText} \`${toName}.\` ${getRandomSymbol()}.` : `\`${fromName}\` ${captionText} ${getRandomSymbol()}.`;
+    const esOtro = !mismaPersona(who, msg.sender);
+    const caption = esOtro ? `\`${fromName}.\` ${captionText} \`${toName}.\` ${getRandomSymbol()}.` : `\`${fromName}\` ${captionText} ${getRandomSymbol()}.`;
     try {
       // Sin API configurada no se llama: se avisa con palabras.
       const api = globalThis.APIs?.Ginko;
       if (!api?.url) {
         return msg.reply(state('sinApi', { what: 'interacciones' }));
       }
-      const response = await fetch(`${api.url}/sfw/interaction?inter=${currentCommand}&key=${api.key}`);
+      const response = await fetch(`${api.url}/sfw/interaction?inter=${currentCommand}&key=${api.key}`, {
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const json = await response.json();
       const result = json?.result || json?.url || json?.data;
       if (!result) throw new Error('Sin resultado de la API.');
-      await sock.sendMessage(msg.chat, { video: { url: result }, gifPlayback: true, caption, mentions: [who, msg.sender] }, { quoted: msg });
+      await sock.sendMessage(msg.chat, { video: { url: result }, gifPlayback: true, caption, mentions: esOtro ? [who, msg.sender] : [msg.sender] }, { quoted: msg });
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

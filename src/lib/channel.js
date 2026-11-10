@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+
 // Resuelve el JID real del canal oficial al conectar por primera vez.
 // Usa sock.newsletterMetadata("invite", code) que devuelve el @newsletter JID correcto.
 const DEFAULT_CHANNEL_CODE = "0029VbDVFpSGJP89hfZUe522";
@@ -24,7 +26,7 @@ export async function resolveChannel(sock, db, force = false) {
   if (!sock) return globalThis.channelJid || null;
   if (globalThis.channelJid?.resolved && !force) return globalThis.channelJid;
 
-  const botId = sock?.user?.id?.split(':')[0] + '@s.whatsapp.net';
+  const botId = botJid(sock);
   // Si ya está guardado en la DB del bot, lo usamos
   if (botId && !force && db) {
     try {

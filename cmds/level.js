@@ -26,20 +26,24 @@ function canLevelUp(level, xp, multiplier = global.multiplier || 2) {
 }
 
 export async function before({ msg }) {
+  if (!msg?.sender || msg.isBot) return;
   db.setCreate('users', msg.sender, 'minxp', 0);
   db.setCreate('users', msg.sender, 'maxxp', 0);
   const user = db.getUser(msg.sender);
-  const users = db.getChatUser(msg.chat, msg.sender);
-  let before = user.level || 0;
+  if (!user) return;
+  const chatUser = msg.isGroup && msg.chat ? db.getChatUser(msg.chat, msg.sender) : null;
+  const beforeLevel = user.level || 0;
   while (canLevelUp(user.level || 0, user.exp || 0, global.multiplier)) {
     db.setUser(msg.sender, 'level', (user.level || 0) + 1);
     user.level = (user.level || 0) + 1;
   }
-  if (before !== user.level) {
+  if (beforeLevel !== user.level) {
     const coinBonus = randomInt(5000, 8000);
     const expBonus = randomInt(100, 500);
     if (user.level % 5 === 0) {
-      db.setChatUser(msg.chat, msg.sender, 'coins', (users.coins || 0) + coinBonus);
+      if (chatUser) {
+        db.setChatUser(msg.chat, msg.sender, 'coins', (chatUser.coins || 0) + coinBonus);
+      }
       db.setUser(msg.sender, 'exp', (user.exp || 0) + expBonus);
     }
     const { min, max } = xpRange(user.level, global.multiplier, CRECIMIENTO_LEVEL);

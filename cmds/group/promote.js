@@ -5,19 +5,23 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
+import { mismaPersona } from '#lib/lid';
 import { state } from '#lib/theme';
+
 export default {
   command: ['promote', 'promover'],
   category: 'group',
   description: 'Ascender a un usuario a administrador.',
+  groupOnly: true,
   isAdmin: true,
   botAdmin: true,
-  run: async ({ msg, sock, usedPrefix, command, groupMetadata, participants }) => {
+  run: async ({ msg, sock, participants }) => {
     const who = msg.mentionedJid?.[0] || msg.quoted?.sender;
     if (!who) return msg.reply('《✧》 Menciona al usuario que deseas promover a administrador.');
     try {
+      const lista = participants || [];
       const whoBase = who.split('@')[0];
-      const participant = participants.find(p => p.id?.split('@')[0] === whoBase || p.lid?.split('@')[0] === whoBase);
+      const participant = lista.find(p => mismaPersona(p.id, who) || mismaPersona(p.lid, who) || p.id?.split('@')[0] === whoBase || p.lid?.split('@')[0] === whoBase);
       if (participant?.admin) {
         return sock.sendMessage(msg.chat, { text: `《✧》 *@${whoBase}* ya es administrador del grupo!`, mentions: [who] }, { quoted: msg });
       }

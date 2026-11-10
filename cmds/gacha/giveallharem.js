@@ -5,13 +5,9 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";
-import { promises as fs } from 'fs';
+import { mismaPersona } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-
-const file = './core/characters.json';
-
-
 
 const getDisplayName = async (jid) => {
   const user = db.getUser(jid);
@@ -24,20 +20,22 @@ export default {
   command: ['giveallharem'],
   category: 'gacha',
   description: 'Regalar todos tus personajes a otro usuario.',
-  before: async ({ msg, sock }) => {
-    const data = pending[msg.sender];
-    if (!data) return;
+  before: async ({ msg }) => {
+    if (!msg?.chat || msg.isBot) return;
     if (msg.text?.trim().toLowerCase() !== 'aceptar') return;
-    if (msg.sender !== data.sender || data.chat !== msg.chat) return;
+    const entry = Object.entries(pending).find(([, d]) => d.chat === msg.chat && mismaPersona(msg.sender, d.sender));
+    if (!entry) return;
+    const [pendingKey, data] = entry;
     try {
       const chatId = msg.chat;
-      let sender = db.getChatUser(chatId, data.sender);
-      let receiver = db.getChatUser(chatId, data.to);
+      const sender = db.getChatUser(chatId, data.sender) || {};
+      const receiver = db.getChatUser(chatId, data.to) || {};
+      if (!Array.isArray(sender.characters)) sender.characters = [];
       if (!Array.isArray(receiver.characters)) receiver.characters = [];
       for (const id of data.ids) {
         const giftKey = chatId + '__' + id;
-        let character = db.getCharacter(giftKey);
-        if (!character || character.user !== data.sender) continue;
+        const character = db.getCharacter(giftKey);
+        if (!character || !mismaPersona(character.user, data.sender)) continue;
         character.user = data.to;
         character.claimedAt = Date.now();
         db.setCharacter(giftKey, character);
@@ -51,7 +49,7 @@ export default {
       db.setChatUser(chatId, data.sender, 'characters', sender.characters);
       db.setChatUser(chatId, data.to, 'characters', receiver.characters);
       clearTimeout(data.timeout);
-      delete pending[msg.sender];
+      delete pending[pendingKey];
       const name = await getDisplayName(data.to);
       await msg.reply(`「✿」 Has regalado con éxito todos tus personajes a *${name}*!\n\n> ❏ Personajes regalados: *${data.count}*\n> ⴵ Valor total: *${data.value.toLocaleString()}*`);
     } catch (e) {
@@ -59,19 +57,19 @@ export default {
     }
     return true;
   },
-  run: async ({ msg, sock, usedPrefix, command }) => {
+  run: async ({ msg, sock, usedPrefix }) => {
     try {
       const chatId = msg.chat;
       db.setCreate('chats', chatId, 'regalosPendientes', []);
       const chat = db.getChat(chatId);
-      if (chat.adminonly || !chat.gacha) {
+      if (chat?.adminonly || !chat?.gacha) {
         return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
       }
       const realSender = msg.sender;
-      const user = db.getChatUser(chatId, realSender);
+      const user = db.getChatUser(chatId, realSender) || {};
       const target = msg.mentionedJid?.[0] || msg.quoted?.sender || null;
       if (!target) return msg.reply('❀ Debes mencionar a quien quieras regalarle tus personajes.');
-      if (target === realSender) return msg.reply('ꕥ No puedes regalarte personajes a ti mismo.');
+      if (mismaPersona(target, realSender)) return msg.reply('ꕥ No puedes regalarte personajes a ti mismo.');
       const json = await loadCharacters();
       const all = flattenCharacters(json);
       const ids = Array.isArray(user.characters) ? user.characters : [];
@@ -79,7 +77,7 @@ export default {
       for (const id of ids) {
         const chatKey = chatId + '__' + id;
         const character = db.getCharacter(chatKey);
-        if (character && character.user === realSender) {
+        if (character && mismaPersona(character.user, realSender)) {
           const ref = all.find((c) => c.id === id);
           const value = character.value || ref?.value || 0;
           list.push({ id, name: character.name || ref?.name || `ID:${id}`, value });

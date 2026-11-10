@@ -135,12 +135,20 @@ export default {
     const r = escribir(RAIZ, ruta, contenido);
     if (!r.ok) return "🚫 " + r.motivo;
 
-    const extra =
-      r.relativa.endsWith(".js") && r.relativa.startsWith("cmds" + path.sep)
-        ? "\n💡 Es un comando: usa `.reload " +
-          path.basename(r.relativa, ".js") +
-          "` para cargarlo sin reiniciar."
-        : "";
+    let extra = "";
+    const prefijo = ctx.usedPrefix || ".";
+    if (r.relativa.endsWith(".js") && r.relativa.startsWith("cmds" + path.sep)) {
+      let recargado = false;
+      try {
+        const router = /** @type {any} */ (globalThis).__shinRouter;
+        if (router && typeof router.reload === "function") {
+          recargado = !!(await router.reload(path.join(RAIZ, r.relativa)));
+        }
+      } catch {}
+      extra = recargado
+        ? "\n♻️ Comando recargado al instante."
+        : `\n💡 Si es un comando nuevo, usa *${prefijo}restart* o *${prefijo}fix* para cargarlo.`;
+    }
     return "✓ Actualizado: `" + r.relativa + "` (" + r.caracteres + " caracteres)" + extra;
   },
 };

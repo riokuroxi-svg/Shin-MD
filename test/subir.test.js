@@ -143,8 +143,8 @@ test("el aviso de recarga solo sale con comandos de cmds/", async () => {
   const dentro = await subir.handler({}, { arg: "cmds/owner/prueba-tmp.js | x" });
   const fuera = await subir.handler({}, { arg: ".prueba-tmp.txt | x" });
   try {
-    assert.match(dentro, /usa `\.reload prueba-tmp`/);
-    assert.doesNotMatch(fuera, /reload/);
+    assert.match(dentro, /usa \*\.restart\* o \*\.fix\* para cargarlo/);
+    assert.doesNotMatch(fuera, /restart|recargado/);
   } finally {
     fs.rmSync(path.join(process.cwd(), "cmds", "owner", "prueba-tmp.js"), { force: true });
     fs.rmSync(path.join(process.cwd(), ".prueba-tmp.txt"), { force: true });

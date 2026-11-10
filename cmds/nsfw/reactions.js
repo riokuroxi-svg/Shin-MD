@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { pickRandom } from "#lib/random";
+import { mismaPersona } from "#lib/lid";
 import fetch from 'node-fetch';
 import fs from 'fs';
 import db from '../../src/services/ginko-db.js';
@@ -92,22 +93,41 @@ export default {
   description: 'Comandos de reacciones NSFW entre usuarios.',
   run: async ({ msg, sock, usedPrefix, command }) => {
     const chat = db.getChat(msg.chat);
-    if (!chat.nsfw) return msg.reply(`ꕥ El contenido *NSFW* está desactivado en este grupo.\n\nUn *administrador* puede activarlo con el comando:\n» *${usedPrefix}nsfw on*`);
+    if (!chat?.nsfw) return msg.reply(`ꕥ El contenido *NSFW* está desactivado en este grupo.\n\nUn *administrador* puede activarlo con el comando:\n» *${usedPrefix}nsfw on*`);
     const currentCommand = Object.keys(alias).find(key => alias[key].includes(command)) || command;
     if (!captions[currentCommand]) return;
     const who = msg.mentionedJid?.[0] || msg.quoted?.sender || msg.sender;
     const from = db.getUser(msg.sender);
-    const fromName = from?.name || '@'+msg.sender.split('@')[0];
+    const fromName = from?.name || '@' + msg.sender.split('@')[0];
     const to = db.getUser(who);
-    const toName = to?.name || '@'+who.split('@')[0];
+    const toName = to?.name || '@' + who.split('@')[0];
     const captionText = captions[currentCommand](fromName, toName);
-    const caption = who !== msg.sender ? `\`${fromName}\` ${captionText} \`${toName}.\` ${getRandomSymbol()}.` : `\`${fromName}\` ${captionText} ${getRandomSymbol()}.`;
+    const esOtro = !mismaPersona(who, msg.sender);
+    const caption = esOtro ? `\`${fromName}\` ${captionText} \`${toName}.\` ${getRandomSymbol()}.` : `\`${fromName}\` ${captionText} ${getRandomSymbol()}.`;
     try {
-      const shares = './core/shares.json'
-      const sharesData = JSON.parse(fs.readFileSync(shares))
-      const videos = sharesData.nsfw[currentCommand]
-      const randomVideo = pickRandom(videos);
-      await sock.sendMessage(msg.chat, { video: { url: randomVideo }, gifPlayback: true, caption, mentions: [who, msg.sender] }, { quoted: msg });
+      let mediaUrl = null;
+      const shares = './core/shares.json';
+      if (fs.existsSync(shares)) {
+        const sharesData = JSON.parse(fs.readFileSync(shares, 'utf8'));
+        const videos = sharesData?.nsfw?.[currentCommand];
+        if (Array.isArray(videos) && videos.length) {
+          mediaUrl = pickRandom(videos);
+        }
+      }
+      if (!mediaUrl) {
+        const api = globalThis.APIs?.Ginko;
+        if (!api?.url) {
+          return msg.reply(state('sinApi', { what: 'reacciones NSFW' }));
+        }
+        const response = await fetch(`${api.url}/nsfw/interaction?inter=${currentCommand}&key=${api.key}`, {
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        mediaUrl = json?.result || json?.url || json?.data;
+      }
+      if (!mediaUrl) throw new Error('Sin contenido disponible para esta reacción.');
+      await sock.sendMessage(msg.chat, { video: { url: mediaUrl }, gifPlayback: true, caption, mentions: esOtro ? [who, msg.sender] : [msg.sender] }, { quoted: msg });
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

@@ -6,16 +6,10 @@
  */
 import { pickRandom } from "#lib/random";
 import { fastFetch } from '#lib/fastFetch';
-import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { flattenCharacters, formatTag, getSeriesNameByCharacter, loadCharacters } from "#lib/gacha-shared";
-const rollLocks = new Map();
 
-// Cache en memoria de personajes (leer disco UNA SOLA VEZ, no cada vez que se usa el comando)
-let charactersCache = null;
-let charactersCacheTime = 0;
-let lastMtime = 0;
-const CHARACTERS_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+const rollLocks = new Map();
 
 function cleanOldLocks() {
   const now = Date.now();
@@ -24,12 +18,8 @@ function cleanOldLocks() {
   }
 }
 
-
 // Precalentar caché al cargar el comando
 loadCharacters().catch(() => {});
-
-
-
 
 function getRefererForUrl(url) {
   if (url.includes('safebooru.org')) return 'https://safebooru.org/';
@@ -46,24 +36,22 @@ async function buscarImagenDelirius(tag) {
     `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${query}&api_key=98f554258c88c44f4dd28ccde0c28f36682b2a992490ab35ebcc7baf7e196a86d7550b174bce577b8cc3f544e9b3ad0f6aeb09ad63bf89a9141cc3eddb6fbfd2&user_id=1917269`
   ];
 
-  // BUSCAR EN LAS 3 FUENTES EN PARALELO (no esperar que termine una para probar la otra)
   const results = await Promise.allSettled(urls.map(async (url) => {
     try {
       const res = await fastFetch(url, {
         timeout: 8000,
-        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' }
+        headers: { 'User-Agent': 'Shin-MD/3.7', 'Accept': 'application/json' }
       });
       const type = res.headers.get('content-type') || '';
       if (!res.ok || !type.includes('json')) return [];
       const json = await res.json();
       const data = Array.isArray(json) ? json : json?.post || json?.data || [];
-      return data.map(i => i?.file_url || i?.large_file_url || i?.image || i?.media_asset?.variants?.[0]?.url).filter(u => typeof u === 'string' && /\.(jpe?g|png)$/.test(u));
+      return data.map(i => i?.file_url || i?.large_file_url || i?.image || i?.media_asset?.variants?.[0]?.url).filter(u => typeof u === 'string' && /\.(jpe?g|png)$/i.test(u));
     } catch {
       return [];
     }
   }));
 
-  // Juntar todos los resultados válidos
   const allUrls = [];
   for (const r of results) {
     if (r.status === 'fulfilled' && Array.isArray(r.value)) {
@@ -87,13 +75,12 @@ export default {
       if (now - lockTime < 15000) return;
       rollLocks.delete(userId);
     }
-    let chat = db.getChat(chatId);
-    if (chat.adminonly || !chat.gacha) {
+    const chat = db.getChat(chatId);
+    if (chat?.adminonly || !chat?.gacha) {
       return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
     }
     db.setCreate('chat_users', [chatId, userId], 'lastRoll', 0);
-    let user = db.getChatUser(chatId, userId);
-    let me = user;
+    const me = db.getChatUser(chatId, userId);
     const now = Date.now();
     const cooldown = 15 * 60 * 1000;
     if (me.lastRoll && now < me.lastRoll) {
@@ -107,11 +94,9 @@ export default {
     }
     rollLocks.set(userId, now);
 
-    // Reaccionar INMEDIATAMENTE para que el usuario vea que el bot respondió
     try { await sock.sendMessage(chatId, { react: { text: '🎲', key: msg.key } }); } catch {}
 
     try {
-      // Cargar personajes del caché (no lee disco si ya está cargado)
       const chars = await loadCharacters();
       const all = flattenCharacters(chars);
       const selected = pickRandom(all);
@@ -119,7 +104,6 @@ export default {
       const source = getSeriesNameByCharacter(chars, selected.id);
       const baseTag = formatTag(selected.tags?.[0] || '');
 
-      // Buscar imágenes en paralelo
       const mediaList = await buscarImagenDelirius(baseTag);
       const media = mediaList.length > 0 ? pickRandom(mediaList) : null;
 
@@ -135,7 +119,7 @@ export default {
         db.setCharacter(charKey, { ...db.getCharacter(charKey), name: String(selected.name || 'Sin nombre') });
       }
       const globalChar = db.getCharacter(id) || {};
-      let chatChar = db.getCharacter(charKey) || {};
+      const chatChar = db.getCharacter(charKey) || {};
       chatChar.name = String(selected.name || 'Sin nombre');
       chatChar.value = typeof globalChar.value === 'number' ? globalChar.value : Number(selected.value) || 100;
       chatChar.votes = Number(chatChar.votes || globalChar.votes || 0);
@@ -147,7 +131,6 @@ export default {
       const owner = claimedBy ? (db.getUser(claimedBy))?.name || claimedBy.split('@')[0] : 'desconocido';
       const caption = `❀ Nombre » *${chatChar.name}*\n⚥ Género » *${selected.gender || 'Desconocido'}*\n✰ Valor » *${chatChar.value.toLocaleString()}*\n♡ Estado » *${claimedBy ? `Reclamado por ${owner}` : 'Libre'}*\n❖ Fuente » *${source}*\u206c`;
 
-      // Descargar imagen con fastFetch (más rápido con keep-alive)
       const imgRes = await fastFetch(media, {
         timeout: 10000,
         headers: {
@@ -155,13 +138,19 @@ export default {
           'Referer': getRefererForUrl(media)
         }
       });
+      if (!imgRes.ok) throw new Error(`HTTP ${imgRes.status} al descargar imagen`);
       const buffer = Buffer.from(await imgRes.arrayBuffer());
 
-      const sent = await sock.sendMessage(chatId, { image: buffer, caption: caption }, { quoted: msg });
+      const sent = await sock.sendMessage(chatId, { image: buffer, caption }, { quoted: msg });
 
-      if (!chat.rolls) chat.rolls = {};
-      chat.rolls[sent.key.id] = { id, charKey, name: chatChar.name, expiresAt: chatChar.expiresAt, reservedBy: userId, reservedUntil: chatChar.reservedUntil };
-      db.setChat(chatId, 'rolls', chat.rolls);
+      let rolls = chat.rolls || {};
+      if (typeof rolls === 'string') {
+        try { rolls = JSON.parse(rolls); } catch { rolls = {}; }
+      }
+      if (sent?.key?.id) {
+        rolls[sent.key.id] = { id, charKey, name: chatChar.name, expiresAt: chatChar.expiresAt, reservedBy: userId, reservedUntil: chatChar.reservedUntil };
+        db.setChat(chatId, 'rolls', rolls);
+      }
       db.setChatUser(chatId, userId, 'lastRoll', now + cooldown);
       try { await sock.sendMessage(chatId, { react: { text: '✅', key: msg.key } }); } catch {}
     } catch (e) {

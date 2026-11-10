@@ -11,7 +11,7 @@ export default {
   command: ['githubstalk', 'ghstalk', 'gh'],
   category: 'utils',
   description: 'Ver información de un usuario de GitHub.',
-  run: async ({ msg, sock, usedPrefix, command, text }) => {
+  run: async ({ msg, sock, usedPrefix, text }) => {
     if (!text) {
       return msg.reply(
         `《✧》 Escribe el *nombre de usuario* de GitHub.\n> Ejemplo: ${usedPrefix}gh riokuroxi-svg`
@@ -21,9 +21,13 @@ export default {
     try {
       await msg.react('🐙');
       const res = await fetch(`https://api.github.com/users/${encodeURIComponent(user)}`, {
-        headers: { 'User-Agent': 'Ginko-Bot', 'Accept': 'application/vnd.github+json' },
+        headers: { 'User-Agent': 'Shin-MD/3.7', Accept: 'application/vnd.github+json' },
+        signal: AbortSignal.timeout(15000),
       });
-      if (res.status === 404) return msg.reply(`《✧》 Usuario *${user}* no encontrado en GitHub.`);
+      if (res.status === 404) {
+        await msg.react('❌');
+        return msg.reply(`《✧》 Usuario *${user}* no encontrado en GitHub.`);
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       const creado = d.created_at ? new Date(d.created_at).toLocaleDateString('es-MX') : '—';

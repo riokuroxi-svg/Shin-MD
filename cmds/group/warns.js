@@ -5,10 +5,12 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import db from '../../src/services/ginko-db.js';
+
 export default {
   command: ['warns'],
   category: 'group',
   description: 'Ver todas las advertencias de un miembro del grupo.',
+  groupOnly: true,
   isAdmin: true,
   run: async ({ msg, sock }) => {
     const userId = msg.mentionedJid?.[0] || msg.quoted?.sender || null;
@@ -16,12 +18,13 @@ export default {
       return msg.reply('《✧》 Menciona o responde a un usuario válido para ver sus advertencias.');
     }
     db.setCreate('chat_users', [msg.chat, userId], 'warnings', []);
-    let user = db.getChatUser(msg.chat, userId);
+    const user = db.getChatUser(msg.chat, userId) || {};
     let warnings = user.warnings;
     if (typeof warnings === 'string') {
       try { warnings = JSON.parse(warnings); } catch { warnings = []; }
     }
-    const total = warnings?.length || 0;
+    if (!Array.isArray(warnings)) warnings = [];
+    const total = warnings.length;
     if (total === 0) {
       return sock.reply(msg.chat, `《✧》 @${userId.split('@')[0]} no tiene advertencias registradas.`, msg, { mentions: [userId] });
     }

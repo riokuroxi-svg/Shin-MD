@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  play.js — Reproductor y descargador interactivo estilo Ginko-MD
+//  play.js — Reproductor y descargador interactivo estilo Shin-MD
 //  · Tarjeta interactiva con botones nativos (Audio MP3 / Video MP4)
 //  · Precalentado en segundo plano (Background Audio Preheating)
 //  · Caché RAM + Disco para entrega instantánea (0ms)
@@ -233,7 +233,7 @@ async function ejecutarDescarga(sock, job, modo, m) {
       const p = getPendingMap(sock);
       p.delete(job.cardId);
       try { sock._shinPlayTokens?.delete(job._token); } catch {}
-    }, 60000);
+    }, 60000).unref?.();
   } catch (e) {
     job._procesando = false;
     // El aviso ya está en pantalla: se edita. Antes se borraba y se
@@ -436,7 +436,7 @@ export default {
           p.delete(card.key.id);
           try { sock._shinPlayTokens?.delete(j._token); } catch {}
         }
-      }, PENDING_TTL_MS);
+      }, PENDING_TTL_MS).unref?.();
 
       try { await sock.sendMessage(ctx.chatId, { react: { text: "✅", key: ctx.full.key } }); } catch {}
       return null;

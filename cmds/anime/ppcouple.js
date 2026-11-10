@@ -14,17 +14,23 @@ export default {
   run: async ({ msg, sock, usedPrefix, command }) => {
     try {
       await msg.react('🕒');
-      let data = await (await fetch('https://raw.githubusercontent.com/ShirokamiRyzen/WAbot-DB/main/fitur_db/ppcp.json')).json();
-      let cita = pickRandom(data);
-      let cowi = Buffer.from(await (await fetch(cita.cowo)).arrayBuffer());
-      await sock.sendFile(msg.chat, cowi, '', '*Masculino* ♂', msg);
-      let ciwi = Buffer.from(await (await fetch(cita.cewe)).arrayBuffer());
-      await sock.sendFile(msg.chat, ciwi, '', '*Femenina* ♀', msg);
+      const res = await fetch('https://raw.githubusercontent.com/ShirokamiRyzen/WAbot-DB/main/fitur_db/ppcp.json', { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const cita = Array.isArray(data) ? pickRandom(data) : null;
+      if (!cita?.cowo || !cita?.cewe) throw new Error('No se encontraron imágenes disponibles.');
+      const resCowo = await fetch(cita.cowo, { signal: AbortSignal.timeout(15000) });
+      if (!resCowo.ok) throw new Error(`HTTP ${resCowo.status}`);
+      const cowi = Buffer.from(await resCowo.arrayBuffer());
+      await sock.sendFile(msg.chat, cowi, 'cowo.jpg', '*Masculino* ♂', msg);
+      const resCewe = await fetch(cita.cewe, { signal: AbortSignal.timeout(15000) });
+      if (!resCewe.ok) throw new Error(`HTTP ${resCewe.status}`);
+      const ciwi = Buffer.from(await resCewe.arrayBuffer());
+      await sock.sendFile(msg.chat, ciwi, 'cewe.jpg', '*Femenina* ♀', msg);
       await msg.react('✔️');
     } catch (e) {
       await msg.react('✖️');
-      await msg.reply(`> Ocurrió un error inesperado al ejecutar el comando *${usedPrefix + command}*.
-> [Error: *${e.message}*]`);
+      await msg.reply(`> Ocurrió un error inesperado al ejecutar el comando *${usedPrefix + command}*.\n> [Error: *${e.message}*]`);
     }
   },
 };

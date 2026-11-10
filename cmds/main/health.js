@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { mismaPersona } from "#lib/lid";
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -28,16 +29,14 @@ installPassiveErrorRecorder();
 const exec = promisify(execFile);
 const format = sizeFormatter({ std: 'JEDEC', decimalPlaces: 2, keepTrailingZeroes: false, render: (literal, symbol) => `${literal} ${symbol}B` });
 
-let _ffmpegCache = null;
-async function hasFfmpeg() {
-  if (_ffmpegCache !== null) return _ffmpegCache;
-  try {
-    await exec('ffmpeg', ['-version'], { timeout: 5000 });
-    _ffmpegCache = true;
-  } catch {
-    _ffmpegCache = false;
+let _ffmpegPromise = null;
+function hasFfmpeg() {
+  if (!_ffmpegPromise) {
+    _ffmpegPromise = exec('ffmpeg', ['-version'], { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
   }
-  return _ffmpegCache;
+  return _ffmpegPromise;
 }
 
 const yesNo = (ok) => (ok ? '✅ Sí' : '❌ No');
@@ -66,10 +65,10 @@ export default {
         return msg.reply('> ✅ Circuit-breakers restablecidos. Los servicios volverán a intentarse.');
       }
 
-      const botId = sock?.user?.id ? `botJid(sock)` : '';
+      const botId = sock?.user?.id ? botJid(sock) : '';
       const settings = botId ? (db.getSettings(botId) || {}) : {};
-      const botname = settings.botname || global.botname || 'Ginko-MD';
-      const isOficial = global.sock?.user?.id && botId === (botJid(global.sock));
+      const botname = settings.botname || global.botname || 'Shin-MD';
+      const isOficial = !!(botId && global.sock?.user?.id && mismaPersona(botId, botJid(global.sock)));
       const botType = isOficial ? 'Principal/Owner' : 'Sub Bot';
       const connected = !!sock?.user;
 

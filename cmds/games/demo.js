@@ -98,7 +98,7 @@ export default {
         showcaseText += `╰─────────────────────────⬣\n\n`;
       }
 
-      showcaseText += `_Usa \`.menu\` para explorar los 201+ comandos disponibles._`;
+      showcaseText += `_Usa \`.menu\` para explorar los 215+ comandos disponibles._`;
 
       if (banner) {
         await sock.sendMessage(

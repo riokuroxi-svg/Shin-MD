@@ -40,18 +40,16 @@ function wrapGinkoCmd(gk) {
     aliases: names.slice(1),
     category: gk.category || "utils",
     description: gk.description || "",
-    cooldown: 3,
+    cooldown: gk.cooldown ?? 3,
     adminOnly: !!(gk.adminOnly || gk.isAdmin),
     botAdmin: !!(gk.botAdmin || gk.isBotAdmin),
     ownerOnly: !!(gk.ownerOnly || gk.isOwner),
     groupOnly: !!(gk.groupOnly || gk.isGroup),
     priority: !!gk.priority,
     handler: async (sock, ctx, engine) => {
-      // Mismo contexto exacto que reciben los hooks `before` (context.js).
-      // Antes esta función construía su propia copia, más rica que la de
-      // los hooks; esa divergencia ya no puede volver a ocurrir.
+      const invokedName = ctx.commandName || mainName;
       const { msg, groupMetadata, participants, isAdmins, isBotAdmins, isOwner } =
-        await buildCommandContext(sock, ctx, engine, { commandName: mainName });
+        await buildCommandContext(sock, ctx, engine, { commandName: invokedName, isCommands: true });
 
       try {
         await gk.run({
@@ -59,7 +57,7 @@ function wrapGinkoCmd(gk) {
           sock,
           usedPrefix: ctx.usedPrefix || ".",
           text: ctx.arg || "",
-          command: mainName,
+          command: invokedName,
           args: ctx.args || [],
           groupMetadata,
           participants,
@@ -91,8 +89,12 @@ export async function loadCommands() {
       const mod = await import(pathToFileURL(filePath).href + "?t=" + Date.now());
       const cmd = mod.default || mod;
 
-      if (typeof mod.before === "function") {
-        befores.push({ name: path.basename(filePath, ".js"), fn: mod.before });
+      const beforeFn =
+        typeof mod.before === "function"
+          ? mod.before
+          : (typeof cmd?.before === "function" ? cmd.before : null);
+      if (beforeFn) {
+        befores.push({ name: path.basename(filePath, ".js"), file: path.relative(CMDS_DIR, filePath), fn: beforeFn });
       }
 
       if (!cmd) continue;
@@ -114,39 +116,75 @@ export async function loadCommands() {
         dupeCount++;
         if (dupeCount <= 10) log.warn("Duplicado: '" + name + "' (" + path.relative(CMDS_DIR, filePath) + ") reemplaza a " + (prev.file || "?"));
       }
-      commands.set(name, { ...shinCmd, name, file: path.relative(CMDS_DIR, filePath) });
+      const entry = { ...shinCmd, name, file: path.relative(CMDS_DIR, filePath) };
+      commands.set(name, entry);
       if (Array.isArray(shinCmd.aliases)) {
-        for (const alias of shinCmd.aliases) commands.set(alias, commands.get(name));
+        for (const alias of shinCmd.aliases) commands.set(String(alias).toLowerCase(), entry);
       }
     } catch (err) {
       log.error("Carga: " + path.relative(CMDS_DIR, filePath) + ": " + (err.message || err));
     }
   }
 
-  // El Map lleva los hooks pegados como propiedad. Se tipa explícito
-  // porque "un Map con una propiedad extra" no existe en el sistema de
-  // tipos; lo limpio sería devolver { commands, befores }.
   /** @type {any} */ (commands).befores = befores;
   const unique = shinCount + ginkoCount - dupeCount;
   log.success(unique + " comandos únicos (" + shinCount + " Shin, " + ginkoCount + " Ginko) · " + commands.size + " entradas con aliases" + (dupeCount ? " · " + dupeCount + " duplicados" : "") + (befores.length ? " · " + befores.length + " hooks before" : ""));
   return commands;
 }
 
-export async function reloadCommand(name, commands) {
-  const current = commands.get(name);
-  if (!current) return false;
+export async function reloadCommand(nameOrFile, commands) {
+  if (!commands) return false;
+  let relFile = null;
+  let current = commands.get(String(nameOrFile || "").toLowerCase());
+  if (current?.file) {
+    relFile = current.file;
+  } else if (nameOrFile) {
+    const abs = path.isAbsolute(nameOrFile) ? nameOrFile : path.resolve(CMDS_DIR, String(nameOrFile));
+    if (fs.existsSync(abs)) relFile = path.relative(CMDS_DIR, abs);
+  }
+  if (!relFile) return false;
+
   try {
-    const mod = await import(pathToFileURL(path.join(CMDS_DIR, current.file)).href + "?t=" + Date.now());
+    const absPath = path.join(CMDS_DIR, relFile);
+    const mod = await import(pathToFileURL(absPath).href + "?t=" + Date.now());
     const cmd = mod.default || mod;
+
+    // Actualizar hook `before` si existe
+    const beforeFn =
+      typeof mod.before === "function"
+        ? mod.before
+        : (typeof cmd?.before === "function" ? cmd.before : null);
+    const befores = /** @type {any} */ (commands).befores;
+    if (Array.isArray(befores)) {
+      const idx = befores.findIndex((b) => b.file === relFile);
+      if (beforeFn) {
+        const hook = { name: path.basename(relFile, ".js"), file: relFile, fn: beforeFn };
+        if (idx >= 0) befores[idx] = hook;
+        else befores.push(hook);
+      } else if (idx >= 0) {
+        befores.splice(idx, 1);
+      }
+    }
+
     let shinCmd;
-    if (typeof cmd.handler === "function") shinCmd = { ...cmd };
-    else if (cmd.command && typeof cmd.run === "function") shinCmd = wrapGinkoCmd(cmd);
-    else return false;
-    commands.set(name, { ...shinCmd, name, file: current.file });
+    if (typeof cmd?.handler === "function") shinCmd = { ...cmd };
+    else if (cmd?.command && typeof cmd?.run === "function") shinCmd = wrapGinkoCmd(cmd);
+    else return !!beforeFn;
+
+    const name = shinCmd.name || path.basename(relFile, ".js");
+    // Limpiar entradas previas pertenecientes a este mismo archivo
+    for (const [k, v] of commands.entries()) {
+      if (v?.file === relFile) commands.delete(k);
+    }
+    const entry = { ...shinCmd, name, file: relFile };
+    commands.set(name, entry);
+    if (Array.isArray(shinCmd.aliases)) {
+      for (const alias of shinCmd.aliases) commands.set(String(alias).toLowerCase(), entry);
+    }
     log.success("Recargado: " + name);
     return true;
   } catch (err) {
-    log.error("Recarga " + name + ": " + (err.message || err));
+    log.error("Recarga " + nameOrFile + ": " + (err.message || err));
     return false;
   }
 }

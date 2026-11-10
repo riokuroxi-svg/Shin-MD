@@ -37,41 +37,41 @@ export default {
 
 async function getInstagramMedia(url) {
   const apis = [
-    { endpoint: `${global.APIs.Ginko.url}/dl/instagram?url=${encodeURIComponent(url)}&key=${global.APIs.Ginko.key}`, extractor: (res) => {
+    { endpoint: global.APIs?.Ginko?.url ? `${global.APIs.Ginko.url}/dl/instagram?url=${encodeURIComponent(url)}&key=${global.APIs.Ginko.key || ''}` : null, extractor: (res) => {
         if (!res.status || !res.data || !res.data.length) return null
         const media = res.data[0]
         if (!media?.url) return null
         return { type: 'video', title: null, caption: null, resolution: null, format: 'mp4', url: media.url, thumbnail: media.thumbnail || null }
       }
     },
-    { endpoint: `${global.APIs.ootaizumi.url}/downloader/instagram/v1?url=${encodeURIComponent(url)}`, extractor: (res) => {
+    { endpoint: global.APIs?.ootaizumi?.url ? `${global.APIs.ootaizumi.url}/downloader/instagram/v1?url=${encodeURIComponent(url)}` : null, extractor: (res) => {
         if (!res.status || !res.result?.media?.length) return null
         const media = res.result.media[0]
         if (!media?.url) return null
         return { type: media.isVideo ? 'video' : 'image', title: res.result.metadata?.author || null, caption: null, like: res.result.metadata?.like === -1 ? null : res.result.metadata?.like, views: res.result.metadata?.views || null, duration: res.result.metadata?.duration ? `${Math.round(res.result.metadata.duration)}s` : null, resolution: null, format: media.isVideo ? 'mp4' : 'jpg', url: media.url, thumbnail: res.result.ppc || null }
       }
     },
-    { endpoint: `${global.APIs.delirius.url}/download/instagram?url=${encodeURIComponent(url)}`, extractor: (res) => {
+    { endpoint: global.APIs?.delirius?.url ? `${global.APIs.delirius.url}/download/instagram?url=${encodeURIComponent(url)}` : null, extractor: (res) => {
         if (!res.status || !res.data || !res.data.length) return null
         const media = res.data[0]
         if (!media?.url) return null
         return { type: media.type || (media.url.includes('.mp4') ? 'video' : 'image'), title: null, caption: null, resolution: null, format: media.type === 'video' ? 'mp4' : 'jpg', url: media.url }
       }
     },
-    { endpoint: `${global.APIs.zenzxz.url}/download/instagram?url=${encodeURIComponent(url)}`, extractor: (res) => {
+    { endpoint: global.APIs?.zenzxz?.url ? `${global.APIs.zenzxz.url}/download/instagram?url=${encodeURIComponent(url)}` : null, extractor: (res) => {
         if (!res.status || !res.result) return null
         if (!res.result.url) return null
         return { type: res.result.is_video ? 'video' : 'image', title: res.result.username || null, caption: res.result.caption || null, resolution: null, format: res.result.is_video ? 'mp4' : 'jpg', url: res.result.url, thumbnail: res.result.thumbnail || null }
       }
     }
   ]
-  // Solo se intentan las APIs que estén configuradas: si falta la URL, se
-  // salta en vez de pedir «undefined/dl/…» y reventar con un TypeError.
-  .filter(({ endpoint }) => typeof endpoint === "string" && !endpoint.includes("undefined"))
+  .filter(({ endpoint }) => typeof endpoint === "string" && endpoint.length > 0 && !endpoint.includes("undefined"))
 
   for (const { endpoint, extractor } of apis) {
     try {
-      const res = await (await fetch(endpoint)).json()
+      const resp = await fetch(endpoint, { signal: AbortSignal.timeout(15000) })
+      if (!resp.ok) continue
+      const res = await resp.json()
       const result = extractor(res)
       if (result) return result
     } catch (error) {
