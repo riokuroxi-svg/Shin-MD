@@ -1772,9 +1772,9 @@ test("si la descarga limpia falla, no deja nada a medias en su sitio", () => {
 });
 
 test("el resumen no recomienda comandos que el proyecto no tiene", () => {
-  // Levi-MD 3.0.3 no tiene `vigia` ni el panel: si el instalador se los
+  // Un fork antiguo no tiene `vigia` ni el panel: si el instalador se los
   // recomienda, el usuario copia un comando que falla con "Missing script".
-  const origen = crearOrigen("levi-md");
+  const origen = crearOrigen("mi-bot");
   const pkg = JSON.parse(fs.readFileSync(path.join(origen, "package.json"), "utf8"));
   delete pkg.scripts.vigia;
   delete pkg.scripts.consola;
@@ -1783,9 +1783,9 @@ test("el resumen no recomienda comandos que el proyecto no tiene", () => {
   git(origen, "commit", "--quiet", "-m", "sin scripts nuevos");
 
   const raiz = temporal("shin-resumen-viejo");
-  const r = correr(INSTALADOR, ["--yes", "--dir", path.join(raiz, "Levi-MD")], {
+  const r = correr(INSTALADOR, ["--yes", "--dir", path.join(raiz, "Mi-Bot")], {
     raiz,
-    env: { SHIN_REPO_URL: origen, SHIN_NOMBRE: "Levi-MD" },
+    env: { SHIN_REPO_URL: origen, SHIN_NOMBRE: "Mi-Bot" },
   });
   assert.equal(r.status, 0, r.salida);
 
@@ -1815,7 +1815,7 @@ test("el resumen final da un solo bloque por tarea, con el cd dentro", () => {
 //
 //  El instalador estaba escrito para un solo repositorio: buscaba
 //  literalmente "name": "shin-md" en el package.json y ejecutaba
-//  scripts/patch-baileys.cjs por su nombre. Un fork (Levi-MD, por
+//  scripts/patch-baileys.cjs por su nombre. Un fork (Mi-Bot, por
 //  ejemplo) se instalaba, pero --verify, --repair, --update y
 //  --uninstall se negaban a tocarlo: "no parece una instalación".
 //  Ahora el nombre del paquete se deduce del nombre visible y el
@@ -1823,16 +1823,16 @@ test("el resumen final da un solo bloque por tarea, con el cd dentro", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 test("un fork con otro nombre se instala en su carpeta y se administra solo", () => {
-  const origen = crearOrigen("levi-md");
+  const origen = crearOrigen("mi-bot");
   const raiz = temporal("shin-fork");
-  const env = { SHIN_REPO_URL: origen, SHIN_NOMBRE: "Levi-MD" };
+  const env = { SHIN_REPO_URL: origen, SHIN_NOMBRE: "Mi-Bot" };
 
   const r = correr(INSTALADOR, ["--yes"], { raiz, env });
   assert.equal(r.status, 0, r.salida);
 
   // En su carpeta, no en ~/Shin-MD.
-  const proyecto = path.join(raiz, "Levi-MD");
-  assert.ok(fs.existsSync(path.join(proyecto, "package.json")), "tiene que instalarse como Levi-MD");
+  const proyecto = path.join(raiz, "Mi-Bot");
+  assert.ok(fs.existsSync(path.join(proyecto, "package.json")), "tiene que instalarse como Mi-Bot");
   assert.match(r.salida, /conector: parches aplicados/);
 
   // Y desde dentro se reconoce como instalación propia.
@@ -1846,8 +1846,8 @@ test("un clon hecho a mano se reconoce por el nombre del paquete", () => {
   // existiera el instalador: no tiene la marca .shin-install, así que lo
   // único que lo identifica es el "name" de su package.json.
   const raiz = temporal("shin-fork-clon");
-  const proyecto = path.join(raiz, "Levi-MD");
-  escribir(path.join(proyecto, "package.json"), JSON.stringify({ name: "levi-md", version: "3.0.3" }, null, 2));
+  const proyecto = path.join(raiz, "Mi-Bot");
+  escribir(path.join(proyecto, "package.json"), JSON.stringify({ name: "mi-bot", version: "3.0.3" }, null, 2));
   escribir(path.join(proyecto, "index.js"), "export const arrancado = true;\n");
   escribir(path.join(proyecto, "install.sh"), fs.readFileSync(INSTALADOR, "utf8"));
   git(proyecto, "init", "--quiet", "--initial-branch", "main");
@@ -1868,7 +1868,7 @@ test("un clon hecho a mano se reconoce por el nombre del paquete", () => {
   // (aquí fallará por lo que le falta, pero ya lo reconoce como suyo).
   const bien = correr(path.join(proyecto, "install.sh"), ["--verify"], {
     cwd: proyecto,
-    env: { SHIN_PKG: "levi-md" },
+    env: { SHIN_PKG: "mi-bot" },
   });
   assert.doesNotMatch(bien.salida, /no parece una instalación/);
   assert.match(bien.salida, /Comprobando la instalación/);
@@ -1876,16 +1876,16 @@ test("un clon hecho a mano se reconoce por el nombre del paquete", () => {
 
 test("un fork anterior a los parches nuevos no se da por roto", () => {
   // Antes de 3.3 el script se llamaba patch-baileys-pairing.cjs.
-  const origen = crearOrigen("levi-md", "patch-baileys-pairing.cjs");
+  const origen = crearOrigen("mi-bot", "patch-baileys-pairing.cjs");
   const raiz = temporal("shin-fork-viejo");
   const r = correr(INSTALADOR, ["--yes"], {
     raiz,
-    env: { SHIN_REPO_URL: origen, SHIN_NOMBRE: "Levi-MD" },
+    env: { SHIN_REPO_URL: origen, SHIN_NOMBRE: "Mi-Bot" },
   });
   assert.equal(r.status, 0, r.salida);
   assert.match(r.salida, /parches aplicados \(scripts\/patch-baileys-pairing\.cjs\)/);
 
-  const proyecto = path.join(raiz, "Levi-MD");
+  const proyecto = path.join(raiz, "Mi-Bot");
   const v = correr(path.join(proyecto, "install.sh"), ["--verify"], { cwd: proyecto });
   assert.equal(v.status, 0, v.salida);
   assert.match(v.salida, /todo correcto/);

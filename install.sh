@@ -53,7 +53,7 @@ readonly NPM_MINIMO="10.0.0"
 readonly NOMBRE="${SHIN_NOMBRE:-Shin-MD}"
 # El "name" de package.json, que es lo que distingue una instalación de
 # cualquier otro proyecto. Se deduce del nombre visible (Shin-MD → shin-md,
-# Levi-MD → levi-md) para que un fork no tenga que tocar el instalador por
+# Mi-Bot → mi-bot) para que un fork no tenga que tocar el instalador por
 # dentro; si tu paquete se llama distinto, se dice y ya:
 #   SHIN_PKG=mi-paquete bash install.sh
 PAQUETE="${SHIN_PKG:-$(printf '%s' "$NOMBRE" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9._ -]//g' -e 's/ /-/g' -e 's/-\{2,\}/-/g' -e 's/^-//' -e 's/-$//')}"
@@ -342,7 +342,7 @@ exigir_destino_conocido() {
 #   · lleva la marca .shin-install, que escribió este mismo instalador, o
 #   · su package.json se llama como el paquete ($PAQUETE).
 # Lo segundo es lo que salva a un fork hecho antes del instalador (un clon a
-# mano de Levi-MD, por ejemplo): se reconoce por el nombre, sin marca.
+# mano de Mi-Bot, por ejemplo): se reconoce por el nombre, sin marca.
 es_propia() {
   local dir="${1:-}"
   [ -f "$dir/package.json" ] || return 1
@@ -1504,7 +1504,7 @@ escribir_estado() {
 estado_instalado() { [ -f "$DESTINO/.shin-install" ] && [ -d "$DESTINO/node_modules" ]; }
 
 # ¿Este proyecto trae ese script de npm? Sirve para no recomendar comandos que
-# un fork antiguo no tiene: Levi-MD 3.0.3, por ejemplo, no conoce `vigia`.
+# un fork antiguo no tiene: una copia de hace un año, por ejemplo, no conoce `vigia`.
 tiene_script() {
   [ -f "$DESTINO/package.json" ] || return 1
   node -e 'const s=(require(process.argv[1]).scripts||{});process.exit(s[process.argv[2]]?0:1)' \
