@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { botJid } from "#serialize";
+import { botJid, resolveJidSync } from "#serialize";
+import { mismaPersona, resolver as resolverLid } from "#lib/lid";
+import { esDuenoSocket } from "#permissions";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['setbotowner', 'setowner'],
@@ -12,9 +14,8 @@ export default {
   description: 'Cambiar el dueño del bot.',
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     const idBot = botJid(sock);
-    let config = db.getSettings(idBot) || {};
-    const isOwner2 = [idBot, ...(config.owner ? [config.owner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
-    if (!isOwner2) return msg.reply(global.mess.socket);
+    const config = db.getSettings(idBot) || {};
+    if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
     const text = args.join(' ').trim();
     const actual = config.owner || '';
     if (text.toLowerCase() === 'clear') {
@@ -22,15 +23,16 @@ export default {
       db.setSettings(idBot, 'owner', '');
       return msg.reply('❀ Se ha eliminado el propietario del Socket.');
     }
-    const who = msg.mentionedJid?.[0] || msg.quoted?.sender || null;
+    const rawWho = msg.mentionedJid?.[0] || msg.quoted?.sender || null;
+    const who = rawWho ? (resolverLid(rawWho) || resolveJidSync(rawWho, sock) || rawWho) : null;
     const limpio = text.replace(/[^0-9]/g, '');
     const nuevo = who || (limpio.length >= 10 ? (limpio.startsWith('52') && limpio.length === 12 ? `52${limpio[2] !== '1' ? '1' : ''}${limpio.slice(2)}@s.whatsapp.net` : `${limpio}@s.whatsapp.net`) : null);
-    if (actual && ((!msg.quoted && msg.mentionedJid.length === 0 && !text) || (nuevo && actual === nuevo))) {
+    if (actual && ((!msg.quoted && msg.mentionedJid.length === 0 && !text) || (nuevo && mismaPersona(actual, nuevo)))) {
       return sock.sendMessage(msg.chat, { text: `ꕥ Ya tienes un dueño asignado @${actual.split('@')[0]}.\n\n✿ Si quieres cambiarlo usa:\n> *${usedPrefix + command}* @${idBot.split('@')[0]}\n\n✿ Si quieres eliminar el dueño asignado usa:\n> *${usedPrefix + command} clear*`, mentions: [actual, idBot] }, { quoted: msg });
     }
     if (!nuevo) return sock.reply(msg.chat, `✐ Debes mencionar al nuevo dueño del Socket.\n> Ejemplo: *${usedPrefix + command}* @${idBot.split('@')[0]}`, msg, { mentions: [idBot] });
     const [ownerActual, ownerNuevo] = [actual ? actual.split('@')[0] : null, nuevo.split('@')[0]];
     db.setSettings(idBot, 'owner', nuevo);
-    return sock.sendMessage(msg.chat, { text: actual && actual !== nuevo ? `✿ El dueño del sokect ha sido cambiado de @${ownerActual} a @${ownerNuevo}!` : `❀ Se asignó a @${ownerNuevo} como nuevo propietario de *${config.namebot || 'Bot'}*!`, mentions: [nuevo, ...(actual && actual !== nuevo ? [actual] : [])] }, { quoted: msg });
+    return sock.sendMessage(msg.chat, { text: actual && !mismaPersona(actual, nuevo) ? `✿ El dueño del sokect ha sido cambiado de @${ownerActual} a @${ownerNuevo}!` : `❀ Se asignó a @${ownerNuevo} como nuevo propietario de *${config.namebot || 'Bot'}*!`, mentions: [nuevo, ...(actual && !mismaPersona(actual, nuevo) ? [actual] : [])] }, { quoted: msg });
   },
 };

@@ -6,7 +6,7 @@
  */
 import log from "#logger";
 import makeWASocket, { Browsers, makeCacheableSignalKeyStore, fetchLatestBaileysVersion, DisconnectReason, jidDecode } from 'baileys';
-import { useSQLiteAuthState } from '#lib/sqliteAuth';
+import { useSQLiteAuthState } from '#auth';
 import NodeCache from 'node-cache';
 import events from '#events';
 import qrcode from 'qrcode';
@@ -14,12 +14,12 @@ import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
 import chalk from 'chalk';
-import { smsg, patchGroupMetadata, getCachedMeta } from '#serialize';
+import { patchGroupMetadata, getCachedMeta } from '#serialize';
 import { sendNativeQuickReply } from '#lib/native-reply';
 import { tiempoLargo as msToTime, esperaRestante } from "#lib/tiempo";
 import db from '../../src/services/ginko-db.js';
 
-if (!global.conns) global.conns = [];
+if (!Array.isArray(global.conns)) global.conns = [];
 const reintentos = {};
 const commandFlags = {};
 const cleanJid = (jid = '') => jid.replace(/:\d+/, '').split('@')[0];
@@ -49,16 +49,23 @@ export function remove(sock) {
 
 const logger = pino({ level: 'silent' });
 const versionCache = { value: null, expiresAt: 0 };
+let versionPromise = null;
 async function getVersion() {
   if (versionCache.value && Date.now() < versionCache.expiresAt) return versionCache.value;
-  try {
-    const latest = await fetchLatestBaileysVersion();
-    versionCache.value = latest.version;
-    versionCache.expiresAt = Date.now() + 60 * 60 * 1000;
-  } catch (e) {
-    if (!versionCache.value) versionCache.value = [2, 3000, 1033105955];
+  if (!versionPromise) {
+    versionPromise = fetchLatestBaileysVersion()
+      .then((latest) => {
+        versionCache.value = latest.version;
+        versionCache.expiresAt = Date.now() + 60 * 60 * 1000;
+        return versionCache.value;
+      })
+      .catch(() => {
+        if (!versionCache.value) versionCache.value = [2, 3000, 1033105955];
+        return versionCache.value;
+      })
+      .finally(() => { versionPromise = null; });
   }
-  return versionCache.value;
+  return versionPromise;
 }
 
 function normalizePhone(input) {
@@ -97,14 +104,13 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
   ensureDir(subsPath);
   const sessionFolder = path.join(subsPath, id);
   const senderId = msg?.sender;
-  const { state, saveCreds: saveCredsDB } = await useSQLiteAuthState(sessionFolder);
+  const { state, saveCreds: saveCredsDB, close: closeAuthDB } = await useSQLiteAuthState(sessionFolder);
   const version = await getVersion();
   let saveCredsTimer = null;
   const saveCreds = () => { clearTimeout(saveCredsTimer); saveCredsTimer = setTimeout(saveCredsDB, 2000); };
   const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
   const msgStore = new Map();
   const msgLimit = 500;
-  console.info = () => {};
   const socks = makeWASocket({
     version,
     logger,
@@ -155,13 +161,15 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       }
       try {
         if (!raw?.message || raw.key?.remoteJid === 'status@broadcast') continue;
-        if ((raw.messageTimestamp * 1000) < bootTime - 15_000) continue;
+        if ((Number(raw.messageTimestamp || 0) * 1000) < bootTime - 15_000) continue;
         if (raw.message.ephemeralMessage) raw.message = raw.message.ephemeralMessage.message;
-        const m = await smsg(socks, raw);
-      } catch (e) { log.ui(e); }
+        if (typeof globalThis.__shinRouter?.handle === 'function') {
+          await globalThis.__shinRouter.handle(socks, raw);
+        }
+      } catch (e) { log.error('[SubBot msg]', e); }
     }
   });
-  try { await events(socks, msg); } catch (err) { log.ui(chalk.gray(`[ EVENT ERROR  ]  → ${err}`)); }
+  try { await events(socks, msg); } catch (err) { log.gray(`[ EVENT ERROR ] -> ${err?.message || err}`); }
   socks.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (connection === 'open') {
       bootTime = Date.now();
@@ -172,45 +180,56 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       const settings = db.getSettings(botDir);
       settings.type = 'Sub';
       db.setSettings(botDir, 'type', settings.type);
+      if (!Array.isArray(global.conns)) global.conns = [];
       const conss = global.conns.findIndex((c) => c.userId === socks.userId);
       if (conss !== -1) { global.conns[conss] = socks; } else { global.conns.push(socks); }
       delete reintentos[socks.userId || id];
-      log.ui(chalk.gray(`[ ✿  ]  SUB-BOT conectado: ${socks.userId}`));
+      log.info(chalk.gray(`[ ✿ ] SUB-BOT conectado: ${socks.userId}`));
 
       // Guardar credenciales de forma inmediata y síncrona
       clearTimeout(saveCredsTimer);
-      // Si esto falla, la sesión del sub-bot no queda guardada y se cae al
-      // reiniciar. Antes fallaba en silencio: ahora deja rastro en el log.
       try { await saveCredsDB(); }
       catch (e) { log.warn("Sub-bot " + (socks.userId || id) + ": no se pudieron guardar las credenciales (" + (e.message || e) + ")"); }
 
       const sentFlagFile = path.join(socks.sessionFolder, 'msg_sent.flag');
       const hasSentMessage = fs.existsSync(sentFlagFile);
       if (msg && socks.isCommand && !hasSentMessage && socks.client && socks.chatId) {
-        await socks.client.sendMessage(chatId, { text: `✎ Has conectado un nuevo Socket de tipo *Sub*.` }, { quoted: msg });
-        fs.writeFileSync(sentFlagFile, '1');
         socks.isCommand = false;
         if (commandFlags[socks.senderId]) delete commandFlags[socks.senderId];
+        await socks.client.sendMessage(chatId, { text: `✎ Has conectado un nuevo Socket de tipo *Sub*.` }, { quoted: msg });
+        fs.writeFileSync(sentFlagFile, '1');
       }
     }
     if (connection === 'close') {
       const botId = socks.userId || id;
       const reason = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.reason || 0;
+      clearTimeout(saveCredsTimer);
+      if (Array.isArray(global.conns)) {
+        const idx = global.conns.indexOf(socks);
+        if (idx !== -1) global.conns.splice(idx, 1);
+      }
       remove(socks);
+      try { closeAuthDB?.(); } catch {}
       const isRegistered = Boolean(state.creds?.registered);
       const intentos = reintentos[botId] || 0;
       reintentos[botId] = intentos + 1;
       const delay = backoffDelay(intentos, 4000, 30000, 1500);
 
-      // Si es un sub-bot YA registrado, NUNCA borrar la sesión por cortes de red o reinicios
+      if (reason === DisconnectReason.connectionReplaced) {
+        log.warn(`[ ✿ ] SUB-BOT ${botId} Conexión reemplazada en otro proceso.`);
+        delete reintentos[botId];
+        return;
+      }
+
+      // Si es un sub-bot YA registrado, solo limpiar si realmente fue desvinculado (401/403/411)
       if (isRegistered) {
-        if ([401, 403].includes(reason) && reason === 401 && String(lastDisconnect?.error?.message || '').includes('logged out')) {
-          log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Sesión cerrada desde el teléfono. Limpiando.`));
+        if ([DisconnectReason.loggedOut, DisconnectReason.forbidden, DisconnectReason.multideviceMismatch].includes(reason)) {
+          log.warn(`[ ✿ ] SUB-BOT ${botId} Sesión cerrada (${reason}). Limpiando.`);
           try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch {}
           delete reintentos[botId];
           return;
         }
-        log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} reconectando sesión existente en ${Math.round(delay/1000)}s...`));
+        log.info(chalk.gray(`[ ✿ ] SUB-BOT ${botId} reconectando sesión existente en ${Math.round(delay / 1000)}s...`));
         setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
         return;
       }
@@ -218,16 +237,16 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       // Si estaba en fase de pairing (aún no registrado)
       if ([401, 403].includes(reason)) {
         if (intentos < 5) {
-          log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Pairing en progreso (${reason}) intento ${intentos}/5 → Reintentando en ${Math.round(delay/1000)}s...`));
+          log.info(chalk.gray(`[ ✿ ] SUB-BOT ${botId} Pairing en progreso (${reason}) intento ${intentos}/5 → Reintentando en ${Math.round(delay / 1000)}s...`));
           setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
         } else {
-          log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} Código de pairing expirado. Limpiando temporales.`));
-          try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (e) {}
+          log.warn(`[ ✿ ] SUB-BOT ${botId} Código de pairing expirado. Limpiando temporales.`);
+          try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch {}
           delete reintentos[botId];
         }
         return;
       }
-      log.ui(chalk.gray(`[ ✿  ]  SUB-BOT ${botId} desconectado (${reason}), reconectando en ${Math.round(delay/1000)}s...`));
+      log.info(chalk.gray(`[ ✿ ] SUB-BOT ${botId} desconectado (${reason}), reconectando en ${Math.round(delay / 1000)}s...`));
       setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
     }
 

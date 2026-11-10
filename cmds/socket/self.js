@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { esDuenoSocket } from "#permissions";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['self'],
@@ -12,9 +13,8 @@ export default {
   description: 'Hacer privado o público tu bot.',
   run: async ({ msg, sock, args }) => {
     const idBot = botJid(sock);
-    let config = db.getSettings(idBot) || {};
-    const isOwner2 = [idBot, ...(config.owner ? [config.owner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
-    if (!isOwner2) return msg.reply(global.mess.socket);
+    const config = db.getSettings(idBot) || {};
+    if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
     const estado = config.self ? 1 : 0;
     if (args[0] === 'enable' || args[0] === 'on') {
       if (estado) return msg.reply('《✧》 El modo *Self* ya estaba activado.');
