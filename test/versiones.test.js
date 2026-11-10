@@ -74,7 +74,21 @@ test("el arranque declara su versión en un solo sitio", () => {
 });
 
 test("los documentos históricos no se reescriben", () => {
-  const auditoria = ["docs", "AUDITORIA-3.2.1.md"];
-  if (!fs.existsSync(path.join(RAIZ, ...auditoria))) return;
+  const auditoria = ["docs", "historico", "AUDITORIA-3.2.1.md"];
+  // Si el archivo no está, es que alguien lo movió o lo borró: eso sí es un
+  // fallo. Antes esta prueba se saltaba en silencio y no vigilaba nada.
+  assert.ok(fs.existsSync(path.join(RAIZ, ...auditoria)), "la auditoría histórica sigue en docs/historico/");
   assert.match(leer(...auditoria), /v3\.2\.9\//, "una auditoría vieja conserva las versiones que auditó");
+});
+
+test("lo histórico no entra en la propagación de versiones", async () => {
+  // Reescribir un documento histórico sería falsificar el registro: cuenta
+  // lo que se dijo aquel día.
+  const { documentos } = await import(path.join(RAIZ, "scripts", "versiones.mjs"));
+  const lista = documentos(RAIZ).map((f) => path.relative(RAIZ, f));
+  assert.ok(lista.length > 0, "hay documentos vivos que versionar");
+  assert.ok(
+    !lista.some((f) => f.includes("historico")),
+    "ningún archivo de docs/historico/ se reescribe: " + lista.filter((f) => f.includes("historico")).join(", "),
+  );
 });

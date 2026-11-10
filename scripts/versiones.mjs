@@ -28,8 +28,8 @@ import { fileURLToPath } from "node:url";
 export const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // Los documentos históricos cuentan lo que se dijo entonces; reescribirlos
-// sería falsificar el registro.
-const NO_VERSIONAR = /^(AUDITORIA|auditoria|investigacion|plan-bloques)/;
+// sería falsificar el registro. Viven en docs/historico/ y esa carpeta no se
+// toca (los demás documentos siguen en docs/ y sí se propagan).
 
 // Reglas por documento. La de las URLs solo toca a ESTE repositorio: los
 // ejemplos de `FORK.md` hablan del fork de quien lee, no de nosotros.
@@ -42,12 +42,12 @@ const DONDE_LA_VERSION = [
   /(│\s*versión\s+)v\d+\.\d+\.\d+/g,
 ];
 
-function documentos(raiz) {
+export function documentos(raiz) {
   const lista = [path.join(raiz, "README.md"), path.join(raiz, "shin.sh")];
   const docs = path.join(raiz, "docs");
   if (fs.existsSync(docs)) {
     for (const f of fs.readdirSync(docs).sort()) {
-      if (f.endsWith(".md") && !NO_VERSIONAR.test(f) && f !== "FORK.md") lista.push(path.join(docs, f));
+      if (f.endsWith(".md") && f !== "FORK.md") lista.push(path.join(docs, f));
     }
   }
   return lista.filter((f) => fs.existsSync(f));

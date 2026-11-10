@@ -4,7 +4,7 @@
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="426/426 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="433/433 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -163,7 +163,7 @@ npm run docs:web
 —la versión de Play Store está abandonada y rompe los paquetes— y pega esto:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 Una línea, y el bot queda arrancado. Ese archivo descarga el instalador de
@@ -215,9 +215,9 @@ huella cubre también el arranque:
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.7.8 --go
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.7.9 --go
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -227,7 +227,7 @@ sin él, el instalador se queda en «instalado» y se arranca luego con `shin`.
 ¿Solo quieres saber si el archivo es el bueno, sin instalar nada?
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/shin.sh | sh -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh -s -- --dry-run
 ```
 
 </details>
@@ -293,7 +293,7 @@ hacia fuera y solo habla con `127.0.0.1`.
 **Servidor o VPS.** El mismo comando, sin preparar nada antes:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 Si falta Node o git, el instalador lo resuelve: con el gestor de paquetes del
@@ -361,17 +361,21 @@ y no a `main`.
 El README es el resumen. Lo que de verdad hace falta para **hacer** algo está en
 `docs/`, en texto que se puede copiar:
 
-| Guía | Para quién |
+**[📑 El índice completo está en `docs/INDICE.md`](docs/INDICE.md)**: una tabla
+que responde «¿dónde está lo que busco?» sin abrir nada más.
+
+Lo que hay, en corto:
+
+| Quiero… | Documento |
 |---|---|
-| **[docs/INSTALACION.md](docs/INSTALACION.md)** | el que instala por primera vez: Termux o VPS, qué escribir, qué debe ver, y qué hacer cuando sale un error |
-| **[docs/TERMUX.md](docs/TERMUX.md)** | el caso del teléfono con todo el detalle (wakelock, batería, procesos hijos) |
-| **[docs/VPS.md](docs/VPS.md)** | servidor, systemd, pm2 y `0.0.0.0` con contraseña |
-| **[docs/MAPA.md](docs/MAPA.md)** | el plano: qué hay en cada carpeta, el viaje de un mensaje, para qué está cada dependencia y qué se retiró (se regenera con `npm run mapa`) |
-| **[docs/DESARROLLO.md](docs/DESARROLLO.md)** | el que quiere **entender**: cómo está montado, tu primer comando, botones, base de datos y migraciones |
-| **[docs/FORK.md](docs/FORK.md)** | el que quiere **publicar su propia versión**: nombre, instalador, imágenes, su copyright y cómo no romper la licencia |
-| **[docs/CONECTOR.md](docs/CONECTOR.md)** | los ocho parches de Baileys y por qué |
-| **[docs/LID.md](docs/LID.md)** | identidades `@lid` contra teléfonos |
-| **[docs/AUDITORIA-3.2.1.md](docs/AUDITORIA-3.2.1.md)** | qué se revisó y qué se encontró |
+| **instalarlo** y sacarlo adelante | [INSTALACION](docs/INSTALACION.md) · [en el teléfono](docs/TERMUX.md) · [en un servidor](docs/VPS.md) |
+| **entender** cómo está hecho | [MAPA](docs/MAPA.md) · [DESARROLLO](docs/DESARROLLO.md) · [CONECTOR](docs/CONECTOR.md) · [LID](docs/LID.md) |
+| **publicar** mi propia versión | [FORK](docs/FORK.md) · [PROCEDENCIA](docs/PROCEDENCIA.md) |
+
+Lo que ya no cambia —auditorías, planes e investigaciones de una fecha— está en
+[`docs/historico/`](docs/historico/), con un aviso en cada uno: se guarda como
+registro y **no se mantiene al día**. Un documento que describe el pasado y se
+actualiza a medias se vuelve mentira; ahí se asume que es pasado.
 
 
 <h2 id="cómo-está-hecho">Cómo está hecho</h2>
@@ -384,7 +388,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 426 pruebas
+npm test               # las 433 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot

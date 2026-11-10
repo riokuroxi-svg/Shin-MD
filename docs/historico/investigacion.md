@@ -1,3 +1,7 @@
+> **Histórico.** 2026-09-01 · investigación con Baileys 6.7.24. Se guarda como registro de lo que se
+> decidió y por qué; **no se mantiene al día**. Para el estado actual,
+> ver [docs/MAPA.md](../MAPA.md) y [docs/INDICE.md](../INDICE.md).
+
 # 🔬 Investigación técnica — Shin-MD · Botones, juegos y rich messages
 
 _Fecha: 2026-09-01_

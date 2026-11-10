@@ -20,6 +20,17 @@ hay nada dentro de una imagen.
 5. [Comprobar que todo está bien](#5-comprobar-que-todo-está-bien)
 6. [Actualizar, reparar, desinstalar](#6-actualizar-reparar-desinstalar)
 7. [Cuando algo sale mal](#7-cuando-algo-sale-mal)
+8. [Cuando algo no va: `shin doctor`](#8-cuando-algo-no-va-shin-doctor)
+9. [Que arranque solo (servidor)](#9-que-arranque-solo-servidor)
+
+Si lo que falla es la **actualización**, mira primero
+[la sección 7](#7-cuando-algo-sale-mal): el caso más común está explicado
+con el mensaje exacto que verás.
+
+> Este documento es para **cualquier** aparato. El caso del teléfono, con todo
+> el detalle (wakelock, batería, procesos hijos), está en
+> [TERMUX.md](TERMUX.md); el del servidor, en [VPS.md](VPS.md). Aquí no se
+> repiten.
 
 ---
 
@@ -51,7 +62,7 @@ Si en algún momento pregunta algo, deja la opción por defecto (pulsa Enter).
 Copia esta línea, pégala en Termux y pulsa Enter:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 **Qué hace, en orden:**
@@ -75,7 +86,7 @@ Verás algo así, y al final un resumen:
 ```
   ✓ Node 26.4.0   npm 11.20.0
   ✓ git listo
-  ▸ descargando Shin-MD v3.7.8
+  ▸ descargando Shin-MD v3.7.9
   ✓ dependencias instaladas
   ✓ 8 parches del conector verificados
   ✓ wakelock activo
@@ -102,7 +113,7 @@ Si dice menos de 22.5 (o dice "command not found"), instálalo desde
 <https://nodejs.org> — versión LTS. Después, el mismo bloque de arriba:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 En un servidor donde quieras que siga corriendo sin tu sesión, mira
@@ -123,7 +134,7 @@ No hay que hacer nada: el instalador mira qué falta y lo resuelve.
 Si prefieres que nunca instale paquetes del sistema:
 
 ```sh
-SHIN_NO_INSTALAR=1 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.8/shin.sh | sh
+SHIN_NO_INSTALAR=1 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 Y si quieres autorizarlo sin que pregunte (para un script de aprovisionamiento):
@@ -168,7 +179,7 @@ Vincular con número de teléfono**, y tecleas el código.
 
 ╭ en línea ──────────────────────────────────────────────╮
 │ cuenta   Shin-MD                                       │
-│ versión  v3.7.8                                        │
+│ versión  v3.7.9                                        │
 │ comandos 213                                           │
 │ prefijo  .                                             │
 │ panel    http://127.0.0.1:3000                         │
@@ -259,7 +270,7 @@ sobreviven a todo menos a `--purge`, que pregunta dos veces.
 | Quiero… | Comando |
 |---|---|
 | actualizar conservando mi sesión | `cd ~/Shin-MD && bash install.sh --update` |
-| pasar a una versión concreta | `bash install.sh --update --version v3.7.8` |
+| pasar a una versión concreta | `bash install.sh --update --version v3.7.9` |
 | seguir la rama `main` y dejar de estar fijado a una versión | `bash install.sh --update --branch main` |
 | arreglar una instalación rota | `bash install.sh --repair` |
 | saber si todo está bien | `bash install.sh --verify` |
@@ -288,7 +299,7 @@ cd ~/Shin-MD && npm start
 La instalación es más vieja que el comando. Actualiza:
 
 ```bash
-cd ~/Shin-MD && bash install.sh --update --version v3.7.8
+cd ~/Shin-MD && bash install.sh --update --version v3.7.9
 ```
 
 ### "Node 20 es demasiado antiguo"
@@ -327,6 +338,25 @@ eso ya no lo arregla reiniciar. Mira el error:
 tail -f ~/Shin-MD/logs/*.log
 ```
 
+### Al actualizar dice «No se pudo consultar el repositorio (¿sin conexión?)»
+
+Con internet funcionando. En la 3.7.8 y anteriores ese mensaje culpaba a la red
+sin comprobarlo, y se comía el error real de git. Desde la **3.7.8** el
+instalador reintenta tres veces (la segunda por HTTP/1.1, porque en datos
+móviles el HTTP/2 se corta) y, si aun así falla, **te enseña lo que dijo git** y
+traduce el motivo: DNS, certificados, credenciales, `git` sin HTTPS o la red
+cortando la transferencia.
+
+Si estás en una versión anterior y ves ese mensaje, actualiza primero:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
+```
+
+Y si el error real resulta ser `would clobber existing tag`, es que el proyecto
+rehízo una etiqueta: `git -C ~/Shin-MD fetch --tags --force origin` lo resuelve,
+y es exactamente lo que hace el instalador nuevo.
+
 ### Nada de esto funciona
 
 ```bash
@@ -338,7 +368,7 @@ tocar tus datos.
 
 ---
 
-## 6. Cuando algo no va: `shin doctor`
+## 8. Cuando algo no va: `shin doctor`
 
 ```sh
 shin doctor
@@ -349,7 +379,7 @@ versiones, de dónde salió Node, si los módulos y los parches del conector est
 cuánto ocupa la sesión, espacio libre, si el bot corre y si hay servicio de
 systemd. Del `.env` solo dice cuántas claves tiene, nunca su contenido.
 
-## 7. Que arranque solo (servidor)
+## 9. Que arranque solo (servidor)
 
 ```sh
 shin service            # systemd, con arranque automático

@@ -1,5 +1,10 @@
-regenerado
-a de los `catch {}` vacíos
+> **Histórico.** 2026-09 · recuento de los `catch` vacíos. Se guarda como registro de lo que se
+> decidió y por qué; **no se mantiene al día**. Para el estado actual,
+> ver [docs/MAPA.md](../MAPA.md) y [docs/INDICE.md](../INDICE.md).
+
+# Los `catch {}` vacíos del proyecto
+
+Recuento y clasificación de los bloques `catch` vacíos,
 
 Total: **183** bloques `catch` vacíos en el proyecto.
 

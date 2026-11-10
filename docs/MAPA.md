@@ -1,4 +1,4 @@
-# Mapa de Shin-MD 3.7.8
+# Mapa de Shin-MD 3.7.9
 
 > Generado con `npm run mapa`. No se edita a mano: los números y las listas
 > salen del repositorio, así que si algo se mueve, se vuelve a lanzar.
@@ -36,13 +36,13 @@ para y dice la orden exacta que hay que escribir.
 | `boot/` | 1 | El arranque: licencia, banner, vinculación y carga de servicios. Un solo archivo, en orden. |
 | `cmds/` | 219 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
 | `data/` | — | La base de datos del bot y su respaldo JSON. Se crea sola. |
-| `docs/` | 76 | Documentación para quien lee y para quien toca el código. |
+| `docs/` | 77 | Documentación para quien lee y para quien toca el código. |
 | `logs/` | — | El registro diario del bot. |
 | `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
 | `scripts/` | 19 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
 | `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
 | `src/` | 82 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
-| `test/` | 49 | Las pruebas. Una por tema; cada archivo corre solo. |
+| `test/` | 50 | Las pruebas. Una por tema; cada archivo corre solo. |
 | `tools/` | 11 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
 | `src/commands/` | 6 | El motor de comandos: cargador, router, contexto de mensaje y permisos. |
 | `src/core/` | 5 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
@@ -57,7 +57,7 @@ número a propósito: se llenan al correr el bot y al pasar las pruebas, así qu
 contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
 y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
-Son **219 archivos de comando**, **52 utilidades** en `src/lib`, **10 servicios** y **48 archivos de prueba**.
+Son **219 archivos de comando**, **52 utilidades** en `src/lib`, **10 servicios** y **49 archivos de prueba**.
 
 ## El viaje de un mensaje
 

@@ -1,3 +1,7 @@
+> **Histórico.** 2026-09-25 · plan de trabajo por bloques. Se guarda como registro de lo que se
+> decidió y por qué; **no se mantiene al día**. Para el estado actual,
+> ver [docs/MAPA.md](../MAPA.md) y [docs/INDICE.md](../INDICE.md).
+
 # 🗺️ Shin-MD — Plan por bloques (desde la lluvia de ideas)
 
 _Fecha: 2026-09-25 · Estado: BLOQUES 0, 1, 2, 3, 4 y 5 COMPLETADOS ✅ (falta prueba visual del menú en teléfono real)_

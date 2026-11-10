@@ -1,3 +1,7 @@
+> **Histórico.** 2026-09 · plantillas de menú que se barajaron. Se guarda como registro de lo que se
+> decidió y por qué; **no se mantiene al día**. Para el estado actual,
+> ver [docs/MAPA.md](../MAPA.md) y [docs/INDICE.md](../INDICE.md).
+
 # 🎨 Plantillas de Menú — Shin-MD
 
 > Elige una plantilla y la implemento. Todas se renderizan con formato de WhatsApp

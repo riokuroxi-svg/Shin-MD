@@ -1,3 +1,7 @@
+> **Histórico.** 2026-10-05 · auditoría de la versión 3.2.1. Se guarda como registro de lo que se
+> decidió y por qué; **no se mantiene al día**. Para el estado actual,
+> ver [docs/MAPA.md](../MAPA.md) y [docs/INDICE.md](../INDICE.md).
+
 # Auditoría de seguridad del instalador — 3.2.1
 
 Commit auditado: `ec2c936` (v3.2.0). Este documento responde a la auditoría
