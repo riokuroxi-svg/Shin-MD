@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1160 54" width="1160" height="54" role="img" aria-label="">
+<line x1="0" y1="27" x2="540" y2="27" stroke="#F2DDE6" stroke-width="2" stroke-linecap="round"/>
+<line x1="620" y1="27" x2="1160" y2="27" stroke="#F2DDE6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="580" cy="27" r="17" fill="#FFFAF6"/>
+<path d="M 592 27 L 584.1 30 L 583.7 38.4 L 578.4 31.8 L 570.3 34.1 L 575 27 L 570.3 19.9 L 578.4 22.2 L 583.7 15.6 L 584.1 24 Z" fill="#E4668F"/>
+<path d="M 521.8 28.4 L 518.5 28 L 516.6 30.8 L 517 27.5 L 514.2 25.6 L 517.5 26 L 519.4 23.2 L 519 26.5 Z" fill="#9B7BD4" opacity="0.7"/>
+<path d="M 645.9 27.7 L 642.6 27.9 L 641.3 30.9 L 641.1 27.6 L 638.1 26.3 L 641.4 26.1 L 642.7 23.1 L 642.9 26.4 Z" fill="#6FCBB0" opacity="0.7"/>
+</svg>

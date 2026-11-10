@@ -5,7 +5,7 @@
   "categorias": 15,
   "pruebas": 433,
   "pruebasTotal": 433,
-  "archivos": 49,
+  "archivos": 51,
   "version": "3.7.9",
   "node": "22.5",
   "baileys": "7.0.0-rc14",

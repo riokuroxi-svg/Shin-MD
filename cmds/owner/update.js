@@ -21,22 +21,22 @@
 //  `.fix` / `.update`, solo dueños.
 // ═══════════════════════════════════════════════════════════════════
 import log from "#logger";
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { actualizar, confirmacionVigente } from '../../extras/actualizar.js';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { actualizar, confirmacionVigente } from "../../extras/actualizar.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // La raíz del bot: este archivo vive en cmds/owner/.
-const RAIZ = path.resolve(__dirname, '..', '..');
+const RAIZ = path.resolve(__dirname, "..", "..");
 
 // Quién pidió confirmación y cuándo. En memoria a propósito: si el bot se
 // reinicia, la confirmación se olvida y hay que volver a pedirla.
 const pedidos = new Map();
 
-async function reloadCommands(dir = path.join(__dirname, '..')) {
+async function reloadCommands(dir = path.join(__dirname, "..")) {
   const commandsMap = new Map();
   async function readCommands(folder) {
     const files = fs.readdirSync(folder);
@@ -44,9 +44,9 @@ async function reloadCommands(dir = path.join(__dirname, '..')) {
       const fullPath = path.join(folder, file);
       if (fs.lstatSync(fullPath).isDirectory()) {
         await readCommands(fullPath);
-      } else if (file.endsWith('.js')) {
+      } else if (file.endsWith(".js")) {
         try {
-          const { default: cmd } = await import(fullPath + '?update=' + Date.now());
+          const { default: cmd } = await import(fullPath + "?update=" + Date.now());
           if (cmd?.command) {
             cmd.command.forEach((c) => {
               commandsMap.set(c.toLowerCase(), cmd);
@@ -63,14 +63,14 @@ async function reloadCommands(dir = path.join(__dirname, '..')) {
 }
 
 export default {
-  command: ['fix', 'update'],
-  category: 'owner',
-  description: 'Actualizar el código desde GitHub y recargar los comandos.',
+  command: ["fix", "update"],
+  category: "owner",
+  description: "Actualizar el código desde GitHub y recargar los comandos.",
   isOwner: true,
   run: async ({ msg, sock }) => {
     const jid = msg.key?.remoteJid || msg.chat;
-    const prefijo = msg.usedPrefix || '.';
-    const comando = msg.command || 'fix';
+    const prefijo = msg.usedPrefix || ".";
+    const comando = msg.command || "fix";
     const ahora = Date.now();
 
     const confirmado = confirmacionVigente(pedidos.get(jid), { ahora });
@@ -79,11 +79,15 @@ export default {
     try {
       r = await actualizar({ raiz: RAIZ, prefijo, comando, confirmado, ahora });
     } catch (error) {
-      await sock.sendMessage(jid, { text: `❌ Error inesperado: ${error.message}\n\n> El código no se ha tocado.` }, { quoted: msg });
+      await sock.sendMessage(
+        jid,
+        { text: `❌ Error inesperado: ${error.message}\n\n> El código no se ha tocado.` },
+        { quoted: msg }
+      );
       return;
     }
 
-    if (r.estado === 'espera') {
+    if (r.estado === "espera") {
       pedidos.set(jid, ahora);
       await sock.sendMessage(jid, { text: r.texto }, { quoted: msg });
       return;
@@ -91,17 +95,17 @@ export default {
 
     pedidos.delete(jid);
 
-    if (r.estado === 'error') {
+    if (r.estado === "error") {
       await sock.sendMessage(jid, { text: r.texto }, { quoted: msg });
       return;
     }
 
-    let recarga = 'recargados';
+    let recarga = "recargados";
     try {
-      await reloadCommands(path.join(__dirname, '..'));
+      await reloadCommands(path.join(__dirname, ".."));
     } catch (err) {
-      recarga = '⚠️ no pude recargar (reinicia el bot)';
-      log.error('No pude recargar los comandos tras actualizar:', err);
+      recarga = "⚠️ no pude recargar (reinicia el bot)";
+      log.error("No pude recargar los comandos tras actualizar:", err);
     }
 
     await sock.sendMessage(
@@ -110,11 +114,11 @@ export default {
         text:
           `✅ *Actualizado*\n\n` +
           `> ${r.texto}\n` +
-          `> Base de datos: ${r.avisoDatos || 'intacta'}\n` +
+          `> Base de datos: ${r.avisoDatos || "intacta"}\n` +
           `> Comandos: ${recarga}\n\n` +
           `♻️ Si algo se ve raro, reinicia con ${prefijo}restart.`,
       },
-      { quoted: msg },
+      { quoted: msg }
     );
   },
 };

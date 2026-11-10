@@ -45,12 +45,15 @@ function numerosReales(totalComandos) {
       "⚠  No hay test/resumen-suite.json: corre `npm test` para tener los números reales."
     );
   }
-  if (!pruebas) {
-    // Sin resumen, se cuentan los archivos para no dejar huecos en la página.
-    archivos =
-      archivos ||
-      fs.readdirSync(path.join(RAIZ, "test")).filter((f) => f.endsWith(".test.js")).length;
-  }
+  // El número de archivos de prueba se cuenta en el disco, no se copia del
+  // resumen: al añadir una prueba nueva y no volver a pasar la suite entera, el
+  // resumen se queda con el número viejo y la página anunciaba 49 archivos
+  // cuando ya había 51. Los que existen son un hecho comprobable; las pruebas
+  // que pasan, solo lo sabe la última corrida.
+  const enDisco = fs
+    .readdirSync(path.join(RAIZ, "test"))
+    .filter((f) => f.endsWith(".test.js")).length;
+  if (!archivos || enDisco !== archivos) archivos = enDisco;
   const pkg = JSON.parse(fs.readFileSync(PAQUETE, "utf8"));
   const node = (pkg.engines?.node || "22").replace(/[^0-9.]/g, "").replace(/\.0$/, "");
   // `docs/assets/datos.json` alimenta los gráficos del README y lo comprueba
@@ -67,7 +70,9 @@ function numerosReales(totalComandos) {
       datos.archivos = archivos;
       if (JSON.stringify([datos.pruebas, datos.pruebasTotal, datos.archivos]) !== antes) {
         fs.writeFileSync(rutaDatos, `${JSON.stringify(datos, null, 2)}\n`);
-        console.log(`  ✓ docs/assets/datos.json al día · ${pruebas}/${total} · ${archivos} archivos`);
+        console.log(
+          `  ✓ docs/assets/datos.json al día · ${pruebas}/${total} · ${archivos} archivos`
+        );
       }
     } catch (err) {
       console.warn(`  ⚠  no pude actualizar docs/assets/datos.json: ${err.message}`);

@@ -12,7 +12,13 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { actualizar, revisarArbol, confirmacionVigente, marcaDe, VENTANA_MS } from "../extras/actualizar.js";
+import {
+  actualizar,
+  revisarArbol,
+  confirmacionVigente,
+  marcaDe,
+  VENTANA_MS,
+} from "../extras/actualizar.js";
 
 const ENTORNO = {
   ...process.env,
@@ -87,8 +93,15 @@ test("con cambios sin subir guarda parche, avisa y NO toca nada", async () => {
   assert.match(r.texto, /Hay 1 archivo\(s\) con cambios sin subir/);
   assert.match(r.texto, /parche-2026-11-10T09-57-22-656Z\.patch/);
   assert.match(r.texto, /escribe otra vez \*\.fix\* en los próximos 5 minutos/);
-  assert.equal(fs.readFileSync(path.join(bot, "index.js"), "utf8"), "console.log('mío');\n", "no debe tocar el archivo");
-  const parche = fs.readFileSync(path.join(bot, "tmp", "parche-2026-11-10T09-57-22-656Z.patch"), "utf8");
+  assert.equal(
+    fs.readFileSync(path.join(bot, "index.js"), "utf8"),
+    "console.log('mío');\n",
+    "no debe tocar el archivo"
+  );
+  const parche = fs.readFileSync(
+    path.join(bot, "tmp", "parche-2026-11-10T09-57-22-656Z.patch"),
+    "utf8"
+  );
   assert.match(parche, /mío/, "el parche tiene que llevar el cambio");
 });
 
@@ -112,7 +125,11 @@ test("la base de datos no cuenta como cambio y sobrevive a la actualización", a
 
   const r = await actualizar({ raiz: bot });
   assert.equal(r.estado, "actualizado");
-  assert.match(fs.readFileSync(path.join(bot, "data", "shin.db.json"), "utf8"), /luis/, "los usuarios no se pierden");
+  assert.match(
+    fs.readFileSync(path.join(bot, "data", "shin.db.json"), "utf8"),
+    /luis/,
+    "los usuarios no se pierden"
+  );
   assert.match(fs.readFileSync(path.join(bot, "index.js"), "utf8"), /v2/);
   assert.deepEqual(r.datos, [{ archivo: "data/shin.db.json", conservado: true }]);
 });

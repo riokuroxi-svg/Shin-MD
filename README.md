@@ -1,86 +1,49 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 378 pruebas" width="100%">
+<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos y 433 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="433/433 pruebas" height="52">
-<img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
-<img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
-<img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
-<img src="docs/assets/pastel/insignia-licencia.svg" alt="Licencia AGPL-3.0-only" height="52">
-<img src="docs/assets/pastel/insignia-termux.svg" alt="Termux (probado en simulación)" height="52">
+<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="433/433 pruebas"></a>
+<a href="#instalación"><img src="docs/assets/perfil/insignias/comandos.svg" height="50" alt="213 comandos"></a>
+<a href="#licencia-y-marca"><img src="docs/assets/perfil/insignias/licencia.svg" height="50" alt="Licencia AGPL-3.0-only"></a>
+<a href="#instalación"><img src="docs/assets/perfil/insignias/node.svg" height="50" alt="Node 22.5 o superior"></a>
+<a href="https://ko-fi.com/kuroxisvg"><img src="docs/assets/perfil/insignias/kofi.svg" height="50" alt="Invítame un café"></a>
 
-<br><br>
-
-<!-- El único recurso externo del README: el badge del CI, porque su estado
-     cambia en cada push. Si quieres cero peticiones a terceros, borra esta línea. -->
 [![CI](https://img.shields.io/github/actions/workflow/status/riokuroxi-svg/Shin-MD/test.yml?style=flat-square&label=CI&labelColor=2E2740&color=7C5FC4)](https://github.com/riokuroxi-svg/Shin-MD/actions)
 
 **El bot de WhatsApp que sobrevive a los cortes de red, no pierde tu sesión
 y reduce el riesgo de bloqueo.**
 
-213 comandos · anti-ban nativo · Node ≥ 22.5 · sin servicios de terceros en medio.
-
-_Reducir el riesgo no es eliminarlo: eso lo decide WhatsApp, no el bot. Lo que sí está en nuestra mano está contado en [el anti-ban por dentro](#el-anti-ban-por-dentro)._
-
-[🌐 Página del proyecto](docs/web/index.html) ·
-[⚡ Instalar](#instalación-en-un-comando) ·
-[🧩 Comandos](#los-comandos) ·
-[🛡️ Anti-ban](#el-anti-ban-por-dentro) ·
-[📚 Guías](#las-guías) · [🪪 Identidades](#identidades-lid) ·
-[🔌 El conector](#el-conector) ·
-[📜 Licencia](#licencia-y-marca) ·
-[🧪 Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab) ·
-[☕ Apoyar el proyecto](#apoyar-el-proyecto)
+[Anti-ban](#el-anti-ban-por-dentro) · [Comandos](#los-comandos) ·
+[Galería](#galería) · [Instalación](#instalación) · [Guías](#las-guías) ·
+[Conector](#el-conector) · [LID](#identidades-lid) ·
+[Licencia](#licencia-y-marca) · [Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab) ·
+[Apoyar](#apoyar-el-proyecto)
 
 </div>
 
-<!-- Sección de apoyo bien visible, primera cosa después de la navegación -->
-<div align="center" id="apoyar-el-proyecto">
+<img src="docs/assets/perfil/cifras.svg" alt="433/433 pruebas en 49 archivos, 213 comandos en 15 categorías, 752 nombres con 539 alias, versión 3.7.9" width="100%">
 
-**Shin-MD es y seguirá siendo gratis, sin publicidad ni funciones de pago.**<br>
-Si te sirve y quieres ayudar a mantener el desarrollo (hosting, tiempo, APIs),
-puedes invitarme un café:
-
-<br>
-
-<a href="https://ko-fi.com/kuroxisvg" target="_blank" rel="noopener noreferrer">
-  <img src="https://storage.ko-fi.com/cdn/kofi5.png?v=3" alt="Invítame un café en Ko-fi" height="60">
-</a>
-
-</div>
-
-<img src="docs/assets/pastel/aviso.svg" alt="Usa un número secundario" width="100%">
-
-> **Usa un chip aparte, no tu número de siempre.** WhatsApp puede sancionar las
-> cuentas que automatizan mensajes; este bot reduce el riesgo, no lo elimina. Un
-> chip barato cuesta menos que tu cuenta personal.
+<img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
 
 <h2 id="lo-que-lo-hace-distinto">Lo que lo hace distinto</h2>
 
-<img src="docs/assets/pastel/banner-01.svg" alt="01 · Lo que lo hace distinto" width="100%">
-
-<img src="docs/assets/pastel/razones.svg" alt="Seis razones medibles" width="100%">
-
-Y si quieres comprobarlo en vez de creértelo, cada razón tiene su archivo:
+No es una lista de deseos: cada línea de abajo tiene su archivo, y su prueba.
 
 | Lo que promete | Dónde está para leerlo |
 |---|---|
-| anti-ban (jitter, perfil, calentamiento) | `src/core/engine/throttler.js` |
+| anti-ban (jitter gaussiano, perfil, calentamiento) | `src/core/engine/throttler.js` |
 | cola con prioridad y reintentos | `src/network/queue.js` |
 | sesión en SQLite, sin `creds.json` corrupto | `src/core/auth.js` y `src/storage/database.js` |
 | el bot se reinicia solo si se cae | `scripts/supervisor.mjs` y `scripts/vigia.mjs` |
 | cada afirmación con su prueba | `test/` (una prueba por cosa que se dice) |
 | capas separadas: motor por un lado, comandos por otro | `src/` y `cmds/` |
 
-Eso es también la base para tus propios proyectos: no hace falta entenderlo
-todo de golpe. Se empieza por un comando y se va bajando. El camino, con
-ejemplos que funcionan tal cual, está en **[docs/DESARROLLO.md](docs/DESARROLLO.md)**.
+_Reducir el riesgo no es eliminarlo: eso lo decide WhatsApp, no el bot. Lo que sí
+está en nuestra mano está contado en [el anti-ban por dentro](#el-anti-ban-por-dentro)._
 
 <h2 id="el-anti-ban-por-dentro">El anti-ban por dentro</h2>
-
-<img src="docs/assets/pastel/banner-02.svg" alt="02 · El anti-ban por dentro" width="100%">
 
 Nada de «espero un `Math.random()`». Esto es lo que hace que el bot parezca una
 persona y se proteja solo:
@@ -94,9 +57,8 @@ leer: riesgo medido por el watchdog (a 80 se pausa la cola de envíos, a 95 se
 reconecta), jitter gaussiano entre mensajes, calentamiento diario, límite por
 comando y sesión que no se borra por un corte de red. Ninguna de ellas puede
 prometer que WhatsApp no suspenda una cuenta: eso lo decide WhatsApp con
-señales que el bot no ve. Lo que sí se puede decir es que el bot no se
-comporta como un robot que dispara mil mensajes por minuto. **Usa un número
-secundario.**
+señales que el bot no ve. Lo que sí se puede decir es que el bot no se comporta
+como un robot que dispara mil mensajes por minuto. **Usa un número secundario.**
 
 <details>
 <summary><b>Huella de Shin-MD (marcador de obras derivadas)</b></summary>
@@ -113,8 +75,6 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 </details>
 
 <h2 id="los-comandos">Los 213 comandos</h2>
-
-<img src="docs/assets/pastel/banner-03.svg" alt="03 · Los 213 comandos" width="100%">
 
 Escribe `.menu` dentro de WhatsApp y verás la tarjeta con botones y la lista
 desplegable por categorías.
@@ -147,15 +107,40 @@ npm run docs:web
 
 </details>
 
-<h2 id="panel-local">Panel local</h2>
+<h2 id="galería">Galería</h2>
 
-<img src="docs/assets/pastel/banner-04.svg" alt="04 · Panel local" width="100%">
+El arte que acompaña al proyecto. Cada pieza está en `assets/src/perfil/` como
+original y en `docs/assets/arte/` preparada para el README (supermuestreo,
+paso alto suave y JPEG 4:4:4, para que el morado no se manche).
+
+<table>
+  <tr>
+    <td width="33.3%"><img src="docs/assets/arte/galeria-1.jpg" alt="Capucha de neón" style="border-radius:16px" width="100%"></td>
+    <td width="33.3%"><img src="docs/assets/arte/galeria-2.jpg" alt="Ciudad glitch" style="border-radius:16px" width="100%"></td>
+    <td width="33.3%"><img src="docs/assets/arte/galeria-3.jpg" alt="Escritorio lila" style="border-radius:16px" width="100%"></td>
+  </tr>
+</table>
+
+<img src="docs/assets/arte/banda.jpg" alt="Sesión de juego terminada" style="border-radius:18px" width="100%">
+
+<img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
+
+<h2 id="panel-local">Panel local</h2>
 
 <img src="docs/assets/pastel/panel.svg" alt="Panel en 127.0.0.1:3000 con /health y /metrics" width="100%">
 
-<h2 id="instalación-en-un-comando">Instalación en un comando</h2>
+**Una foto del estado, sin arrancar nada.** `npm run panel` dibuja dos cajas:
+una con el bot y otra con el teléfono donde corre. `npm run panel:vivir` la
+refresca cada dos segundos. Es de solo lectura: no manda nada, no expone nada
+hacia fuera y solo habla con `127.0.0.1`.
 
-<img src="docs/assets/pastel/banner-05.svg" alt="05 · Instalación en un comando" width="100%">
+**Cuando un mensaje sale como «no compatible con tu versión».** Ese cartel no
+lo pone el bot: lo pone tu WhatsApp cuando no entiende un tipo de mensaje. Como
+el envío sí funciona, no da ningún error y quedas a ciegas. Hay un comando que
+lo mide: `.compat`, en privado, manda cuatro mensajes numerados —texto, botones,
+hoja inferior y álbum— y el que salga mal es el culpable.
+
+<h2 id="instalación">Instalación</h2>
 
 <img src="docs/assets/pastel/subbanner-1.svg" alt="Termux (Android)" width="100%">
 
@@ -255,7 +240,7 @@ acababa pidiendo un QR que nadie podía escanear desde el mismo teléfono.
 **Un solo comando.** `shin` levanta el bot y dibuja el panel:
 
 ```
-╭ SHIN-MD 3.5.1 ──────────────────────────────────────╮
+╭ SHIN-MD 3.7.9 ──────────────────────────────────────╮
 │ ● ACTIVO  12 grupos  ↑ 2h 15m  ⟳ 1  pid 4242        │
 │ mem 151M · cola 3 · riesgo 23 · disco 19.9G · bat 39│
 │ web http://127.0.0.1:3000                           │
@@ -277,17 +262,6 @@ siempre en la cabecera, así que no se pierde al limpiar la pantalla.
 `nohup`, `npm start` escribe líneas normales: el panel solo se dibuja cuando
 hay una terminal de verdad. Ver [`docs/VPS.md`](docs/VPS.md).
 
-**Cuando un mensaje sale como «no compatible con tu versión».** Ese cartel no
-lo pone el bot: lo pone tu WhatsApp cuando no entiende un tipo de mensaje. Como
-el envío sí funciona, no da ningún error y quedas a ciegas. Hay un comando que
-lo mide: `.compat`, en privado, manda cuatro mensajes numerados —texto, botones,
-hoja inferior y álbum— y el que salga mal es el culpable.
-
-**Una foto del estado, sin arrancar nada.** `npm run panel` dibuja dos cajas:
-una con el bot y otra con el teléfono donde corre. `npm run panel:vivir` la
-refresca cada dos segundos. Es de solo lectura: no manda nada, no expone nada
-hacia fuera y solo habla con `127.0.0.1`.
-
 <img src="docs/assets/pastel/subbanner-2.svg" alt="Servidor o VPS" width="100%">
 
 **Servidor o VPS.** El mismo comando, sin preparar nada antes:
@@ -298,73 +272,16 @@ curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.s
 
 Si falta Node o git, el instalador lo resuelve: con el gestor de paquetes del
 sistema si hay terminal y te deja preguntarte, o **sin root** descargando Node
-oficial en `~/.local/opt` con su huella comprobada. En un contenedor o en un
-`ssh -T` (sin terminal) no toca el sistema: va directo a la vía sin root.
+oficial y comprobando su huella. Para dejarlo como servicio que arranca solo,
+`shin service`.
 
-Para que sobreviva a un reinicio del servidor, hay una orden y no hay que
-escribir unidades a mano:
-
-```sh
-shin service              # unidad de systemd + arranque automático
-shin service --print      # verla antes, sin escribir nada
-```
-
-Queda `systemctl status shin-md` y `journalctl -u shin-md -f` para ver qué dice.
-En un servicio de usuario (sin root) avisa de lo único que falta:
-
-```sh
-sudo loginctl enable-linger $USER
-```
-
-Sin terminal de verdad no hay panel: el bot escribe líneas normales, que es
-justo lo que quieres en un servidor. Si prefieres pm2, sigue funcionando igual
-(`pm2 start index.js --name shin-md`). Detalle en **[docs/VPS.md](docs/VPS.md)**.
-
-**Cuando algo no va.** Antes de tocar nada, pide la foto:
-
-```sh
-shin doctor
-```
-
-Dice plataforma, versiones, de dónde salió Node, si los parches del conector
-están puestos, cuánto ocupa la sesión, espacio libre, si el bot corre y si hay
-servicio. No lee secretos (del `.env` solo cuenta las claves) y no cambia nada.
-Es el texto que hay que pegar cuando se pide ayuda.
-
-**Ya instalado.** Un solo archivo manda sobre todo:
-
-| Quiero… | Comando |
-|---|---|
-| arrancar el bot | `shin` |
-| actualizar conservando mi sesión | `shin update` |
-| arreglar una instalación rota | `shin repair` |
-| saber si todo está bien | `shin verify` |
-| ver qué pasa cuando algo falla | `shin doctor` |
-| que arranque solo tras un reinicio | `shin service` |
-| actualizar, arrancar o reparar sin el lanzador | `bash ~/Shin-MD/install.sh --update` · `--go` · `--repair` |
-| desinstalar y guardar mis datos | `shin uninstall` |
-
-`shin` es un archivo de veinte líneas que el instalador deja en `$PREFIX/bin`
-(en Android) o en `~/.local/bin`, apuntando a la instalación de verdad: si
-mueves la carpeta, vuelve a ejecutar `install.sh` y se reescribe solo.
-
-**Por qué el comando de una línea no es un `curl | bash` a ciegas.** `shin.sh`
-no descarga y ejecuta: descarga el instalador y su `SHA256SUMS`, calcula la
-huella y compara. Si no coincide —porque el archivo llegó cortado o porque
-alguien lo cambió— **no ejecuta nada** y lo dice. Lo único que ese esquema no
-puede comprobar es `shin.sh` mismo, que es de donde cuelga la cadena: por eso
-existe el modo auditor de arriba, y por eso el archivo va fijado a una etiqueta
-y no a `main`.
-
-### Las guías
+<h3 id="las-guías">Las guías</h3>
 
 El README es el resumen. Lo que de verdad hace falta para **hacer** algo está en
 `docs/`, en texto que se puede copiar:
 
 **[📑 El índice completo está en `docs/INDICE.md`](docs/INDICE.md)**: una tabla
 que responde «¿dónde está lo que busco?» sin abrir nada más.
-
-Lo que hay, en corto:
 
 | Quiero… | Documento |
 |---|---|
@@ -377,10 +294,7 @@ Lo que ya no cambia —auditorías, planes e investigaciones de una fecha— est
 registro y **no se mantiene al día**. Un documento que describe el pasado y se
 actualiza a medias se vuelve mentira; ahí se asume que es pasado.
 
-
 <h2 id="cómo-está-hecho">Cómo está hecho</h2>
-
-<img src="docs/assets/pastel/banner-06.svg" alt="06 · Cómo está hecho" width="100%">
 
 <img src="docs/assets/pastel/estructura.svg" alt="Estructura de carpetas y comandos npm" width="100%">
 
@@ -422,28 +336,27 @@ npm run publicar -- --seco        # enseña el plan y no toca nada
 Nada de eso hace falta para usarlo: se instala con un comando y se arranca con
 `npm start`. Están aquí porque **el que quiera tocarlo tiene derecho a saber
 dónde está cada cosa**. Si es tu caso, empieza por
-**[docs/DESARROLLO.md](docs/DESARROLLO.md)**: cómo se carga un comando, dónde se
-guarda un dato, qué puedes cambiar sin romper nada y las cinco reglas que este
-proyecto no se salta. Y si lo que quieres es el plano —qué hay en cada carpeta,
-el viaje de un mensaje, para qué está cada dependencia, qué se retiró y por qué—
-**[docs/MAPA.md](docs/MAPA.md)**, que se regenera con `npm run mapa` y falla en
-la suite si se queda viejo.
+**[docs/DESARROLLO.md](docs/DESARROLLO.md)**. Y si lo que quieres es el plano
+—qué hay en cada carpeta, el viaje de un mensaje, para qué está cada
+dependencia, qué se retiró y por qué— **[docs/MAPA.md](docs/MAPA.md)**, que se
+regenera con `npm run mapa` y falla en la suite si se queda viejo.
 
 <details>
 <summary><b>Regenerar los gráficos del README (trazo vectorial, sin fuentes externas)</b></summary>
 
-Las imágenes de arriba se generan solas y leen los números reales del bot
-(`docs/assets/datos.json` si está; si no, los valores de respaldo del script),
-así que nunca enseñan una cifra vieja. No usan fuentes de terceros ni peticiones
-a internet: el texto va convertido a **trazado vectorial**, y así se dibuja
-idéntico en cualquier móvil o navegador.
+Las imágenes de las secciones se generan solas y leen los números reales del bot
+(`docs/assets/datos.json`), así que nunca enseñan una cifra vieja. No usan
+fuentes de terceros ni peticiones a internet: el texto va convertido a
+**trazado vectorial**, y así se dibuja idéntico en cualquier móvil o navegador.
 
 ```bash
-npm run docs:pastel        # o directamente: python3 tools/build_pastel.py
+npm run docs:pastel        # piezas de las secciones (tools/build_pastel.py)
+python3 tools/preparar_arte.py   # las ilustraciones de la galería
+python3 tools/build_perfil.py    # portada, cifras, divisor, pie e insignias
 ```
 
-La primera vez hace falta `python3 -m pip install fonttools cairosvg pillow`
-(y `fonts-noto-cjk` en Debian/Ubuntu para el kanji 反魂).
+La primera vez hace falta `python3 -m pip install fonttools pillow` (y
+`fonts-noto-cjk` en Debian/Ubuntu para el kanji 反魂).
 
 </details>
 
@@ -458,55 +371,24 @@ origen— que cubren lo que duele de verdad:
 - **Vinculación**: QR que caduca, código que el teléfono rechaza por un nonce
   mal puesto y reconexión que manda el nodo equivocado.
 - **Reconexiones**: los estados llegan como `<status>` y sin ack el servidor
-  corta el stream cada ~50 minutos.
-- **Multimedia**: una URL caducada ya no deja el archivo sin descargar; se pide
-  el reenvío.
-- **Memoria**: una fuga de `AsyncLocalStorage` por socket que crecía en cada
-  reconexión.
+  vuelve a mandar lo mismo; el bot perdía mensajes en cada corte.
 
-Lo que no se puede arreglar (y por qué) también está escrito, con las 1 662
-incidencias revisadas y su estado. Informe completo en
-**[docs/CONECTOR.md](docs/CONECTOR.md)** · detalle de LID en
-**[docs/LID.md](docs/LID.md)**.
-
-```bash
-node scripts/patch-baileys.cjs --check   # ¿están los ocho parches aplicados?
-```
+El detalle, con el issue de cada parche, está en
+**[docs/CONECTOR.md](docs/CONECTOR.md)**.
 
 <h2 id="identidades-lid">Identidades: LID y teléfono</h2>
 
-WhatsApp puede mandar al mismo usuario de dos formas: con su teléfono
-(`521…@s.whatsapp.net`) o con un identificador interno, el **LID**
-(`123…@lid`). Son **la misma persona**. Si el bot los tratara como dos, cada
-usuario tendría dos carteras, el dueño dejaría de ser dueño y el admin de un
-grupo dejaría de ser admin porque "no coincide el número".
-
-Este bot los une:
-
-- La llave de la economía es el **teléfono** siempre que se conozca, así los
-  datos que ya estaban guardados siguen cuadrando.
-- La pareja LID ↔ teléfono se aprende de donde venga (mensajes, metadatos del
-  grupo, avisos del conector) y se guarda en SQLite: **sobrevive a reinicios y
-  cambios de sesión**.
-- El conector (Baileys 7) también guarda esas parejas en su propia sesión, así
-  que «¿de quién es este LID?» se contesta **sin salir a internet**.
-- Si alguien escribió cuando solo se conocía su LID, sus monedas se **fusionan**
-  con la cuenta del teléfono en cuanto la pareja se aprende.
-- Los permisos (dueño, admins) comparan las dos caras y la regla mexicana
-  `521 = 52`, no cadenas de texto.
-
-Lo que **no** se puede hacer, y conviene decirlo: saber el teléfono de un LID
-que nadie vio nunca. Se contesta con lo aprendido por el conector y por el
-tráfico; la consulta inversa (teléfono → LID) sí existe, pero sale a internet y
-solo se usa cuando se pide a propósito con `.lid`.
+WhatsApp está moviendo las identidades de los usuarios a **LID** y el bot tiene
+que saber reconocer a la misma persona por las dos. Lo que ya está resuelto sin
+salir a internet: la pareja que llega en el propio tráfico; la consulta inversa
+(teléfono → LID) sí existe, pero sale a internet y solo se usa cuando se pide a
+propósito con `.lid`.
 
 Pruébalo en el teléfono con `.lid`: muestra tu llave, tu teléfono, tu LID, lo
-que sabe el conector y si el bot ya conoce la pareja. En un grupo y en privado debes ver **la misma
-llave**. Detalle técnico en **[docs/LID.md](docs/LID.md)**.
+que sabe el conector y si el bot ya conoce la pareja. En un grupo y en privado
+debes ver **la misma llave**. Detalle técnico en **[docs/LID.md](docs/LID.md)**.
 
 <h2 id="el-laboratorio">El laboratorio</h2>
-
-<img src="docs/assets/pastel/banner-07.svg" alt="07 · El laboratorio" width="100%">
 
 <img src="docs/assets/pastel/laboratorio.svg" alt="Experimentos de Shin-Lab" width="100%">
 
@@ -514,8 +396,6 @@ Todo lo experimental vive en [**Shin-Lab**](https://github.com/riokuroxi-svg/Shi
 **Nada migra a este repositorio sin estar probado.**
 
 <h2 id="licencia-y-marca">Licencia y marca</h2>
-
-<img src="docs/assets/pastel/banner-08.svg" alt="08 · Licencia y marca" width="100%">
 
 <img src="docs/assets/pastel/licencia-tabla.svg" alt="Tabla de licencias por capa" width="100%">
 
@@ -537,12 +417,35 @@ guía con los pasos exactos es **[docs/FORK.md](docs/FORK.md)**.
 
 <h2 id="créditos">Créditos</h2>
 
-<img src="docs/assets/pastel/banner-09.svg" alt="09 · Créditos" width="100%">
+| | |
+|---|---|
+| **Creador y mantenedor** | [riokuroxi-svg](https://github.com/riokuroxi-svg) |
+| **Librería de WhatsApp** | [`baileys`](https://github.com/WhiskeySockets/Baileys) con los parches de `scripts/patch-baileys.cjs` |
+| **Laboratorio** | [Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab) |
+| **Licencia** | AGPL-3.0-only · ver [LICENSE](LICENSE) y [NOTICE](NOTICE) |
 
-<img src="docs/assets/pastel/creditos.svg" alt="Creador, librería, laboratorio y licencia" width="100%">
+<div align="center" id="apoyar-el-proyecto">
+
+**Shin-MD es y seguirá siendo gratis, sin publicidad ni funciones de pago.**<br>
+Si te sirve y quieres ayudar a mantener el desarrollo (hosting, tiempo, APIs),
+puedes invitarme un café:
+
+<br>
+
+<a href="https://ko-fi.com/kuroxisvg" target="_blank" rel="noopener noreferrer">
+  <img src="https://storage.ko-fi.com/cdn/kofi5.png?v=3" alt="Invítame un café en Ko-fi" height="60">
+</a>
+
+</div>
+
+<img src="docs/assets/pastel/aviso.svg" alt="Usa un número secundario" width="100%">
+
+> **Usa un chip aparte, no tu número de siempre.** WhatsApp puede sancionar las
+> cuentas que automatizan mensajes; este bot reduce el riesgo, no lo elimina. Un
+> chip barato cuesta menos que tu cuenta personal.
 
 <div align="center">
 
-<img src="docs/assets/pastel/pie.svg" alt="Shin-MD · hecho para quedarse encendido" width="100%">
+<img src="docs/assets/perfil/pie.svg" alt="Shin-MD · hecho para quedarse encendido" width="100%">
 
 </div>

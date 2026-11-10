@@ -93,12 +93,25 @@ export async function guardarParche(raiz, { ahora = Date.now(), carpeta = "tmp" 
     diff = "";
   }
   fs.writeFileSync(destino, diff.endsWith("\n") || !diff ? diff : diff + "\n", "utf8");
-  return { nombre, ruta: destino, relativa: `${carpeta}/${nombre}`, bytes: Buffer.byteLength(diff) };
+  return {
+    nombre,
+    ruta: destino,
+    relativa: `${carpeta}/${nombre}`,
+    bytes: Buffer.byteLength(diff),
+  };
 }
 
 /** Texto del aviso, con la misma forma que el mensaje de siempre. */
-export function avisoDeCambios({ sucios = [], parche = null, prefijo = ".", comando = "fix" } = {}) {
-  const lista = sucios.slice(0, MAX_LISTADOS).map((l) => `> ${l}`).join("\n");
+export function avisoDeCambios({
+  sucios = [],
+  parche = null,
+  prefijo = ".",
+  comando = "fix",
+} = {}) {
+  const lista = sucios
+    .slice(0, MAX_LISTADOS)
+    .map((l) => `> ${l}`)
+    .join("\n");
   const resto = sucios.length > MAX_LISTADOS ? `\n> …y ${sucios.length - MAX_LISTADOS} más` : "";
   const guardado = parche ? `\n\nHe guardado un parche en \`${parche.relativa}\`.` : "";
   return (
@@ -134,7 +147,10 @@ export async function actualizar({
 } = {}) {
   const arbol = await revisarArbol(raiz);
   if (arbol.error) {
-    return { estado: "error", texto: `❌ No pude leer el repositorio:\n_${arbol.error}_\n\n> No se ha tocado nada.` };
+    return {
+      estado: "error",
+      texto: `❌ No pude leer el repositorio:\n_${arbol.error}_\n\n> No se ha tocado nada.`,
+    };
   }
 
   if (arbol.propios.length && !confirmado) {
@@ -169,8 +185,13 @@ export async function actualizar({
     antes = await git(raiz, ["rev-parse", "--short", "HEAD"]);
     await git(raiz, ["reset", "--hard", `${remoto}/${rama}`]);
   } catch (error) {
-    const mensaje = String(error?.stderr || error?.message || error).trim().split("\n")[0];
-    return { estado: "error", texto: `❌ No pude actualizar:\n_${mensaje}_\n\n> El código no se ha tocado.` };
+    const mensaje = String(error?.stderr || error?.message || error)
+      .trim()
+      .split("\n")[0];
+    return {
+      estado: "error",
+      texto: `❌ No pude actualizar:\n_${mensaje}_\n\n> El código no se ha tocado.`,
+    };
   }
 
   let despues = antes;
