@@ -232,6 +232,28 @@ tipo de mensaje es el que falla. Y por eso **todo comando con botones debe
 tener un respaldo en texto**: alguien que no vea los botones tiene que poder
 usarlo igual.
 
+### El cartel «actualiza WhatsApp»
+
+Ese cartel **no lo pone el bot**: lo pone el teléfono de quien recibe, cuando su
+versión no sabe dibujar lo que le llegó. Enviar y poder leerlo son cosas
+distintas, así que en el registro del bot no aparece ningún error.
+
+Hay dos cosas que sí dependen de nosotros:
+
+1. **El nodo `biz` tiene que ir completo.** Ese nodo es la pista que le dice al
+   teléfono con qué camino dibujar el mensaje. Lo arma `#lib/wa-nodes`, y si la
+   librería instalada trae su propio constructor (`getBizBinaryNode`) se usa el
+   suyo; el respaldo escrito a mano lleva `decision_id` (20 bytes en
+   hexadecimal) y `<decision_source value="df"/>`, igual que el cliente oficial.
+   Ojo: un nodo nuestro **sustituye** al de la librería (ella no pone dos), así
+   que si el nuestro se queda corto el mensaje sale peor que sin él.
+2. **El formato de la tarjeta.** Con `BOTONES_FORMATO=plantilla` en el entorno,
+   la tarjeta se manda dentro de un mensaje de plantilla
+   (`templateMessage.interactiveMessageTemplate`), que es el envoltorio que los
+   WhatsApp viejos sí entienden: se ve más sobrio, pero no sale el cartel. Sin
+   la variable se manda el formato moderno, que es el más bonito y el que
+   entienden los clientes al día.
+
 ---
 
 ## 5. Guardar datos: la base de datos
