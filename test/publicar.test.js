@@ -117,11 +117,26 @@ exit 0
   return { dir, registro, leer: () => (fs.existsSync(registro) ? fs.readFileSync(registro, "utf8") : "") };
 }
 
+/**
+ * El PATH sin ningún `gh` de verdad.
+ *
+ * Los runners de GitHub traen `gh` instalado, así que las pruebas que
+ * simulan «esta máquina no tiene gh» fallaban allí y no aquí: en la 3.7.4
+ * el CI se puso en rojo por tres pruebas que dependían de lo que hubiera
+ * instalado en la máquina. La máquina de pruebas no puede cambiar el
+ * resultado: si una prueba necesita `gh`, se le pasa el doble; si no,
+ * aquí no hay ninguno.
+ */
+function sinGh() {
+  const partes = (process.env.PATH || "").split(":").filter(Boolean);
+  return partes.filter((d) => !fs.existsSync(path.join(d, "gh"))).join(":");
+}
+
 function publicar(repo, args = [], { gh, env = {} } = {}) {
   const entorno = {
     ...process.env,
     NO_COLOR: "1",
-    PATH: gh ? `${gh}:${process.env.PATH}` : process.env.PATH,
+    PATH: [gh, sinGh()].filter(Boolean).join(":"),
     // El token se borra a propósito, aunque lo haya en el entorno: si alguien
     // publica de verdad con `GH_TOKEN` puesto, las pruebas que simulan «sin
     // gh» dejarían de simularlo y verían una release por la API. Pasó: la
