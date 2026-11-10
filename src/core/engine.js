@@ -8,6 +8,8 @@ import log from "#logger";
 import { createHealthMonitor } from "#health";
 import createSendQueue from "#queue";
 import { createThrottler } from "#throttler";
+import { crearRitmo, avisarRitmo } from "../lib/ritmo.js";
+import { crearSesion } from "../lib/sesion.js";
 
 const LIFECYCLE = { BOOT: 0, INIT: 1, CONNECT: 2, READY: 3, RUNNING: 4, SHUTDOWN: 5 };
 
@@ -22,7 +24,13 @@ export function createEngine(opts) {
   // opts.throttler: perfil del número (B2.1) — el boot decide si el
   // número es nuevo (1500ms + warm-up 7d) o aclimatado (700ms + 2d).
   const throttler = createThrottler(opts.throttler);
-  const sendQueue = createSendQueue(throttler, health);
+  // El ritmo vive aparte del tope diario: cuenta conversaciones nuevas (no
+  // mensajes), mira la hora y se encarga del «escribiendo…».
+  const ritmo = crearRitmo({ estado: opts.ritmoEstado, ajustes: opts.ritmo });
+  // Las piezas de sesión: calma tras reconectar, detector de sordera, portón de
+  // reentrada y descanso diario. Ver src/lib/sesion.js.
+  const sesion = crearSesion(opts.sesion);
+  const sendQueue = createSendQueue(throttler, health, { ritmo, sesion, avisarRitmo });
   const listeners = {};
 
   function getState() { return state; }
@@ -36,6 +44,8 @@ export function createEngine(opts) {
   function getHealth() { return health; }
   function getThrottler() { return throttler; }
   function getSendQueue() { return sendQueue; }
+  function getRitmo() { return ritmo; }
+  function getSesion() { return sesion; }
   function getUptime() { return Date.now() - bootTime; }
   function resetBootTime() { bootTime = Date.now(); }
 
@@ -85,7 +95,7 @@ export function createEngine(opts) {
     getState, getStateName, getSock, setSock,
     setOwnerJid, getOwnerJid,
     setGroupCount, getGroupCount,
-    getHealth, getThrottler, getSendQueue, getUptime, resetBootTime,
+    getHealth, getThrottler, getSendQueue, getRitmo, getSesion, getUptime, resetBootTime,
     transit, emit, on, once, shutdown, LIFECYCLE,
     bootTime,
   };

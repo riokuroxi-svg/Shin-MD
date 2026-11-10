@@ -68,6 +68,45 @@ export function formatearCodigoDeVinculacion(pair) {
   return (pair.match(/.{1,4}/g) || [pair]).join("-");
 }
 
+/**
+ * Enciende el «escribiendo…» el tiempo que tardaría una persona en escribir
+ * ese texto, y lo apaga al mandar.
+ *
+ * Es lo único de todo el blindaje que WhatsApp dice mirar con nombre propio:
+ * «si una cuenta manda mensajes continuamente sin activar el indicador de
+ * escritura, puede ser una señal de abuso». Cuesta 0 recursos (no gasta cuota)
+ * y es lo que más separa a un bot de una persona.
+ *
+ * Si el servidor no lo admite, el mensaje sale igual: esto es ritmo, no un
+ * requisito para mandar.
+ *
+ * @param {object} sock
+ * @param {string} jid
+ * @param {number} largo del texto que se va a mandar
+ * @param {object} ritmo de `crearRitmo`
+ */
+async function teclear(sock, jid, largo, ritmo) {
+  if (typeof sock.sendPresenceUpdate !== "function" || !largo) return;
+  // Los canales y las listas de difusión no tienen «escribiendo».
+  if (typeof jid === "string" && (jid.endsWith("@newsletter") || jid.endsWith("@broadcast"))) return;
+  try {
+    await sock.sendPresenceUpdate("composing", jid);
+    await new Promise((r) => setTimeout(r, ritmo.planDeTecleo(largo).ms));
+  } catch {
+    // sin tecleo se manda igual
+  }
+}
+
+/** Apaga el «escribiendo…» sin esperar: si falla, da igual. */
+function dejarDeTeclear(sock, jid) {
+  if (typeof sock.sendPresenceUpdate !== "function") return;
+  try {
+    Promise.resolve(sock.sendPresenceUpdate("paused", jid)).catch(() => {});
+  } catch {
+    /* nada */
+  }
+}
+
 export function connectSocket(engine, opts) {
   opts = opts || {};
   const sessionDir = opts.sessionDir || "./Sessions/Owner";
@@ -252,13 +291,28 @@ export function connectSocket(engine, opts) {
       const esLigero = esEnvioLigero(c);
       const qo = {
         messageLength: c?.text?.length || 0,
+        // A quién va: el ritmo cuenta conversaciones nuevas por destinatario.
+        destino: j,
         // B1.4: prioridad por flag explícito (_priority) o por ventana de
         // prioridad activa (comandos priority: .menu/.ping/.owner).
         isPriority: !!(o && o._priority) || sendQueue.inPriority(),
         countsForQuota: !esLigero,
       };
       if (o) { delete o._priority; } // no fugarse a Baileys
-      const r = await sendQueue.enqueue(() => origSM(j, c, o), qo);
+      // El «escribiendo…» de antes de mandar. Es la señal más barata que hay
+      // y la única que WhatsApp nombra en su propio documento sobre spam: una
+      // cuenta que nunca enciende el tecleo es señal de abuso. Va dentro del
+      // turno de la cola (no antes), para que el orden sea siempre el mismo.
+      const ritmo = engine.getRitmo && engine.getRitmo();
+      const r = await sendQueue.enqueue(async () => {
+        const tecleando = !esLigero && ritmo && ritmo.ajustes.presencia;
+        if (tecleando) await teclear(s, j, qo.messageLength, ritmo);
+        try {
+          return await origSM(j, c, o);
+        } finally {
+          if (tecleando) dejarDeTeclear(s, j);
+        }
+      }, qo);
       try {
         if (r?.key?.id) {
           const st = { key: r.key, message: c };
@@ -285,6 +339,7 @@ export function connectSocket(engine, opts) {
       const text = m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || "";
       return sendQueue.enqueue(() => origRelay(j, m, o), {
         messageLength: String(text).length,
+        destino: j,
         isPriority: sendQueue.inPriority(), // B1.4: tarjetas interactivas de comandos priority
         // Las ediciones y borrados que viajan como protocolMessage no
         // crean mensaje nuevo: respetan el delay pero no gastan cuota.
@@ -307,6 +362,19 @@ export function connectSocket(engine, opts) {
       if (watchdog) watchdog.tick();
       if (engine.getState() < engine.LIFECYCLE.READY) return;
       if (!Array.isArray(messages)) return;
+
+      // Señal de vida para el detector de sordera: si esto deja de llegar con
+      // la conexión «abierta», la sesión está sorda (#2491).
+      const ses = engine.getSesion?.();
+      ses?.sordera?.latido?.();
+
+      // Portón de reentrada: tras reconectar se descartan los mensajes viejos
+      // y los repetidos. Contestar una ráfaga de conversaciones de hace media
+      // hora es peor que no contestar.
+      const entrantes = ses?.activo ? ses.porton.filtrar(messages) : messages;
+      if (entrantes.length === 0) return;
+      messages = entrantes;
+
       for (const msg of messages) {
         try {
           if (!msg?.message || msg.key?.remoteJid === "status@broadcast") continue;
@@ -373,6 +441,12 @@ export function connectSocket(engine, opts) {
         retries = 0;
         isRestarting = false;
         patientWarned = false;
+        // Al volver, el ritmo arranca suave y el portón de reentrada se cierra
+        // unos segundos: el pico de envíos y la reentrega de mensajes viejos
+        // son los dos sustos clásicos de una reconexión.
+        engine.getSesion?.()?.calma?.reiniciar?.();
+        engine.getSesion?.()?.porton?.reiniciar?.();
+        engine.getSesion?.()?.sordera?.reiniciar?.();
         if (typeof engine.resetBootTime === "function") engine.resetBootTime();
         if (Date.now() - lastRestartAt > 60000) restartStreak = 0;
 
@@ -410,6 +484,19 @@ export function connectSocket(engine, opts) {
         }, 1500);
         if (engine.getState() < engine.LIFECYCLE.RUNNING) engine.transit(engine.LIFECYCLE.RUNNING);
         if (watchdog) watchdog.tick();
+
+        // Detector de sordera: una conexión «abierta» que lleva 5 min sin
+        // recibir nada está sorda (#2491). Se revisa cada minuto y se pide un
+        // cierre limpio; el reinicio lo decide quien reconecta, no esto.
+        const ses = engine.getSesion?.();
+        if (ses?.activo && !ses.__sorderaTimer) {
+          ses.__sorderaTimer = setInterval(() => {
+            if (engine.getState() !== engine.LIFECYCLE.RUNNING) return;
+            ses.sordera.revisar();
+          }, 60_000);
+          // No debe mantener vivo el proceso él solo.
+          if (typeof ses.__sorderaTimer.unref === "function") ses.__sorderaTimer.unref();
+        }
       }
 
       if (isNewLogin) {
