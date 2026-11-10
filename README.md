@@ -449,3 +449,8 @@ puedes invitarme un café:
 <img src="docs/assets/perfil/pie.svg" alt="Shin-MD · hecho para quedarse encendido" width="100%">
 
 </div>
+
+
+---
+
+<sub>Escrito y mantenido por **[riokuroxi-svg](https://github.com/riokuroxi-svg)** · Shin-MD · AGPL-3.0-only · si te sirve, [invítame un café](https://ko-fi.com/kuroxisvg).</sub>
