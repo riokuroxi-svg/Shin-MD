@@ -115,3 +115,8 @@ salud y marcas del menú) contra el cliente instalado, y 8 pruebas de
 (árbol limpio, commit nuevo, cambios sin subir, confirmación, base de datos
 protegida, archivo nuevo, remoto caído y caducidad de los 5 minutos). Todo en
 verde. No se ha probado el envío real a una cuenta de WhatsApp.
+
+
+---
+
+<sub>Escrito y mantenido por **[riokuroxi-svg](https://github.com/riokuroxi-svg)** · Shin-MD · AGPL-3.0-only · si te sirve, [invítame un café](https://ko-fi.com/kuroxisvg).</sub>

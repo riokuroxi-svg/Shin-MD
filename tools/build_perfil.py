@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+# Copyright (C) 2026 riokuroxi-svg
+# SPDX-License-Identifier: AGPL-3.0-only
 """
 build_perfil — dibuja las piezas nuevas del README (estilo «perfil»).
 

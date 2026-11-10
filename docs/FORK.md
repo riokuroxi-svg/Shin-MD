@@ -475,3 +475,8 @@ d=$(mktemp -d) && cd "$d" && curl -fsSL https://raw.githubusercontent.com/TU-USU
 - [ ] Y arrancaste esa instalación con `npm start` y respondía a `.menu`.
 
 Si todo eso está, no estás publicando un fork: estás publicando **un proyecto**.
+
+
+---
+
+<sub>Escrito y mantenido por **[riokuroxi-svg](https://github.com/riokuroxi-svg)** · Shin-MD · AGPL-3.0-only · si te sirve, [invítame un café](https://ko-fi.com/kuroxisvg).</sub>
