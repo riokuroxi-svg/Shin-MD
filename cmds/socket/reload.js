@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { botJid } from "#serialize";
+import { esDuenoSocket } from "#permissions";
 import { startSubBot } from './subs.js';
 import fs from 'fs';
 import path from 'path';
@@ -15,10 +17,11 @@ export default {
   category: 'socket',
   description: 'Recargar la sesión del bot.',
   run: async ({ msg, sock, args }) => {
-    const botId = sock?.user?.id.split(':')[0] + '@s.whatsapp.net' || '';
+    const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
-    const isOwner2 = [botId, ...(botSettings.owner ? [botSettings.owner] : []), ...((global).owner || []).map((num) => num + '@s.whatsapp.net')].includes(msg.sender);
-    if (!isOwner2) return sock.reply(msg.chat, '《✧》 Este comando solo puede ser ejecutado por un Socket.', msg);
+    if (!esDuenoSocket(sock, msg.sender, botSettings)) {
+      return sock.reply(msg.chat, '《✧》 Este comando solo puede ser ejecutado por un Socket.', msg);
+    }
     const rawId = sock.user?.id || '';
     const decoded = jidDecode(rawId);
     const cleanId = decoded?.user || rawId.split('@')[0];
@@ -28,7 +31,7 @@ export default {
     }
     const caption = '✿ *Sesión del bot reiniciada correctamente!*.';
     const phone = args[0] ? args[0].replace(/\D/g, '') : msg.sender.split('@')[0];
-    startSubBot(msg, sock, caption, false, phone, msg.chat, true);
+    await startSubBot(msg, sock, caption, false, phone, msg.chat, true);
     await sock.reply(msg.chat, caption, msg);
   },
 };

@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { esDuenoSocket } from "#permissions";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['setbotname', 'setname'],
@@ -12,13 +13,12 @@ export default {
   description: 'Cambiar el nombre del bot.',
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     const idBot = botJid(sock);
-    let config = db.getSettings(idBot) || {};
-    const isOwner2 = [idBot, ...(config.owner ? [config.owner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
-    if (!isOwner2) return msg.reply(global.mess.socket);
+    const config = db.getSettings(idBot) || {};
+    if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
     const value = args.join(' ').trim();
-    if (!value) return msg.reply(`✐ Debes escribir un nombre corto y un nombre largo valido.\n> Ejemplo: *Ginko / Ginko-MD*`);
+    if (!value) return msg.reply(`✐ Debes escribir un nombre corto y un nombre largo valido.\n> Ejemplo: *Shin / Shin-MD*`);
     const formatted = value.replace(/\s*\/\s*/g, '/');
-    let [short, long] = formatted.includes('/') ? formatted.split('/') : [value, value];
+    const [short, long] = formatted.includes('/') ? formatted.split('/') : [value, value];
     if (!short || !long) return msg.reply('✎ Usa el formato: Nombre Corto / Nombre Largo');
     if (/\s/.test(short)) return msg.reply('❖ El nombre corto no puede contener espacios.');
     db.setSettings(idBot, 'namebot', short.trim());

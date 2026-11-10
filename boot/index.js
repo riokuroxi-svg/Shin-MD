@@ -362,7 +362,7 @@ async function main() {
   };
   globalThis.multiplier = 2;
   globalThis.botname = "Shin-MD";
-  globalThis.conns = new Map();
+  globalThis.conns = [];
   globalThis.mess = {
     default: "⚠️ Comando no disponible.",
     socket: "🚫 *Solo el dueño* puede usar este comando.",

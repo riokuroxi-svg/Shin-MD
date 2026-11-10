@@ -498,3 +498,89 @@ test("reiniciar() también suelta el conector", async () => {
   lid.reiniciar();
   assert.equal(lid.estadisticas().conector, false);
 });
+
+test("fusión: el cooldown Subs (epoch ms) conserva el más reciente y nunca se suma", () => {
+  const base = baseTemporal();
+  try {
+    const { db } = base;
+    db.exec("ALTER TABLE g_users ADD COLUMN Subs INTEGER DEFAULT 0");
+    const ts1 = 1_780_000_000_000;
+    const ts2 = 1_780_000_050_000;
+    db.prepare("INSERT INTO g_users (id, Subs) VALUES (?, ?)").run(LID, ts1);
+    db.prepare("INSERT INTO g_users (id, Subs) VALUES (?, ?)").run(PN, ts2);
+
+    assert.equal(fusionarCuentas(db, LID, PN), true);
+    const fila = db.prepare("SELECT Subs FROM g_users WHERE id = ?").get(PN);
+    assert.equal(fila.Subs, ts2, "Subs debe quedar en el timestamp más reciente, no sumado");
+  } finally {
+    base.cerrar();
+  }
+});
+
+test("esDuenoSocket reconoce dueño del socket incluso vía LID", async () => {
+  const { esDuenoSocket } = await import("../src/commands/middleware/permissions.js");
+  lid.reiniciar();
+  try {
+    lid.aprender(LID, PN);
+    const sock = sockFalso({ user: { id: "5215500000000:4@s.whatsapp.net" } });
+    assert.equal(esDuenoSocket(sock, LID, { owner: PN }), true);
+    assert.equal(esDuenoSocket(sock, "5215599999999@s.whatsapp.net", { owner: PN }), false);
+  } finally {
+    lid.reiniciar();
+  }
+});
+
+test("ginko-db: setSettings(false), getChatUsers, personajes, sticker packs y deletedb", async () => {
+  const dir = carpetaTemporal();
+  process.env.SHIN_DB_PATH = path.join(dir, "shin.db");
+  try {
+    const { default: db } = await import("../src/services/ginko-db.js");
+
+    const botId = "5215500000000@s.whatsapp.net";
+    db.setSettings(botId, "self", true);
+    assert.equal(db.getSettings(botId).self, 1);
+    db.setSettings(botId, "self", false);
+    assert.equal(db.getSettings(botId).self, 0, "setSettings(false) debe guardar 0, no ignorarse");
+
+    const chat = "120363000000000001@g.us";
+    db.setChatUser(chat, PN, "coins", 77);
+    const lista = db.getChatUsers(chat);
+    assert.equal(lista.length, 1);
+    assert.equal(lista[0].coins, 77);
+
+    db.setCreate("g_characters", "c1", "name", "Shin");
+    assert.equal(db.getCharacter("c1").name, "Shin");
+    db.setCharacter("c1", "value", 200);
+    assert.equal(db.getCharacter("c1").value, 200);
+
+    db.setStickersPack("p1", "packs", [{ name: "Pack1", stickers: ["s1"] }]);
+    assert.deepEqual(db.getStickersPack("p1").packs[0].stickers, ["s1"]);
+    db.setStickersPack("p1", [{ name: "Pack2", stickers: ["s2"] }]);
+    assert.equal(db.getStickersPack("p1").packs[0].name, "Pack2");
+
+    assert.equal(db.deletedb("g_characters", "c1").changes, 1);
+    assert.equal(db.getCharacter("c1"), null);
+  } finally {
+    try {
+      const { getDatabase } = await import("../src/storage/database.js");
+      getDatabase().close();
+    } catch { /* ya cerrada */ }
+    delete process.env.SHIN_DB_PATH;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("auth: keys.set borra claves con null/undefined dentro de transacción", async () => {
+  const { useSQLiteAuthState } = await import("../src/core/auth.js");
+  const dir = carpetaTemporal();
+  const res = await useSQLiteAuthState(dir);
+  try {
+    await res.state.keys.set({ session: { k1: { ok: 1 }, k2: { ok: 2 } } });
+    assert.deepEqual(await res.state.keys.get("session", ["k1", "k2"]), { k1: { ok: 1 }, k2: { ok: 2 } });
+    await res.state.keys.set({ session: { k1: null, k2: undefined } });
+    assert.deepEqual(await res.state.keys.get("session", ["k1", "k2"]), {});
+  } finally {
+    res.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

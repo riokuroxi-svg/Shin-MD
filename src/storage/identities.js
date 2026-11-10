@@ -38,12 +38,13 @@ const TABLA = `
 
 /** Columnas que se suman al fusionar (dinero, XP, objetos contados). */
 const SUMAR = new Set([
-  "coins", "bank", "exp", "xp", "minxp", "maxxp", "usedcommands", "Subs",
+  "coins", "bank", "exp", "xp", "minxp", "maxxp", "usedcommands",
   "wins", "losses", "games", "count", "uses", "amount",
 ]);
 /** Columnas de tiempo: al fusionar vale la más reciente (no se duplica el premio). */
 const RECIENTE = new Set([
-  "streak", "weeklyStreak", "monthlyStreak",
+  "streak", "weeklyStreak", "monthlyStreak", "Subs",
+  "reportCooldown", "sugCooldown", "timeTrade",
   "lastDailyGlobal", "lastWeeklyGlobal", "lastMonthlyGlobal",
   "lastCmd", "lastdaily", "lastweekly", "lastmonthly", "lastwork", "lastfish",
   "lasthunt", "lastmine", "lastcrime", "laststeal", "lastslut", "lastadventure",
@@ -54,7 +55,7 @@ const RECIENTE = new Set([
 /** Listas donde se unen los elementos sin repetir. */
 const LISTAS = new Set(["warnings", "robVictims", "characters"]);
 /** Columnas que guardan JSON aunque su nombre no lo diga. */
-const JSON_COLS = new Set(["metadatos", "metadatos2", "stats", "inventory", "tools", "weapons", "rolls"]);
+const JSON_COLS = new Set(["stats", "inventory", "tools", "weapons", "rolls", "sales", "intercambios", "regalosPendientes"]);
 
 const num = (v) => {
   if (v === null || v === undefined || v === "") return 0;

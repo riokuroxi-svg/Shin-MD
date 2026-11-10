@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
+import { esDuenoSocket } from "#permissions";
 import GraphemeSplitter from 'grapheme-splitter';
 import db from '../../src/services/ginko-db.js';
 
@@ -14,9 +15,8 @@ export default {
   description: 'Cambiar el prefijo del bot.',
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     const idBot = botJid(sock);
-    let config = db.getSettings(idBot) || {};
-    const isOwner2 = [idBot, ...(config.owner ? [config.owner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
-    if (!isOwner2) return sock.reply(msg.chat, global.mess.socket, msg);
+    const config = db.getSettings(idBot) || {};
+    if (!esDuenoSocket(sock, msg.sender, config)) return sock.reply(msg.chat, global.mess.socket, msg);
     const value = args.join(' ').trim();
     const defaultPrefix = ["#", "/", "!", "."];
     if (!value) {

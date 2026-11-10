@@ -117,10 +117,12 @@ export function createDatabase(dbPath) {
 
   function close() {
     try { db.close(); } catch {}
+    if (defaultDb === inst) defaultDb = null;
     log.gray("Database closed");
   }
 
-  return { db, migrate, settings, close };
+  const inst = { db, migrate, settings, close };
+  return inst;
 }
 
 let defaultDb = null;

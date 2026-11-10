@@ -98,15 +98,22 @@ export async function useSQLiteAuthState(sessionDir) {
       return out;
     },
     async set(data) {
-      for (const category in data) {
-        for (const id in data[category]) {
-          const value = data[category][id];
-          try {
-            stmtSet.run(category, id, JSON.stringify(value, BufferJSON.replacer));
-          } catch (err) {
-            log.error("keys.set(" + category + "," + id + "): " + (err.message || err));
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        for (const category in data) {
+          for (const id in data[category]) {
+            const value = data[category][id];
+            if (value === null || value === undefined) {
+              stmtRemove.run(category, id);
+            } else {
+              stmtSet.run(category, id, JSON.stringify(value, BufferJSON.replacer));
+            }
           }
         }
+        db.exec("COMMIT");
+      } catch (err) {
+        try { db.exec("ROLLBACK"); } catch {}
+        log.error("keys.set: " + (err.message || err));
       }
     },
     async remove(ids) {
@@ -114,13 +121,18 @@ export async function useSQLiteAuthState(sessionDir) {
       // (varios ":" dentro). split(":") truncaba la keyId → DELETE que
       // nunca coincidía → las keys muertas se acumulaban en la tabla.
       // Partir SOLO en el primer ":".
-      for (const id of ids) {
-        const idx = String(id).indexOf(":");
-        const cat = idx === -1 ? id : id.slice(0, idx);
-        const keyId = idx === -1 ? "" : id.slice(idx + 1);
-        try { stmtRemove.run(cat, keyId); } catch (err) {
-          log.error("keys.remove(" + id + "): " + (err.message || err));
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        for (const id of ids) {
+          const idx = String(id).indexOf(":");
+          const cat = idx === -1 ? id : id.slice(0, idx);
+          const keyId = idx === -1 ? "" : id.slice(idx + 1);
+          stmtRemove.run(cat, keyId);
         }
+        db.exec("COMMIT");
+      } catch (err) {
+        try { db.exec("ROLLBACK"); } catch {}
+        log.error("keys.remove: " + (err.message || err));
       }
     },
   };
@@ -135,7 +147,11 @@ export async function useSQLiteAuthState(sessionDir) {
     }
   }
 
-  return { state: { creds, keys }, saveCreds };
+  function close() {
+    try { db.close(); } catch {}
+  }
+
+  return { state: { creds, keys }, saveCreds, close };
 }
 
 export default { useSQLiteAuthState };
