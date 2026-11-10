@@ -42,7 +42,7 @@ para y dice la orden exacta que hay que escribir.
 | `scripts/` | 19 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
 | `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
 | `src/` | 84 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
-| `test/` | 55 | Las pruebas. Una por tema; cada archivo corre solo. |
+| `test/` | 56 | Las pruebas. Una por tema; cada archivo corre solo. |
 | `tools/` | 13 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
 | `src/commands/` | 6 | El motor de comandos: cargador, router, contexto de mensaje y permisos. |
 | `src/core/` | 5 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
@@ -57,7 +57,7 @@ número a propósito: se llenan al correr el bot y al pasar las pruebas, así qu
 contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
 y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
-Son **219 archivos de comando**, **54 utilidades** en `src/lib`, **10 servicios** y **54 archivos de prueba**.
+Son **219 archivos de comando**, **54 utilidades** en `src/lib`, **10 servicios** y **55 archivos de prueba**.
 
 ## El viaje de un mensaje
 

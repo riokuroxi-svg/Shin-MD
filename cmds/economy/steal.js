@@ -36,7 +36,9 @@ export default {
     }
     const name = (db.getUser(who))?.name || who.split('@')[0];
     const lastCmd = target.lastCmd || 0;
-    const tiempoInactivo = Date.now() - lastCmd;
+    // Se acota a cero: con una marca imposible (en el futuro) la resta sale
+    // negativa y el comando se negaba siempre, sin decir por qué.
+    const tiempoInactivo = Math.max(0, Date.now() - Number(lastCmd || 0));
     if (tiempoInactivo < 3600000) {
       return sock.reply(msg.chat, `ꕥ Solo puedes robarle *${currency}* a un usuario si estuvo más de 1 hora inactivo.`, msg);
     }

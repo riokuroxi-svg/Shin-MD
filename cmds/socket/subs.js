@@ -16,7 +16,7 @@ import path from 'path';
 import chalk from 'chalk';
 import { smsg, patchGroupMetadata, getCachedMeta } from '#serialize';
 import { sendNativeQuickReply } from '#lib/native-reply';
-import { tiempoLargo as msToTime } from "#lib/tiempo";
+import { tiempoLargo as msToTime, esperaRestante } from "#lib/tiempo";
 import db from '../../src/services/ginko-db.js';
 
 if (!global.conns) global.conns = [];
@@ -25,6 +25,9 @@ const commandFlags = {};
 const cleanJid = (jid = '') => jid.replace(/:\d+/, '').split('@')[0];
 const sessionsPath = path.resolve(process.cwd(), 'Sessions');
 const subsPath = path.join(sessionsPath, 'Subs');
+
+/** Lo mínimo entre dos intentos de vincular un socket. */
+const ESPERA_VINCULAR_MS = 80000;
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -325,10 +328,18 @@ export default {
   run: async ({ msg, sock, args, command }) => {
     db.setCreate('users', msg.sender, 'Subs', 0);
     const user = db.getUser(msg.sender);
-    const lastSubTime = Number(user?.Subs || 0);
-    if (Date.now() - lastSubTime < 80000) {
-      const remainingTime = (lastSubTime + 80000) - Date.now();
-      return sock.reply(msg.chat, `ꕥ Debes esperar *${msToTime(remainingTime)}* para volver a intentar vincular un socket.`, msg);
+    // Antes esto era `Date.now() - lastSubTime < 80000` y luego pintaba lo que
+    // sobrara. Con un valor guardado imposible (una fecha 57 años por delante,
+    // de un reloj mal puesto o de un campo reusado) la respuesta era «espera
+    // *20685 días*»: un bloqueo de por vida por un dato roto. `esperaRestante`
+    // limita la espera a su propio tamaño y avisa cuando el dato no es creíble.
+    const { esperaMs, corrupto } = esperaRestante(user?.Subs, ESPERA_VINCULAR_MS);
+    if (corrupto) {
+      log.warn("[subs] La marca de último registro no era una fecha válida; se limpia.");
+      db.setUser(msg.sender, 'Subs', 0);
+    }
+    if (esperaMs > 0) {
+      return sock.reply(msg.chat, `ꕥ Debes esperar *${msToTime(esperaMs)}* para volver a intentar vincular un socket.`, msg);
     }
     ensureDir(subsPath);
     const allSubs = fs.readdirSync(subsPath, { withFileTypes: true })

@@ -7,7 +7,10 @@
 import { botJid } from "#serialize";
 import defaultAvatar from "#lib/default-avatar";
 import db from '../../src/services/ginko-db.js';
-import { tiempoLargo as msToTime } from "#lib/tiempo";
+import { tiempoLargo as msToTime, esperaRestante } from "#lib/tiempo";
+
+/** Lo mínimo entre dos invitaciones. */
+const ESPERA_INVITAR_MS = 3600000;
 const linkRegex = /chat\.whatsapp\.com\/([0-9A-Za-z]{20,24})(?:\s+[0-9]{1,3})?/i;
 
 async function getGroupName(sock, chatId) {
@@ -31,10 +34,11 @@ export default {
     const botSettings = db.getSettings(botId) || {};
     const botname = botSettings.botname || 'Bot';
     const dueño = botSettings.owner || '';
-    const cooldown = 3600000;
-    const nextTime = user.jointime + cooldown;
-    if (Date.now() - user.jointime < cooldown) {
-      return msg.reply(`ꕥ Espera *${msToTime(nextTime - Date.now())}* para volver a enviar otra invitacion.`);
+    // El mismo cuidado que en el resto: un dato imposible no puede convertirse
+    // en una espera de años.
+    const { esperaMs } = esperaRestante(user.jointime, ESPERA_INVITAR_MS);
+    if (esperaMs > 0) {
+      return msg.reply(`ꕥ Espera *${msToTime(esperaMs)}* para volver a enviar otra invitacion.`);
     }
     if (!args || !args.length) {
       return msg.reply('《✧》 Ingresa el enlace para invitar al bot a tu grupo.');
