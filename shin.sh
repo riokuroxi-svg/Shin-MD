@@ -4,7 +4,7 @@
 #  https://github.com/riokuroxi-svg/Shin-MD
 #  Copyright (C) 2026 riokuroxi-svg · SPDX-License-Identifier: AGPL-3.0-only
 #
-#    curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.4/shin.sh | sh
+#    curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.5/shin.sh | sh
 #
 #  Eso es todo. No hace falta `pkg update`, ni descargar tres archivos,
 #  ni comprobar huellas a mano, ni `cd`, ni `npm start`.
@@ -48,7 +48,7 @@
 # ═══════════════════════════════════════════════════════════════════
 set -eu
 
-readonly VERSION="${SHIN_VERSION:-v3.7.4}"
+readonly VERSION="${SHIN_VERSION:-v3.7.5}"
 REPO="${SHIN_REPO:-riokuroxi-svg/Shin-MD}"
 
 # ─────────────────────────── salida ───────────────────────────

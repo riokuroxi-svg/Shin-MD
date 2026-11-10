@@ -163,7 +163,7 @@ npm run docs:web
 —la versión de Play Store está abandonada y rompe los paquetes— y pega esto:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.4/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.5/shin.sh | sh
 ```
 
 Una línea, y el bot queda arrancado. Ese archivo descarga el instalador de
@@ -215,9 +215,9 @@ huella cubre también el arranque:
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.4/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.4/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.7.4 --go
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.5/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.5/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.7.5 --go
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -227,7 +227,7 @@ sin él, el instalador se queda en «instalado» y se arranca luego con `shin`.
 ¿Solo quieres saber si el archivo es el bueno, sin instalar nada?
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.4/shin.sh | sh -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.5/shin.sh | sh -s -- --dry-run
 ```
 
 </details>
@@ -293,7 +293,7 @@ hacia fuera y solo habla con `127.0.0.1`.
 **Servidor o VPS.** El mismo comando, sin preparar nada antes:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.4/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.5/shin.sh | sh
 ```
 
 Si falta Node o git, el instalador lo resuelve: con el gestor de paquetes del
