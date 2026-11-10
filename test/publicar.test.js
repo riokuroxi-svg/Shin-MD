@@ -118,25 +118,22 @@ exit 0
 }
 
 /**
- * El PATH sin ningún `gh` de verdad.
+ * Simular una máquina SIN `gh`.
  *
- * Los runners de GitHub traen `gh` instalado, así que las pruebas que
- * simulan «esta máquina no tiene gh» fallaban allí y no aquí: en la 3.7.4
- * el CI se puso en rojo por tres pruebas que dependían de lo que hubiera
- * instalado en la máquina. La máquina de pruebas no puede cambiar el
- * resultado: si una prueba necesita `gh`, se le pasa el doble; si no,
- * aquí no hay ninguno.
+ * Los runners de GitHub traen `gh` instalado, así que las pruebas que dan
+ * por hecho que no lo hay fallaban allí y no aquí. El primer intento fue
+ * quitar del PATH las carpetas que tienen un `gh`… y en esos mismos runners
+ * `gh` y `git` viven en la misma carpeta: el script se quedaba sin `git`.
+ * La manera buena es decírselo al script: `--sin-gh` (o SHIN_SIN_GH=1),
+ * que además sirve de verdad cuando `gh` está instalado pero sin sesión.
  */
-function sinGh() {
-  const partes = (process.env.PATH || "").split(":").filter(Boolean);
-  return partes.filter((d) => !fs.existsSync(path.join(d, "gh"))).join(":");
-}
+const SIN_GH = { SHIN_SIN_GH: "1" };
 
 function publicar(repo, args = [], { gh, env = {} } = {}) {
   const entorno = {
     ...process.env,
     NO_COLOR: "1",
-    PATH: [gh, sinGh()].filter(Boolean).join(":"),
+    PATH: gh ? `${gh}:${process.env.PATH}` : process.env.PATH,
     // El token se borra a propósito, aunque lo haya en el entorno: si alguien
     // publica de verdad con `GH_TOKEN` puesto, las pruebas que simulan «sin
     // gh» dejarían de simularlo y verían una release por la API. Pasó: la
@@ -274,10 +271,7 @@ test("--sin-release publica código y etiqueta, sin GitHub Release", () => {
 
 test("sin gh avisa y deja todo listo para la release manual", () => {
   const { trabajo, remoto } = copiaDelRepo("3.7.0");
-  const vacio = temporal("shin-sin-gh");
-  const r = publicar(trabajo, ["3.7.1", "--rapido", "--si"], {
-    env: { PATH: `/usr/bin:/bin:${vacio}` },
-  });
+  const r = publicar(trabajo, ["3.7.1", "--rapido", "--si"], { env: SIN_GH });
   assert.equal(r.status, 0, r.salida);
   assert.match(r.salida, /no encuentro `gh`/);
   assert.ok(git(remoto, "tag", "--list").includes("v3.7.1"));
@@ -309,7 +303,7 @@ test("sin gh pero con GH_TOKEN, la release se anuncia por la API", () => {
   // `--seco` no llama a la red: lo que se comprueba es que el plan ya cuenta
   // con la release, para que la orden única no acabe en «subí el código pero
   // no hay release».
-  const r = publicar(trabajo, ["3.9.0", "--seco"], { env: { GH_TOKEN: "token-de-prueba" } });
+  const r = publicar(trabajo, ["3.9.0", "--seco"], { env: { ...SIN_GH, GH_TOKEN: "token-de-prueba" } });
   assert.equal(r.status, 0, r.salida);
   assert.match(r.salida, /release v3\.9\.0 por la API/, r.salida);
   assert.doesNotMatch(r.salida, /sin GitHub Release/, "no debe renunciar a la release si hay token");
@@ -317,10 +311,22 @@ test("sin gh pero con GH_TOKEN, la release se anuncia por la API", () => {
 
 test("sin gh y sin token, avisa en vez de fallar", () => {
   const { trabajo } = copiaDelRepo("3.7.0");
-  const r = publicar(trabajo, ["3.9.0", "--seco"], { env: { GH_TOKEN: "", GITHUB_TOKEN: "" } });
+  const r = publicar(trabajo, ["3.9.0", "--seco"], { env: { ...SIN_GH, GH_TOKEN: "", GITHUB_TOKEN: "" } });
   assert.equal(r.status, 0, r.salida);
   assert.match(r.salida, /sin GitHub Release/);
   assert.match(r.salida, /GH_TOKEN/, "tiene que decir cómo arreglarlo");
+});
+
+test("--sin-gh fuerza la API aunque gh esté instalado", () => {
+  // La otra manera de decirlo, además de SHIN_SIN_GH=1. Sirve de verdad en
+  // una máquina con `gh` instalado pero sin sesión iniciada.
+  const { trabajo } = copiaDelRepo("3.7.0");
+  const r = publicar(trabajo, ["3.9.0", "--seco", "--sin-gh"], {
+    env: { GH_TOKEN: "token-de-prueba" },
+  });
+  assert.equal(r.status, 0, r.salida);
+  assert.match(r.salida, /release v3\.9\.0 por la API/, r.salida);
+  assert.doesNotMatch(r.salida, /gh release create/, "no puede planear usar gh");
 });
 
 test("sin identidad de git se para con un mensaje que sirve de algo", () => {

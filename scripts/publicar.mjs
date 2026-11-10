@@ -42,6 +42,8 @@
 //    --rapido          no pasar la suite (solo se salta en pruebas)
 //    --borrador        crear la release como borrador
 //    --sin-release     solo commit + etiqueta + push (sin GitHub Release)
+//    --sin-gh          crear la release por la API aunque `gh` esté instalado
+//                      (útil si `gh` está pero sin sesión; también SHIN_SIN_GH=1)
 //    --rama RAMA       rama a publicar (por defecto main)
 //    --mensaje TEXTO   mensaje del commit (por defecto, el de siempre)
 //    --si / --yes      sin preguntas (para CI)
@@ -99,6 +101,7 @@ const opciones = {
   rapido: false,
   borrador: false,
   sinRelease: false,
+  sinGh: false,
   rama: "main",
   mensaje: "",
   si: false,
@@ -122,6 +125,9 @@ for (let i = 0; i < crudos.length; i += 1) {
       break;
     case "--sin-release":
       opciones.sinRelease = true;
+      break;
+    case "--sin-gh":
+      opciones.sinGh = true;
       break;
     case "--si":
     case "--yes":
@@ -232,7 +238,12 @@ if (etiquetas === etiqueta) {
 // Sin `gh` no hay release, pero el código y la etiqueta sí se pueden subir.
 // Se mira aquí para poder anunciarlo en el plan, pero no se ejecuta nada de
 // `gh` hasta después del modo seco: `--seco` no llama a nada.
-const hayGh = hay("gh");
+// `--sin-gh` (o SHIN_SIN_GH=1) fuerza el camino de la API aunque `gh` esté
+// instalado. Sirve cuando `gh` está pero sin sesión, y es lo que usan las
+// pruebas para simular una máquina sin `gh` sin pelearse con el PATH —que
+// fue el error anterior: en los runners de GitHub, `gh` y `git` viven en la
+// misma carpeta, así que quitar esa carpeta dejaba al script sin `git`.
+const hayGh = !opciones.sinGh && !process.env.SHIN_SIN_GH && hay("gh");
 // Sin `gh` hay otra puerta: la API de GitHub con un token del entorno. El
 // token se lee de `GH_TOKEN` o `GITHUB_TOKEN` y nunca se escribe en ningún
 // archivo ni se imprime.
