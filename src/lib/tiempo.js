@@ -78,4 +78,35 @@ export function tiempoCorto(ms) {
   return partes.join(" ");
 }
 
-export default { tiempoLargo, tiempoCorto };
+/**
+ * Cuánto falta para que se cumpla una espera guardada en la base.
+ *
+ * Existe por un caso real: `.code` contestó «Debes esperar *20685 días, 13 horas
+ * y 37 minutos*». La cuenta estaba bien; el dato guardado era imposible (una
+ * fecha en el futuro, 57 años por delante, de un reloj mal puesto o de un campo
+ * reusado). Con la comprobación de antes, ese número se convertía en un castigo
+ * de por vida: el usuario no podía volver a usar el comando nunca.
+ *
+ * La regla es simple: **una espera nunca puede ser más larga que ella misma**.
+ * Si el resultado se pasa del propio cooldown, el dato está roto, se da por
+ * cumplido y se deja constancia para poder limpiarlo.
+ *
+ * @param {unknown} ultimo    lo guardado (un instante en ms)
+ * @param {number} cooldownMs cuánto dura la espera
+ * @param {number} [ahora]    reloj, para poder probarlo
+ * @returns {{esperaMs:number, corrupto:boolean}} esperaMs = 0 → puede pasar
+ */
+export function esperaRestante(ultimo, cooldownMs, ahora = Date.now()) {
+  const t = Number(ultimo);
+  const tope = Math.max(0, Number(cooldownMs) || 0);
+  // Sin registro (0, null, undefined) o basura: no hay espera que respetar.
+  if (!Number.isFinite(t) || t <= 0 || !tope) return { esperaMs: 0, corrupto: false };
+
+  const falta = t + tope - Number(ahora);
+  if (!Number.isFinite(falta) || falta <= 0) return { esperaMs: 0, corrupto: false };
+  // Más espera que el propio cooldown solo puede venir de un dato imposible.
+  if (falta > tope) return { esperaMs: 0, corrupto: true };
+  return { esperaMs: falta, corrupto: false };
+}
+
+export default { tiempoLargo, tiempoCorto, esperaRestante };
