@@ -1739,6 +1739,108 @@ accion_auto() {
   accion_actualizar
 }
 
+# ═══════════════════════════════════════════════════════════════════
+#  CONSULTAR EL REPOSITORIO
+#
+#  Antes esto era un `git fetch --quiet` y, si fallaba, un «¿sin conexión?»
+#  a secas. Eso es inútil: el 90 % de las veces SÍ hay conexión y el fallo
+#  es otro (HTTP/2 roto por la red móvil, un certificado, un DNS que no
+#  responde). Encima `--quiet` se tragaba el mensaje de git, así que la
+#  única pista se perdía.
+#
+#  Ahora: tres intentos, el segundo y el tercero forzando HTTP/1.1 (que es
+#  el arreglo conocido de «RPC failed; curl 92 HTTP/2 stream …» en redes
+#  móviles), y si aun así falla se ENSEÑA lo que dijo git y se explica qué
+#  es. Nada de adivinar por ti.
+# ═══════════════════════════════════════════════════════════════════
+consultar_repositorio() {
+  if ! hay git; then
+    morir "No encuentro git, y para actualizar hace falta.
+  En Termux:  pkg install git
+  Después vuelve a ejecutar este mismo comando."
+  fi
+
+  local salida rc intento version_http
+  salida=""
+  intento=1
+  while [ "$intento" -le 3 ]; do
+    # El 2.º y el 3.er intento van por HTTP/1.1: en datos móviles el HTTP/2
+    # se corta a medias y git lo reporta como «RPC failed». No se toca la
+    # configuración global: es solo para este comando.
+    case "$intento" in
+      1) version_http="" ;;
+      *) version_http="-c http.version=HTTP/1.1" ;;
+    esac
+    # shellcheck disable=SC2086
+    # --force NO es un capricho: `git fetch --tags` se niega a mover una
+    # etiqueta que ya existe («would clobber existing tag») y devuelve error.
+    # Basta con que el proyecto rehaga una etiqueta —cosa que pasó al
+    # reescribir el historial para corregir las firmas— para que TODA
+    # instalación anterior deje de poder actualizarse, con un error que no
+    # tiene nada que ver con la red. Con --force, las etiquetas locales se
+    # ponen como las del remoto, que es lo que se quiere al actualizar.
+    # Ojo con `set -e`: una asignación desde $(...) que falla aborta el
+    # script entero, y entonces no se llega a explicar nada. De ahí el
+    # `|| rc=$?`.
+    rc=0
+    salida="$(git -C "$DESTINO" $version_http -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 \
+      fetch --tags --force origin 2>&1)" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      if [ "$intento" -gt 1 ]; then
+        dato "conectó en el intento $intento (HTTP/1.1)"
+      fi
+      return 0
+    fi
+    if [ "$intento" -lt 3 ]; then
+      dato "intento $intento falló; reintentando…"
+    fi
+    sleep $((intento * 2))
+    intento=$((intento + 1))
+  done
+
+  explicar_fallo_de_red "$salida"
+  return 1
+}
+
+# Traduce el error de git a algo que se pueda accionar. Se queda con la
+# última línea con «fatal:» o «error:», que es la que dice el motivo.
+explicar_fallo_de_red() {
+  local texto linea pista
+  texto="$1"
+  linea="$(printf '%s\n' "$texto" | grep -E 'fatal:|error:' | tail -n 1 | sed 's/^ *//' || true)"
+  pista=""
+  case "$texto" in
+    *"Could not resolve host"*|*"Temporary failure in name resolution"*)
+      pista="No resuelve el nombre: es el DNS, no GitHub. Prueba con otra red (wifi en vez de datos) o pon 1.1.1.1 a mano." ;;
+    *"certificate"*|*"SSL"*)
+      pista="Problema de certificados. En Termux:  pkg install ca-certificates  y reintenta." ;;
+    *"Username"*|*"Authentication"*|*"403"*)
+      pista="GitHub pidió credenciales: el repositorio no responde como público. Revisa con: git -C ${DESTINO:-<ruta>} remote -v" ;;
+    *"remote-https"*)
+      pista="Tu git viene sin soporte HTTPS. En Termux:  pkg install git libcurl  y reintenta." ;;
+    *"RPC failed"*|*"HTTP/2"*|*"early EOF"*|*"invalid index-pack"*)
+      pista="La red corta las transferencias (típico en datos móviles). Ya lo intenté por HTTP/1.1 tres veces." ;;
+    *"Connection timed out"*|*"Connection refused"*|*"unable to access"*)
+      pista="No hay salida a github.com. Comprueba la conexión:  curl -sI https://github.com | head -1" ;;
+    *"would clobber existing tag"*|*"clobber"*)
+      pista="Las etiquetas del proyecto se rehicieron y las tuyas son las viejas. Ya se resuelve solo con --force; si lo ves aquí, es que tu git es muy antiguo." ;;
+    *"dubious ownership"*)
+      pista="El dueño de la carpeta no coincide. Ejecuta:  git config --global --add safe.directory ${DESTINO:-<ruta>}" ;;
+    *) pista="No reconozco este fallo; el mensaje de arriba es lo único que hay." ;;
+  esac
+
+  error "No se pudo consultar el repositorio."
+  printf '\n' >&2
+  if [ -n "$linea" ]; then
+    printf '  %sLo que dijo git:%s\n    %s\n\n' "$C_GRIS" "$C_RESET" "$linea" >&2
+  else
+    printf '  %sgit no dio ningún mensaje.%s\n\n' "$C_GRIS" "$C_RESET" >&2
+  fi
+  printf '  %s%s%s\n\n' "$C_AMAR" "$pista" "$C_RESET" >&2
+  printf '  Nada se ha tocado: ni el código ni tus datos.\n' >&2
+  printf '  Para ver el error completo a mano:\n    git -C %s fetch --tags origin\n' "${DESTINO:-<ruta>}" >&2
+}
+
 accion_actualizar() {
   exigir_destino_conocido update
   exigir_proyecto
@@ -1764,9 +1866,7 @@ accion_actualizar() {
   # red, se para aquí y no se ha copiado ni un byte; antes se respaldaba
   # primero, así que cada intento sin conexión dejaba un respaldo inútil
   # (y en un teléfono eso son cientos de megas repetidos).
-  if ! git -C "$DESTINO" fetch --quiet --tags origin; then
-    morir "No se pudo consultar el repositorio (¿sin conexión?)."
-  fi
+  consultar_repositorio
 
   # Repetir el mismo comando tiene que ser barato e idempotente: si el código
   # ya es el objetivo, las dependencias están enteras y los parches puestos,
