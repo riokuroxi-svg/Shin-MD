@@ -299,12 +299,9 @@ function fusionarPersonajes(db, lid, pn) {
 /** Avisos de grupo: el campo que identifica a la persona es `warned_jid`. */
 function fusionarAvisos(db, lid, pn) {
   if (!tablaExiste(db, "group_warns")) return 0;
-  try {
-    const r = db.prepare("UPDATE group_warns SET warned_jid = ? WHERE warned_jid = ?").run(pn, lid);
-    return r?.changes || 0;
-  } catch {
-    return 0;
-  }
+  // Sin try/catch: un fallo real debe deshacer la fusión (ver fusionarCuentas).
+  const r = db.prepare("UPDATE group_warns SET warned_jid = ? WHERE warned_jid = ?").run(pn, lid);
+  return r?.changes || 0;
 }
 
 /**
@@ -332,13 +329,24 @@ export function fusionarCuentas(db, lidJid, pnJid) {
     ["group_warns", () => fusionarAvisos(db, lid, pn)],
   ];
 
-  for (const [nombre, paso] of pasos) {
-    try {
-      if (paso() > 0) tocado = true;
-    } catch (err) {
-      // Una tabla con un esquema raro no puede impedir las demás fusiones.
-      log.warn("[identities] fusionar " + nombre + ": " + (err?.message || err));
+  // Todo o nada: si un paso falla se deshace la fusión entera y el error
+  // sube a lid.js, que la reintenta. Sin esto quedaba la cuenta partida
+  // entre el LID y el teléfono (y un reintento sumaría dos veces).
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const [nombre, paso] of pasos) {
+      try {
+        if (paso() > 0) tocado = true;
+      } catch (err) {
+        err.pasoFusion = nombre;
+        throw err;
+      }
     }
+    db.exec("COMMIT");
+  } catch (err) {
+    try { db.exec("ROLLBACK"); } catch {}
+    log.warn("[identities] fusión deshecha en " + (err?.pasoFusion || "?") + ": " + (err?.message || err));
+    throw err;
   }
   return tocado;
 }

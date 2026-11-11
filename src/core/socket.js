@@ -173,7 +173,11 @@ export function connectSocket(engine, opts) {
     });
   }
 
+  // Cierre de la auth.db de la conexión en curso (lo fija start()).
+  let cerrarAuthActual = null;
+
   function clearSession() {
+    try { cerrarAuthActual?.(); } catch {}
     try {
       if (!fs.existsSync(sessionDir)) return;
       for (const f of fs.readdirSync(sessionDir)) {
@@ -201,7 +205,15 @@ export function connectSocket(engine, opts) {
     engine.transit(engine.LIFECYCLE.CONNECT);
     log.gray("Conectando con WhatsApp...");
 
-    const { state, saveCreds: sc } = await useSQLiteAuthState(sessionDir);
+    const { state, saveCreds: sc, close: cerrarBaseAuth } = await useSQLiteAuthState(sessionDir);
+    // Una auth.db por conexión: se cierra al caer el socket (no se acumulan).
+    let authCerrada = false;
+    const cerrarAuth = () => {
+      if (authCerrada) return;
+      authCerrada = true;
+      try { cerrarBaseAuth?.(); } catch {}
+    };
+    cerrarAuthActual = cerrarAuth;
 
     let ver;
     try { const v = await obtenerVersion(); ver = v.version; }
@@ -491,7 +503,7 @@ export function connectSocket(engine, opts) {
 
         // FORZAR guardado inmediato de credenciales ANTES de que se cierre
         clearTimeout(saveTimer);
-        try { await sc(); } catch {}
+        try { await sc(); } catch (e) { log.warn("saveCreds al conectar: " + (e?.message || e)); }
         saveTimer = null;
 
         conectadoDesde = Date.now();
@@ -528,7 +540,7 @@ export function connectSocket(engine, opts) {
         log.info("Nuevo dispositivo vinculado");
         // Forzar saveCreds inmediato cuando se vincula
         clearTimeout(saveTimer);
-        try { await sc(); } catch {}
+        try { await sc(); } catch (e) { log.warn("saveCreds al vincular: " + (e?.message || e)); }
         saveTimer = null;
       }
 
@@ -540,6 +552,14 @@ export function connectSocket(engine, opts) {
         try { engine.getSendQueue()?.pause?.("conexion"); } catch {}
 
         remove(s);
+
+        // Última escritura de credenciales y cierre diferido de la auth.db
+        // (da margen a escrituras en vuelo del socket que acaba de caer).
+        clearTimeout(saveTimer);
+        try { await sc(); } catch (e) { log.warn("saveCreds al cerrar: " + (e?.message || e)); }
+        saveTimer = null;
+        const cierre = setTimeout(cerrarAuth, 3000);
+        if (typeof cierre.unref === "function") cierre.unref();
 
         const code = lastDisconnect?.error?.output?.statusCode || 0;
         const registered = !!state.creds.registered;
