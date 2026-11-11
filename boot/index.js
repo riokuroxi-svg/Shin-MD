@@ -356,7 +356,9 @@ async function main() {
       if (thState) db.settings.set("warmup_state", JSON.stringify(thState));
       const rtState = engine.getRitmo()?.estado;
       if (rtState) db.settings.set("ritmo_state", JSON.stringify(rtState));
-    } catch {}
+    } catch (err) {
+      log.warn("No se pudo guardar el estado antiban: " + (err?.message || err));
+    }
   }
   const persistTimer = setInterval(persistAntibanState, 60000);
   if (typeof persistTimer.unref === "function") persistTimer.unref();

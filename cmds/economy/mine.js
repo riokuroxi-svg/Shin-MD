@@ -37,11 +37,18 @@ function registrarListener(sock) {
   if (sock._ginkoMineListener) return;
   sock._ginkoMineListener = true;
   // Limpieza periódica de jobs viejos
-  setInterval(() => {
+  // WeakRef: si el intervalo cerrara sobre `sock`, cada reconexión dejaría
+  // un socket entero vivo para siempre. Así el GC puede soltarlo y el
+  // intervalo se cancela solo.
+  const ref = new WeakRef(sock);
+  const temporizador = setInterval(() => {
+    const s = ref.deref();
+    if (!s) { clearInterval(temporizador); return; }
     const now = Date.now();
-    const m = getPendingMap(sock);
+    const m = getPendingMap(s);
     for (const [id, job] of m) if (now - job.ts > PENDING_TTL) m.delete(id);
-  }, 60000).unref?.();
+  }, 60000);
+  temporizador.unref?.();
 
   sock.ev.on('messages.upsert', async ({ messages, type }) => {
     if (type !== 'notify') return;
