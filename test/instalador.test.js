@@ -736,7 +736,8 @@ test("una actualización interrumpida no pierde los datos", () => {
 
   assert.notEqual(r.status, 0);
   assert.match(r.salida, /vuelvo a la anterior|revertida/i);
-  // El código vuelve atrás y los datos siguen byte a byte.
+  // El código vuelve atrás conservando la rama (no queda en HEAD suelta) y los datos siguen byte a byte.
+  assert.equal(git(proyecto, "rev-parse", "--abbrev-ref", "HEAD").trim(), "main");
   assert.equal(hashDe(path.join(proyecto, ".env")), antes.env);
   assert.equal(hashDe(path.join(proyecto, "Sessions", "Owner", "auth.db")), antes.sesion);
   assert.equal(hashDe(path.join(proyecto, "data", "shin.db")), antes.base);

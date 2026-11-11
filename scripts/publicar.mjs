@@ -377,6 +377,10 @@ const PASTEL = path.join(RAIZ, "tools", "build_pastel.py");
 if (fs.existsSync(PASTEL) && hay("python3")) {
   ejecutar("python3", [PASTEL], { permitirFallo: true });
 }
+const PERFIL = path.join(RAIZ, "tools", "build_perfil.py");
+if (fs.existsSync(PERFIL) && hay("python3")) {
+  ejecutar("python3", [PERFIL], { permitirFallo: true });
+}
 sincronizarNumerosReadme();
 bien("página de comandos, imágenes y números de pruebas al día");
 

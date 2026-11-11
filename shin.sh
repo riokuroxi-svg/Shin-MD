@@ -48,7 +48,7 @@
 # ═══════════════════════════════════════════════════════════════════
 set -eu
 
-readonly VERSION="${SHIN_VERSION:-v3.7.9}"
+VERSION="${SHIN_VERSION:-v3.7.9}"
 REPO="${SHIN_REPO:-riokuroxi-svg/Shin-MD}"
 
 # ─────────────────────────── salida ───────────────────────────
@@ -243,7 +243,12 @@ DRY_RUN="${SHIN_DRY_RUN:-0}"
 _previo=""
 for _a in "$@"; do
   case "$_previo" in
-    --version|-v) VERSION="$_a" ;;
+    --version|-v)
+      case "$_a" in ""|-*) morir "$_previo necesita una etiqueta (por ejemplo v3.7.9)" ;; esac
+      VERSION="$_a"
+      _previo=""
+      continue
+      ;;
   esac
   case "$_a" in
     -h|--help) AYUDA_PEDIDA=1 ;;
@@ -251,12 +256,17 @@ for _a in "$@"; do
   esac
   _previo="$_a"
 done
+case "$_previo" in
+  --version|-v) morir "$_previo necesita una etiqueta (por ejemplo v3.7.9)" ;;
+esac
 
-[ "$AYUDA_PEDIDA" -eq 1 ] && { ayuda; exit 0; }
 case "$VERSION" in
   v*) ;;
   *[0-9]*) VERSION="v$VERSION" ;;
 esac
+readonly VERSION
+
+[ "$AYUDA_PEDIDA" -eq 1 ] && { ayuda; exit 0; }
 
 detectar_entorno
 
@@ -383,6 +393,17 @@ fi
 SHIN_INSTALADOR_HUELLA="$HUELLA_INSTALADOR"
 SHIN_INSTALADOR_ESPEJO="$ESPEJO_USADO"
 export SHIN_INSTALADOR_HUELLA SHIN_INSTALADOR_ESPEJO
+
+if ! hay bash; then
+  if [ "$TERMUX" -eq 1 ] && hay pkg; then
+    dato "instalando bash…"
+    pkg install -y bash >/dev/null 2>&1 || true
+  elif hay apk && [ "$(id -u 2>/dev/null || echo 1)" = "0" ]; then
+    dato "instalando bash…"
+    apk add --no-cache bash >/dev/null 2>&1 || true
+  fi
+  hay bash || morir "Hace falta bash para ejecutar el instalador. Instálalo y vuelve a intentarlo."
+fi
 
 if [ "$SIN_TTY" -eq 0 ]; then
   exec bash "$INSTALADOR" --version "$VERSION" --auto "$@" < /dev/tty

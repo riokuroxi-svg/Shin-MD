@@ -45,6 +45,20 @@
 # ═══════════════════════════════════════════════════════════════════
 set -Eeuo pipefail
 
+# ═══════════════════════════════════════════════════════════════════
+#  ÍNDICE DE SECCIONES
+#    1. Configuración global y helpers de consola
+#    2. Protección de rutas (resolver_real .. destino_instalable)
+#    3. Limpieza ante señales y utilidades base
+#    4. Detección de plataforma, paquetes del sistema y descargas
+#    5. Entorno: git, Node.js, npm, PATH y extras de Termux
+#    6. Base de datos y respaldos consistentes (WAL / VACUUM INTO)
+#    7. Clonado, dependencias, parches y verificación
+#    8. Lanzador `shin`, detección de proceso y resumen final
+#    9. Red git y acciones CLI (--install/--auto/--update/--repair/…)
+#   10. Parseo de argumentos y despacho principal
+# ═══════════════════════════════════════════════════════════════════
+
 readonly REPO_URL="${SHIN_REPO_URL:-https://github.com/riokuroxi-svg/Shin-MD.git}"
 RAMA="${SHIN_BRANCH:-main}"
 readonly REPO_URL_INFO="${SHIN_REPO_URL_INFO:-${REPO_URL%.git}}"
@@ -271,9 +285,14 @@ destino_instalable() {
 # ───────────────────── limpieza ante interrupción ─────────────────────
 INSTALANDO=0
 al_salir() {
-  local codigo=$?
-  if [ -n "${DESTINO:-}" ] && [ -f "$DESTINO/.shin-install.tmp" ] && [ ! -L "$DESTINO/.shin-install.tmp" ]; then
-    rm -f -- "$DESTINO/.shin-install.tmp" || true
+  local codigo=$? ruta
+  if [ -n "${DESTINO:-}" ]; then
+    for ruta in "$DESTINO/.shin-install.tmp" "$DESTINO/.npm-instalar.log" \
+                "$DESTINO/.node-tmp" "${DESTINO}.parcial-$$"; do
+      if [ -e "$ruta" ] && [ ! -L "$ruta" ]; then
+        rm -rf -- "$ruta" || true
+      fi
+    done
   fi
   if [ "$codigo" -ne 0 ] && [ "$INSTALANDO" -eq 1 ]; then
     printf '\n%s  La instalación no terminó. Nada quedó marcado como instalado:%s\n' "$C_GRIS" "$C_RESET" >&2
@@ -525,12 +544,7 @@ asegurar_git() {
   hay git && { GIT_ORIGEN="sistema"; return 0; }
   paso "Instalando git"
   if puedo_instalar_sistema && pedir_permiso "git (para descargar el proyecto)"; then
-    case "$PLATAFORMA" in
-      termux) instalar_paquete_sistema git ;;
-      alpine) instalar_paquete_sistema git ;;
-      macos)  instalar_paquete_sistema git ;;
-      *)      instalar_paquete_sistema git ;;
-    esac
+    instalar_paquete_sistema git || true
   fi
   if hay git; then
     GIT_ORIGEN="instalado"
@@ -720,12 +734,9 @@ comprobar_npm_minimo() {
 # si la carpeta no está ya en el PATH, solo con marcas propias para poder
 # volver atrás, y nunca dos veces (repetir el comando no añade otra línea).
 persistir_path() {
-  local dir="$1" archivo marcado=0 rc
+  local dir="$1" marcado=0 rc
   [ -n "$dir" ] || return 0
   [ "${SHIN_NO_PATH:-0}" = "1" ] && return 0
-  case ":$PATH:" in
-    *":$dir:"*) ;;
-  esac
   for rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
     [ -f "$rc" ] || continue
     if grep -qF "# >>> Shin-MD >>>" "$rc" 2>/dev/null; then
@@ -734,11 +745,15 @@ persistir_path() {
       if ! grep -qF "$dir" "$rc" 2>/dev/null; then
         # Se inserta una línea antes del cierre del bloque.
         local tmp="$rc.shin-tmp"
-        awk -v d="$dir" '
+        if awk -v d="$dir" '
           /# >>> Shin-MD >>>/ {dentro=1}
           dentro && /# <<< Shin-MD <<</ && !hecho {print "export PATH=\"" d ":$PATH\""; hecho=1}
           {print}
-        ' "$rc" > "$tmp" 2>/dev/null && mv -f -- "$tmp" "$rc"
+        ' "$rc" > "$tmp" 2>/dev/null && mv -f -- "$tmp" "$rc"; then
+          :
+        else
+          rm -f -- "$tmp"
+        fi
       fi
     fi
   done
@@ -792,7 +807,7 @@ asegurar_entorno() {
   comprobar_npm_minimo
   NODE_V="$(node -p 'process.versions.node' 2>/dev/null || echo '?')"
   NPM_V="$(npm -v 2>/dev/null || echo '?')"
-  bien "node $NODE_V · npm $NPM_V · $(ARQ_SIS=$ARQ_SIS; arquitectura)"
+  bien "node $NODE_V · npm $NPM_V · $ARQ_SIS"
 }
 
 describir_plataforma() {
@@ -838,20 +853,6 @@ comprobar_node() {
     else
       printf '  %sInstala Node %s o superior:%s https://nodejs.org\n\n' "$C_GRIS" "$NODE_MINIMO" "$C_RESET" >&2
     fi
-    return 1
-  fi
-  return 0
-}
-
-comprobar_npm() {
-  if ! hay npm; then
-    error "No hay npm (viene con Node.js)."
-    return 1
-  fi
-  NPM_V="$(npm -v 2>/dev/null || echo "0.0.0")"
-  if ! version_mayor_o_igual "$NPM_V" "$NPM_MINIMO"; then
-    error "npm $NPM_V es antiguo (hace falta $NPM_MINIMO o más)."
-    printf '  %sActualizar:%s npm install -g npm@latest\n\n' "$C_GRIS" "$C_RESET" >&2
     return 1
   fi
   return 0
@@ -1101,6 +1102,10 @@ podar_respaldos() {
 # ¿Está el bot corriendo ahora mismo? Con WAL la copia consistente lo soporta,
 # pero conviene decirlo: actualizar con el bot vivo puede dejarlo a medias.
 bot_corriendo() {
+  if [ -d /proc/$$ ]; then
+    nuestro_bot_corriendo && return 0
+    return 1
+  fi
   if hay pgrep; then
     pgrep -f "node .*index\.js" >/dev/null 2>&1 && return 0
     return 1
@@ -1283,8 +1288,9 @@ descargar_limpio() {
 comprobar_espacio() {
   # Dos umbrales: por debajo del duro no se empieza (las dependencias no
   # caben), entre ambos se avisa y se deja decidir al usuario.
-  local libre_kb duro_mb="${SHIN_ESPACIO_MIN_MB:-400}" aviso_mb=1200 libre_mb
-  libre_kb="$(df -Pk "$DESTINO" 2>/dev/null | awk 'NR==2 {print $4}')"
+  local libre_kb duro_mb="${SHIN_ESPACIO_MIN_MB:-400}" aviso_mb=1200 libre_mb ruta_df="$DESTINO"
+  [ -e "$ruta_df" ] || ruta_df="$(dirname "$DESTINO")"
+  libre_kb="$(df -Pk "$ruta_df" 2>/dev/null | awk 'NR==2 {print $4}')"
   case "$libre_kb" in ''|*[!0-9]*) return 0 ;; esac   # si no se puede medir, no se bloquea
   libre_mb=$((libre_kb / 1024))
   if [ "$libre_mb" -lt "$duro_mb" ]; then
@@ -1590,6 +1596,7 @@ nuestro_bot_corriendo() {
   hay pgrep || return 1
   for pid in $(pgrep -f 'node .*index\.js' 2>/dev/null || true); do
     [ -n "$pid" ] || continue
+    [ -d "/proc/$pid/cwd" ] || continue
     local suyo=""
     suyo="$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)"
     [ -n "$suyo" ] || suyo="$( cd "/proc/$pid/cwd" 2>/dev/null && pwd -P )" || true
@@ -1647,8 +1654,7 @@ instalar_lanzador() {
     nombre="$PAQUETE"
   fi
   archivo="$dir/$nombre"
-  bash_real="$(command -v bash 2>/dev/null || true)"
-  [ -n "$bash_real" ] || bash_real="/bin/sh"
+  bash_real="$(command -v bash 2>/dev/null || printf '%s' "${BASH:-/bin/bash}")"
   # El intérprete se escribe con su ruta real porque en Android no existe
   # /bin/sh ni /usr/bin/env: un shebang "bonito" no arrancaría.
   {
@@ -1693,6 +1699,20 @@ LANZADOR
   esac
 }
 
+limpiar_lanzador() {
+  local dir nombre
+  dir="$(carpeta_del_lanzador 2>/dev/null || true)"
+  [ -n "$dir" ] && [ -d "$dir" ] || return 0
+  for nombre in shin "$PAQUETE"; do
+    local archivo="$dir/$nombre"
+    [ -f "$archivo" ] && [ ! -L "$archivo" ] || continue
+    if grep -qF "$DESTINO/install.sh" "$archivo" 2>/dev/null; then
+      rm -f -- "$archivo" 2>/dev/null && dato "comando '$nombre' retirado ($archivo)" || true
+    fi
+  done
+  return 0
+}
+
 # ───────────────────────── acciones ─────────────────────────
 accion_instalar() {
   asegurar_entorno
@@ -1728,11 +1748,11 @@ accion_arrancar() {
 # actualizar si hay algo nuevo. Siempre termina arrancando el bot.
 accion_auto() {
   GO=1
-  if ! es_propia "$DESTINO" || [ ! -d "$DESTINO/.git" ]; then
+  if ! es_propia "$DESTINO" || [ ! -d "$DESTINO/.git" ] || [ ! -f "$DESTINO/.shin-install" ]; then
     accion_instalar
     return 0
   fi
-  if ! estado_instalado || ! dependencias_sanas || ! parches_aplicados; then
+  if ! dependencias_sanas || ! parches_aplicados; then
     accion_reparar
     return 0
   fi
@@ -1760,7 +1780,8 @@ consultar_repositorio() {
   Después vuelve a ejecutar este mismo comando."
   fi
 
-  local salida rc intento version_http
+  local salida rc intento
+  local -a extra_http
   salida=""
   intento=1
   while [ "$intento" -le 3 ]; do
@@ -1768,10 +1789,9 @@ consultar_repositorio() {
     # se corta a medias y git lo reporta como «RPC failed». No se toca la
     # configuración global: es solo para este comando.
     case "$intento" in
-      1) version_http="" ;;
-      *) version_http="-c http.version=HTTP/1.1" ;;
+      1) extra_http=() ;;
+      *) extra_http=(-c http.version=HTTP/1.1) ;;
     esac
-    # shellcheck disable=SC2086
     # --force NO es un capricho: `git fetch --tags` se niega a mover una
     # etiqueta que ya existe («would clobber existing tag») y devuelve error.
     # Basta con que el proyecto rehaga una etiqueta —cosa que pasó al
@@ -1783,7 +1803,7 @@ consultar_repositorio() {
     # script entero, y entonces no se llega a explicar nada. De ahí el
     # `|| rc=$?`.
     rc=0
-    salida="$(git -C "$DESTINO" $version_http -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 \
+    salida="$(GIT_TERMINAL_PROMPT=0 GIT_ASKPASS='' git -C "$DESTINO" "${extra_http[@]}" -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=30 \
       fetch --tags --force origin 2>&1)" || rc=$?
     if [ "$rc" -eq 0 ]; then
       if [ "$intento" -gt 1 ]; then
@@ -1857,9 +1877,10 @@ accion_actualizar() {
     aviso "parece que el bot está corriendo. Para que no quede a medias, páralo"
     aviso "con Ctrl+C antes de continuar. La copia de la base sí es consistente."
   fi
-  local previo esquema_antes db_del_bot
+  local previo rama_previa esquema_antes db_del_bot
   previo="$(git -C "$DESTINO" rev-parse HEAD)"
-  db_del_bot="$DESTINO/data/shin.db"
+  rama_previa="$(git -C "$DESTINO" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+  db_del_bot="${SHIN_DB_PATH:-$DESTINO/data/shin.db}"
   esquema_antes="$(version_esquema_db "$db_del_bot")"
 
   # La consulta al repositorio va ANTES del respaldo, no después. Si no hay
@@ -1895,6 +1916,12 @@ accion_actualizar() {
       fi
       bien "siguiendo la rama $RAMA (ya no está fijada a una versión)"
     elif [ -n "$VERSION_PEDIDA" ]; then
+      if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
+        case "$VERSION_PEDIDA" in
+          v*) ;;
+          *) git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/v$VERSION_PEDIDA" >/dev/null 2>&1 && VERSION_PEDIDA="v$VERSION_PEDIDA" ;;
+        esac
+      fi
       dato "instalación fijada en ${fijada:-$previo}; pasando a la versión $VERSION_PEDIDA"
       if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
         morir "No existe la versión $VERSION_PEDIDA.
@@ -1912,6 +1939,12 @@ accion_actualizar() {
     fi
   else
     if [ -n "$VERSION_PEDIDA" ]; then
+      if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
+        case "$VERSION_PEDIDA" in
+          v*) ;;
+          *) git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/v$VERSION_PEDIDA" >/dev/null 2>&1 && VERSION_PEDIDA="v$VERSION_PEDIDA" ;;
+        esac
+      fi
       if ! git -C "$DESTINO" rev-parse --verify --quiet "refs/tags/$VERSION_PEDIDA" >/dev/null 2>&1; then
         morir "No existe la versión $VERSION_PEDIDA.
   Lista las disponibles: git ls-remote --tags $REPO_URL"
@@ -1933,7 +1966,11 @@ accion_actualizar() {
   if ! instalar_dependencias || ! verificar; then
     ACTUALIZANDO=0
     error "La nueva versión no supera las comprobaciones; vuelvo a la anterior."
-    git -C "$DESTINO" checkout --quiet --detach "$previo" || aviso "no se pudo volver al commit ${previo:0:7}"
+    if [ -n "$rama_previa" ]; then
+      git -C "$DESTINO" checkout --quiet -B "$rama_previa" "$previo" || aviso "no se pudo volver al commit ${previo:0:7}"
+    else
+      git -C "$DESTINO" checkout --quiet --detach "$previo" || aviso "no se pudo volver al commit ${previo:0:7}"
+    fi
     ( cd "$DESTINO" && npm ci --include=optional --no-audit --no-fund >/dev/null 2>&1 ) || true
     INSTALANDO=0
     error "Actualización revertida. Sigues en la versión ${previo:0:7} y tus datos están intactos."
@@ -1945,7 +1982,9 @@ accion_actualizar() {
   escribir_estado
   INSTALANDO=0
   instalar_lanzador
-  aviso "reinicia el bot para usar la versión nueva (Ctrl+C y npm start)."
+  if [ "$GO" -eq 0 ] && [ "$SIN_ARRANQUE" -eq 0 ]; then
+    aviso "reinicia el bot para usar la versión nueva (Ctrl+C y npm start)."
+  fi
   resumen
 }
 
@@ -1981,7 +2020,7 @@ accion_verificar() {
       dato "fijada a la versión $etiqueta (no sigue la rama)"
     fi
     local esquema
-    esquema="$(version_esquema_db "$DESTINO/data/shin.db")"
+    esquema="$(version_esquema_db "${SHIN_DB_PATH:-$DESTINO/data/shin.db}")"
     [ -n "$esquema" ] && dato "base de datos en esquema v$esquema"
   fi
   if [ -f "$DESTINO/.shin-install" ]; then
@@ -2053,6 +2092,7 @@ accion_desinstalar() {
     while IFS= read -r r; do [ -n "$r" ] && cp -a "$DESTINO/$r" "$destino_datos/"; done < <(rutas_a_conservar)
     bien "datos guardados en $destino_datos"
   fi
+  limpiar_lanzador
   borrar_arbol "$DESTINO" "desinstalación"
   if [ "$PURGAR" -eq 1 ]; then
     printf '\n%s  Todo borrado.%s\n\n' "$C_GRIS" "$C_RESET"
@@ -2128,6 +2168,7 @@ accion_doctor() {
   [ -f "$DESTINO/.env" ] \
     && neutro ".env presente ($(grep -cE '^[A-Z_]+=' "$DESTINO/.env" 2>/dev/null || echo 0) claves; no se muestra su contenido)" \
     || ojo "no hay .env (se crea solo desde .env.example al instalar)"
+  local r
   for r in Sessions session data backups; do
     [ -e "$DESTINO/$r" ] && neutro "$r: $(du -sh "$DESTINO/$r" 2>/dev/null | cut -f1)"
   done
@@ -2136,8 +2177,9 @@ accion_doctor() {
   fi
 
   seccion "sistema"
-  local libre
-  libre="$(df -Pk "$DESTINO" 2>/dev/null | awk 'NR==2 {printf "%.1f GB", $4/1048576}')"
+  local libre ruta_df="$DESTINO"
+  [ -e "$ruta_df" ] || ruta_df="$(dirname "$DESTINO")"
+  libre="$(df -Pk "$ruta_df" 2>/dev/null | awk 'NR==2 {printf "%.1f GB", $4/1048576}')"
   [ -n "$libre" ] && neutro "espacio libre donde vive la instalación: $libre"
   if hay pgrep && pgrep -f "node .*index\\.js" >/dev/null 2>&1; then
     ok "hay un proceso del bot corriendo ($(pgrep -fc "node .*index\\.js" 2>/dev/null || echo 1))"
@@ -2273,15 +2315,13 @@ accion_servicio() {
     como=""
   fi
 
-  step_confirmar() {
-    [ "$PEDIR_CONFIRMACION" -eq 1 ] || return 0
+  if [ "$PEDIR_CONFIRMACION" -eq 1 ]; then
     printf '  %s?%s Voy a escribir %s y activar el servicio. ¿Sigo? [S/n] ' "$C_AMAR" "$C_RESET" "$archivo" >&2
-    local r=""; read -r r || return 1
-    case "$r" in ""|s|S|si|sí|SI|Sí|y|Y) return 0 ;; *) return 1 ;; esac
-  }
-  if ! step_confirmar; then
-    printf '\n  %scancelado; no escribí nada.%s\n\n' "$C_GRIS" "$C_RESET" >&2
-    return 1
+    local resp_svc=""; read -r resp_svc || resp_svc="n"
+    case "$resp_svc" in
+      ""|s|S|si|sí|SI|Sí|y|Y) ;;
+      *) printf '\n  %scancelado; no escribí nada.%s\n\n' "$C_GRIS" "$C_RESET" >&2; return 1 ;;
+    esac
   fi
 
   # Se escribe en un temporal y se mueve con `mv`: si algo falla a mitad, no
@@ -2291,15 +2331,15 @@ accion_servicio() {
   if [ -n "$como" ] && [ "$(id -u 2>/dev/null || echo 1)" != "0" ]; then
     $como mkdir -p "$carpeta" || morir "No pude crear $carpeta (¿hacen falta permisos?)."
     printf '%s\n' "$unidad" | $como tee "$tmp" >/dev/null 2>&1 \
-      || morir "No pude escribir en $archivo (¿hacen falta permisos?)."
-    $como mv -f "$tmp" "$archivo" || morir "No pude dejar la unidad en $archivo."
+      || { $como rm -f "$tmp" 2>/dev/null || true; morir "No pude escribir en $archivo (¿hacen falta permisos?)."; }
+    $como mv -f "$tmp" "$archivo" || { $como rm -f "$tmp" 2>/dev/null || true; morir "No pude dejar la unidad en $archivo."; }
     $como systemctl daemon-reload || true
     $como systemctl enable --now "$PAQUETE" \
       || morir "La unidad está escrita, pero no arrancó. Mira: journalctl -u $PAQUETE -n 50"
   else
     mkdir -p "$carpeta" || morir "No pude crear $carpeta."
-    printf '%s\n' "$unidad" > "$tmp" || morir "No pude escribir en $archivo."
-    mv -f "$tmp" "$archivo" || morir "No pude dejar la unidad en $archivo."
+    printf '%s\n' "$unidad" > "$tmp" || { rm -f -- "$tmp"; morir "No pude escribir en $archivo."; }
+    mv -f "$tmp" "$archivo" || { rm -f -- "$tmp"; morir "No pude dejar la unidad en $archivo."; }
     if [ "$ambito" = "system" ]; then
       systemctl daemon-reload || true
       systemctl enable --now "$PAQUETE" \
