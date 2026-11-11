@@ -88,6 +88,7 @@ export function createSendQueue(throttler, health, opts = {}) {
   let avisoTopeDado = false;
   let avisoRitmoDado = null;
   let despertar = null;
+  let despertarReanudacion = null;
   function avisarTopeDiario(th) {
     if (avisoTopeDado) return;
     avisoTopeDado = true;
@@ -113,9 +114,22 @@ export function createSendQueue(throttler, health, opts = {}) {
    * @param {number} topeMs
    */
   async function esperarReanudacion(topeMs) {
-    const fin = Date.now() + topeMs;
+    if (!paused) return true;
+    const fin = Date.now() + Math.max(0, topeMs);
     while (paused && Date.now() < fin) {
-      await new Promise((r) => setTimeout(r, 250));
+      const restante = fin - Date.now();
+      if (restante <= 0) break;
+      await new Promise((r) => {
+        const timer = setTimeout(() => {
+          despertarReanudacion = null;
+          r();
+        }, Math.min(250, restante));
+        despertarReanudacion = () => {
+          clearTimeout(timer);
+          despertarReanudacion = null;
+          r();
+        };
+      });
     }
     return !paused;
   }
@@ -136,31 +150,27 @@ export function createSendQueue(throttler, health, opts = {}) {
   }
 
   /**
-   * Duerme `ms` pero se despierta si entra una tarea nueva.
-   *
-   * Antes esto era un `setTimeout` largo: un chat desconocido bloqueado al
-   * frente de la cola retrasaba hasta un minuto la respuesta a alguien que sí
-   * estaba esperando. Ahora se duerme en tramos cortos (0,03 % de CPU, medido)
-   * y cada tramo vuelve a mirar la cola.
+   * Duerme `ms` pero se despierta si entra una tarea nueva o la cola se pausa.
    */
   async function esperarTurno(ms) {
     const fin = Date.now() + Math.max(50, ms);
     while (Date.now() < fin) {
-      if (queue.length === 0) return;
+      if (paused || queue.length === 0) return;
       const tramo = Math.min(250, fin - Date.now());
       let despertado = false;
       await new Promise((r) => {
-        // Al entrar una tarea nueva, esto se resuelve de inmediato (y se
-        // marca), para salir del todo: si solo se resolviera el tramo, la
-        // respuesta seguiría esperando al siguiente, y así hasta el final.
+        const timer = setTimeout(() => {
+          despertar = null;
+          r();
+        }, tramo);
         despertar = () => {
           despertado = true;
+          clearTimeout(timer);
+          despertar = null;
           r();
         };
-        setTimeout(r, tramo);
       });
-      despertar = null;
-      if (despertado) return;
+      if (despertado || paused) return;
     }
   }
 
@@ -168,178 +178,158 @@ export function createSendQueue(throttler, health, opts = {}) {
     if (processing || paused) return;
     processing = true;
 
-    while (queue.length > 0) {
-      if (paused) { processing = false; return; }
+    try {
+      while (queue.length > 0) {
+        if (paused) return;
 
-      // B1.4: con el tope diario del warm-up alcanzado, las tareas
-      // normales esperan; si hay una tarea de prioridad en la cola,
-      // se adelanta y pasa (nunca se queda 60s detrás del bloqueo).
-      // B2.2: lo mismo para las tareas que no gastan cuota (reacciones,
-      // borrados, ediciones): no tiene sentido congelarlas 60s por un
-      // tope que ni siquiera consumen.
-      if (throttler && throttler.canSend()) avisoTopeDado = false;
-      if (ritmo && ritmo.evaluar("", {}).ok) avisoRitmoDado = null;
+        // B1.4: con el tope diario del warm-up alcanzado, las tareas
+        // normales esperan; si hay una tarea de prioridad en la cola,
+        // se adelanta y pasa (nunca se queda 60s detrás del bloqueo).
+        // B2.2: lo mismo para las tareas que no gastan cuota (reacciones,
+        // borrados, ediciones): no tiene sentido congelarlas 60s por un
+        // tope que ni siquiera consumen.
+        if (throttler && throttler.canSend()) avisoTopeDado = false;
+        if (ritmo && ritmo.evaluar("", {}).ok) avisoRitmoDado = null;
 
-      // Quién puede salir ahora. Pasan siempre las de prioridad y las que no
-      // gastan cuota (reacciones, borrados, ediciones): si no, con la cola
-      // frenada el bot no podría ni quitar un mensaje.
-      const puedePasar = (t) => {
-        const o = t.opts || {};
-        if (o.isPriority || o.countsForQuota === false) return true;
-        // Descanso diario: los envíos normales duermen; lo urgente y las
-        // respuestas ya pasaron por el atajo de arriba.
-        if (sesion?.activo && sesion.descanso.enDescanso() && !o.esRespuesta) {
-          t.esperaDescanso = true;
-          return false;
-        }
-        if (throttler && !throttler.canSend()) return false;
-        if (ritmo) {
-          // Sin `ahora`: el ritmo tiene su propio reloj (inyectable en las
-          // pruebas). Pasarle Date.now() aquí rompía la calidez del chat.
-          const d = ritmo.evaluar(o.destino || "");
-          if (!d.ok) {
-            t.esperaRitmo = d;
+        // Quién puede salir ahora. Pasan siempre las de prioridad y las que no
+        // gastan cuota (reacciones, borrados, ediciones): si no, con la cola
+        // frenada el bot no podría ni quitar un mensaje.
+        const puedePasar = (t) => {
+          delete t.esperaDescanso;
+          delete t.esperaRitmo;
+          const o = t.opts || {};
+          if (o.isPriority || o.countsForQuota === false) return true;
+          // Descanso diario: los envíos normales duermen; lo urgente y las
+          // respuestas ya pasaron por el atajo de arriba.
+          if (sesion?.activo && sesion.descanso.enDescanso() && !o.esRespuesta) {
+            t.esperaDescanso = true;
             return false;
           }
-        }
-        return true;
-      };
-
-      const idx = queue.findIndex(puedePasar);
-      if (idx === -1) {
-        if (queue[0]?.esperaDescanso) {
-          // En descanso se revisa cada minuto: no hay nada que calcular.
-          await esperarTurno(60000);
-        } else if (throttler && !throttler.canSend()) {
-          avisarTopeDiario(throttler);
-          await esperarTurno(60000);
-        } else {
-          // El ritmo frena: se duerme lo que falta (el propio ritmo lo calcula)
-          // en vez de 60 s a ciegas, y con un mínimo para no girar en vacío.
-          const espera = queue[0]?.esperaRitmo || { motivo: null, esperarMs: 1000 };
-          if (avisoRitmoDado !== espera.motivo) {
-            avisoRitmoDado = espera.motivo;
-            if (typeof opts.avisarRitmo === "function") opts.avisarRitmo(espera.motivo);
+          if (throttler && !throttler.canSend()) return false;
+          if (ritmo) {
+            // Sin `ahora`: el ritmo tiene su propio reloj (inyectable en las
+            // pruebas). Pasarle Date.now() aquí rompía la calidez del chat.
+            const d = ritmo.evaluar(o.destino || "");
+            if (!d.ok) {
+              t.esperaRitmo = d;
+              return false;
+            }
           }
-          await esperarTurno(Math.max(50, Math.min(60000, espera.esperarMs || 1000)));
-        }
-        continue;
-      }
-      const task = queue.splice(idx, 1)[0];
+          return true;
+        };
 
-      const delay = throttler ? throttler.calcDelay({
-        isPriority: task.opts.isPriority || false,
-        messageLength: task.opts.messageLength || 0,
-        isNewContact: task.opts.isNewContact || false,
-      }) : 500;
-
-      // Calma tras reconectar: el pico de envíos justo después de volver es lo
-      // que más rápido dispara los límites. Arranca al 10 % del ritmo y vuelve
-      // al 100 % en un minuto.
-      const calma = sesion?.activo ? sesion.calma.factorDeEspera() : 1;
-      await new Promise(r => setTimeout(r, Math.round(delay * calma)));
-
-      const gastaCuota = task.opts.countsForQuota !== false;
-
-      try {
-        const result = await withTimeout(task.fn(), timeoutMs, "envío");
-        if (throttler && gastaCuota) throttler.recordSent();
-        if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-        if (health) health.recordSend();
-        task.resolve(result);
-      } catch (err) {
-        if (health) health.recordSendFail(err);
-
-        // ── Un envío sin respuesta NO se reintenta a ciegas ──────────
-        // Antes, un timeout (120 s sin que Baileys conteste) caía en el
-        // reintento de abajo y se mandaba OTRA VEZ el mismo mensaje. Pero
-        // el que se colgó puede haber llegado perfectamente: la promesa
-        // huérfana sigue viva en segundo plano. Resultado: el contacto ve
-        // el mensaje dos veces, y el doble mensaje es de las cosas que más
-        // se reportan como spam — justo lo que este bot evita.
-        //
-        // Reintentar sirve cuando el fallo es SEGURO (el socket dijo que
-        // no). Cuando es una incógnita, se anota y se sigue: perder uno
-        // es mejor que duplicarlo. El estado queda en el registro y en
-        // `.health`, nunca en silencio.
-        if (err && err.code === CODIGO_INCIERTO) {
-          inciertos += 1;
-          ultimoIncierto = Date.now();
-          if (throttler && gastaCuota) throttler.recordSent(); // se envió trabajo real
-          if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-          log.warn(
-            "Envío sin respuesta tras " + timeoutMs + "ms: NO lo repito para no duplicarlo. " +
-              "Puede haber llegado o no; revisa el chat. (" + inciertos + " en esta sesión)",
-          );
-          task.reject(err);
+        const idx = queue.findIndex(puedePasar);
+        if (idx === -1) {
+          if (queue[0]?.esperaDescanso) {
+            // En descanso se revisa cada minuto: no hay nada que calcular.
+            await esperarTurno(60000);
+          } else if (throttler && !throttler.canSend()) {
+            avisarTopeDiario(throttler);
+            await esperarTurno(60000);
+          } else {
+            // El ritmo frena: se duerme lo que falta (el propio ritmo lo calcula)
+            // en vez de 60 s a ciegas, y con un mínimo para no girar en vacío.
+            const espera = queue[0]?.esperaRitmo || { motivo: null, esperarMs: 1000 };
+            if (avisoRitmoDado !== espera.motivo) {
+              avisoRitmoDado = espera.motivo;
+              if (typeof opts.avisarRitmo === "function") opts.avisarRitmo(espera.motivo);
+            }
+            await esperarTurno(Math.max(50, Math.min(60000, espera.esperarMs || 1000)));
+          }
           continue;
         }
+        const task = queue.splice(idx, 1)[0];
 
-        // ── Se cayó la conexión: el mensaje ESPERA, no se pierde ────
-        // El fallo que se veía en el móvil: llega un comando, justo ahí se
-        // cae la conexión (código 428 en datos móviles es de todos los
-        // días), el envío revienta con «Connection Closed», se reintenta a
-        // los 2-3 s —la conexión sigue caída—, vuelve a reventar y la
-        // respuesta se TIRA. Quien escribió el comando no recibe nada y el
-        // bot parece muerto aunque esté reconectando.
-        //
-        // Aquí ese reintento ciego se cambia por espera: el mensaje se
-        // queda en la cola (que está pausada por el mismo motivo) y sale
-        // en cuanto la conexión vuelve.
-        //
-        // ¿Y no se duplica? No: «Connection Closed» lo lanza Baileys al
-        // escribir sobre un websocket ya cerrado — el fotograma NO llegó a
-        // salir. Es el caso contrario del envío sin respuesta (ese sí es
-        // una incógnita y no se reintenta nunca).
-        if (esFalloDeConexion(err)) {
-          log.warn("Conexión caída: el mensaje queda en cola y sale al reconectar");
-          const volvio = await esperarReanudacion(esperaReconexionMs);
-          if (!volvio) {
-            log.warn("No volvió la conexión en " + Math.round(esperaReconexionMs / 60000) + " min: ese mensaje se pierde");
+        const delay = throttler ? throttler.calcDelay({
+          isPriority: task.opts.isPriority || false,
+          messageLength: task.opts.messageLength || 0,
+          isNewContact: task.opts.isNewContact || false,
+        }) : 500;
+
+        // Calma tras reconectar: el pico de envíos justo después de volver es lo
+        // que más rápido dispara los límites. Arranca al 10 % del ritmo y vuelve
+        // al 100 % en un minuto.
+        const calma = sesion?.activo ? sesion.calma.factorDeEspera() : 1;
+        const esperaEnvio = Math.round(delay * calma);
+        if (esperaEnvio > 0) await new Promise(r => setTimeout(r, esperaEnvio));
+        if (paused) {
+          queue.unshift(task);
+          return;
+        }
+
+        const gastaCuota = task.opts.countsForQuota !== false;
+
+        try {
+          const result = await withTimeout(task.fn(), timeoutMs, "envío");
+          if (throttler && gastaCuota) throttler.recordSent();
+          if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
+          if (health) health.recordSend();
+          task.resolve(result);
+        } catch (err) {
+          if (health) health.recordSendFail(err);
+
+          if (err && err.code === CODIGO_INCIERTO) {
+            inciertos += 1;
+            ultimoIncierto = Date.now();
+            if (throttler && gastaCuota) throttler.recordSent(); // se envió trabajo real
+            if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
+            log.warn(
+              "Envío sin respuesta tras " + timeoutMs + "ms: NO lo repito para no duplicarlo. " +
+                "Puede haber llegado o no; revisa el chat. (" + inciertos + " en esta sesión)",
+            );
             task.reject(err);
             continue;
           }
+
+          if (esFalloDeConexion(err)) {
+            log.warn("Conexión caída: el mensaje queda en cola y sale al reconectar");
+            const volvio = await esperarReanudacion(esperaReconexionMs);
+            if (!volvio) {
+              log.warn("No volvió la conexión en " + Math.round(esperaReconexionMs / 60000) + " min: ese mensaje se pierde");
+              task.reject(err);
+              continue;
+            }
+            try {
+              const result3 = await withTimeout(task.fn(), timeoutMs, "envío tras reconectar");
+              if (throttler && gastaCuota) throttler.recordSent();
+              if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
+              if (health) health.recordSend();
+              task.resolve(result3);
+            } catch (err3) {
+              if (health) health.recordSendFail(err3);
+              task.reject(err3);
+            }
+            continue;
+          }
+
+          log.error("Send failed: " + (err.message || err), err);
           try {
-            const result3 = await withTimeout(task.fn(), timeoutMs, "envío tras reconectar");
+            // Reintento que RESPETA el throttler (nunca 3s fijos a tope de
+            // velocidad: esto es un bot anti-ban). Mínimo 2s.
+            const retryDelay = throttler
+              ? Math.max(2000, throttler.calcDelay({ messageLength: task.opts.messageLength || 0 }))
+              : 3000;
+            await new Promise(r => setTimeout(r, retryDelay));
+            const result2 = await withTimeout(task.fn(), timeoutMs, "reintento");
             if (throttler && gastaCuota) throttler.recordSent();
             if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
+            task.resolve(result2);
             if (health) health.recordSend();
-            task.resolve(result3);
-          } catch (err3) {
-            if (health) health.recordSendFail(err3);
-            task.reject(err3);
+          } catch (err2) {
+            if (err2 && err2.code === CODIGO_INCIERTO) {
+              inciertos += 1;
+              ultimoIncierto = Date.now();
+              log.warn("El reintento también quedó sin respuesta; no hay un tercer envío.");
+            } else if (health) {
+              health.recordSendFail(err2);
+            }
+            task.reject(err2);
           }
-          continue;
-        }
-
-        log.error("Send failed: " + (err.message || err), err);
-        try {
-          // Reintento que RESPETA el throttler (nunca 3s fijos a tope de
-          // velocidad: esto es un bot anti-ban). Mínimo 2s.
-          const retryDelay = throttler
-            ? Math.max(2000, throttler.calcDelay({ messageLength: task.opts.messageLength || 0 }))
-            : 3000;
-          await new Promise(r => setTimeout(r, retryDelay));
-          const result2 = await withTimeout(task.fn(), timeoutMs, "reintento");
-          if (throttler && gastaCuota) throttler.recordSent();
-          if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-          task.resolve(result2);
-          if (health) health.recordSend();
-        } catch (err2) {
-          // El reintento también puede quedarse sin respuesta. Ahí se
-          // acaba: una incógnita no se persigue con un tercer envío.
-          if (err2 && err2.code === CODIGO_INCIERTO) {
-            inciertos += 1;
-            ultimoIncierto = Date.now();
-            log.warn("El reintento también quedó sin respuesta; no hay un tercer envío.");
-          } else if (health) {
-            health.recordSendFail(err2);
-          }
-          task.reject(err2);
         }
       }
+    } finally {
+      processing = false;
     }
-    processing = false;
   }
 
   /**
@@ -347,7 +337,15 @@ export function createSendQueue(throttler, health, opts = {}) {
    * pisarse: el watchdog por riesgo y la conexión por estar caída.
    * @param {string} [motivo]
    */
-  function pause(motivo = "manual") { motivosDePausa.add(motivo); paused = true; }
+  function pause(motivo = "manual") {
+    motivosDePausa.add(motivo);
+    paused = true;
+    if (despertar) {
+      const d = despertar;
+      despertar = null;
+      d();
+    }
+  }
 
   /**
    * Quita un motivo de pausa. La cola solo vuelve a andar cuando no queda
@@ -357,7 +355,14 @@ export function createSendQueue(throttler, health, opts = {}) {
   function resume(motivo = "manual") {
     motivosDePausa.delete(motivo);
     paused = motivosDePausa.size > 0;
-    if (!paused && !processing) process();
+    if (!paused) {
+      if (despertarReanudacion) {
+        const d = despertarReanudacion;
+        despertarReanudacion = null;
+        d();
+      }
+      if (!processing) process();
+    }
   }
 
   /** Por qué está parada la cola ahora mismo (vacío si anda). */

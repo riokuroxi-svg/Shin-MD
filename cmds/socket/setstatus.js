@@ -16,7 +16,7 @@ export default {
     const config = db.getSettings(idBot) || {};
     if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
     const value = args.join(' ').trim();
-    if (!value) return msg.reply(`✐ Debes escribir un estado valido.\n> Ejemplo: *${usedPrefix + command} Hola! soy Ginko-MD*`);
+    if (!value) return msg.reply(`✎ Debes escribir un estado valido.\n> Ejemplo: *${usedPrefix + command} Hola! soy Shin-MD*`);
     await sock.updateProfileStatus(value);
     return msg.reply(`✿ Se ha actualizado el estado del bot a *${value}*!`);
   },

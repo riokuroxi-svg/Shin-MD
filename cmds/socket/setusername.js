@@ -16,7 +16,7 @@ export default {
     const config = db.getSettings(idBot) || {};
     if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
     const value = args.join(' ').trim();
-    if (!value) return msg.reply(`✎ Debes escribir un nombre de usuario valido.\n> Ejemplo: *${usedPrefix + command} Ginko-MD*`);
+    if (!value) return msg.reply(`✎ Debes escribir un nombre de usuario valido.\n> Ejemplo: *${usedPrefix + command} Shin-MD*`);
     await sock.updateProfileName(value);
     return msg.reply(`✿ El nombre de usuario del bot ha sido actualizado a *${value}*!`);
   },

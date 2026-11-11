@@ -85,23 +85,30 @@ export function createWatchdog(engine, opts = {}) {
       lastRisk = score;
 
       // 1) Pausa/reanuda la cola según riesgo (anti-ban)
+      // Usa el motivo "riesgo" para no pisarse con la pausa por "conexion".
       if (score >= riskThreshold && !paused) {
         paused = true;
-        queue.pause();
+        queue.pause("riesgo");
         log.warn("Watchdog: riesgo alto (" + score + ") — cola de envíos en pausa");
       } else if (paused && score < riskThreshold) {
         paused = false;
-        queue.resume();
+        queue.resume("riesgo");
         log.info("Watchdog: riesgo normal (" + score + ") — cola reanudada");
       }
 
-      // 2) Conexión stuck: el engine dice que está conectado pero no
-      //    hay señales de vida (open/mensajes) desde stuckThresholdMs.
+      // 2) Conexión stuck / sesión sorda (#2491): unificado aquí para no
+      //    duplicar temporizadores ni provocar tormentas de reconexión.
+      const ses = typeof engine.getSesion === "function" ? engine.getSesion() : null;
+      const sordera = state === engine.LIFECYCLE.RUNNING && ses?.activo && ses.sordera?.revisar?.();
       const idle = Date.now() - lastActivity;
-      if (state >= engine.LIFECYCLE.CONNECT && idle > stuckThresholdMs) {
+      if ((state >= engine.LIFECYCLE.CONNECT && idle > stuckThresholdMs) || sordera) {
         if (wsReady(sock)) {
-          doReconnect("conexión stuck " + Math.round(idle / 60000) + " min sin actividad");
-        } else {
+          doReconnect(
+            sordera
+              ? "sesión sorda — sin mensajes entrantes"
+              : "conexión stuck " + Math.round(idle / 60000) + " min sin actividad",
+          );
+        } else if (idle > stuckThresholdMs) {
           // sin ws abierta: Baileys ya está reintentando; solo avisar
           log.warn("Watchdog: sin conexión abierta y " + Math.round(idle / 60000) + " min de inactividad");
         }

@@ -32,6 +32,15 @@ export function createEngine(opts) {
   const sesion = crearSesion(opts.sesion);
   const sendQueue = createSendQueue(throttler, health, { ritmo, sesion, avisarRitmo });
   const listeners = {};
+  const shutdownHooks = [];
+
+  function onShutdown(fn) {
+    if (typeof fn === "function") shutdownHooks.push(fn);
+    return () => {
+      const idx = shutdownHooks.indexOf(fn);
+      if (idx >= 0) shutdownHooks.splice(idx, 1);
+    };
+  }
 
   function getState() { return state; }
   function getStateName() { return Object.keys(LIFECYCLE).find(k => LIFECYCLE[k] === state) || "UNKNOWN"; }
@@ -80,7 +89,14 @@ export function createEngine(opts) {
   async function shutdown() {
     transit(LIFECYCLE.SHUTDOWN);
     log.info("Engine shutting down...");
-    sendQueue.pause();
+    sendQueue.pause("shutdown");
+    for (const fn of [...shutdownHooks].reverse()) {
+      try { await fn(); } catch (e) { log.warn("Engine shutdown hook: " + (e?.message || e)); }
+    }
+    if (sesion.__sorderaTimer) {
+      clearInterval(sesion.__sorderaTimer);
+      sesion.__sorderaTimer = null;
+    }
     if (sock) {
       try { sock.ev.removeAllListeners(); } catch {}
       try { sock.ws.close(); } catch {}
@@ -96,7 +112,7 @@ export function createEngine(opts) {
     setOwnerJid, getOwnerJid,
     setGroupCount, getGroupCount,
     getHealth, getThrottler, getSendQueue, getRitmo, getSesion, getUptime, resetBootTime,
-    transit, emit, on, once, shutdown, LIFECYCLE,
+    transit, emit, on, once, onShutdown, shutdown, LIFECYCLE,
     bootTime,
   };
 }

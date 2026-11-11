@@ -5,8 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  socket.js — Conexión Baileys estilo Ginko-MD
-//  Auto-clearing de sesión corrupta + saveCreds forzado
+//  socket.js — Conexión Baileys de Shin-MD
+//  Auto-limpieza de sesión corrupta + saveCreds + cola anti-ban
 // ═══════════════════════════════════════════════════════════════════
 
 import makeWASocket, {
@@ -131,6 +131,8 @@ export function connectSocket(engine, opts) {
   let sock = null;
   let retries = 0;
   let isRestarting = false;
+  let reconnectTimer = null;
+  let pairingTimer = null;
   let restartStreak = 0;
   let lastRestartAt = 0;
   let patientWarned = false;
@@ -145,12 +147,30 @@ export function connectSocket(engine, opts) {
 
   const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
 
+  function scheduleReconnect(delayMs) {
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      start();
+    }, delayMs);
+    if (typeof reconnectTimer.unref === "function") reconnectTimer.unref();
+  }
+
   function remove(s) {
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = null; }
     if (!s) return;
     try { s.ev.removeAllListeners(); } catch {}
     try { s.ws?.close(); } catch {}
     try { s.end?.(new Error("replaced")); } catch {}
     try { s.msgRetryCounterCache?.close(); } catch {}
+  }
+
+  if (typeof engine.onShutdown === "function") {
+    engine.onShutdown(() => {
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = null; }
+    });
   }
 
   function clearSession() {
@@ -189,7 +209,13 @@ export function connectSocket(engine, opts) {
     catch { ver = [2, 3000, 1044802095]; }
 
     let saveTimer;
-    const saveCreds = () => { clearTimeout(saveTimer); saveTimer = setTimeout(sc, 2000); };
+    const saveCreds = () => {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        Promise.resolve(sc()).catch((e) => log.warn("saveCreds: " + (e?.message || e)));
+      }, 2000);
+      if (typeof saveTimer.unref === "function") saveTimer.unref();
+    };
 
     console.info = () => {};
     console.debug = () => {};
@@ -289,13 +315,18 @@ export function connectSocket(engine, opts) {
       }
 
       const esLigero = esEnvioLigero(c);
+      const ritmo = engine.getRitmo && engine.getRitmo();
+      const esCaliente = !!(ritmo && j && ritmo.caliente(j));
+      const isPriority = !!(o && o._priority) || sendQueue.inPriority();
       const qo = {
         messageLength: c?.text?.length || 0,
         // A quién va: el ritmo cuenta conversaciones nuevas por destinatario.
         destino: j,
+        esRespuesta: esCaliente,
+        isNewContact: Boolean(ritmo && j && !esCaliente),
         // B1.4: prioridad por flag explícito (_priority) o por ventana de
         // prioridad activa (comandos priority: .menu/.ping/.owner).
-        isPriority: !!(o && o._priority) || sendQueue.inPriority(),
+        isPriority,
         countsForQuota: !esLigero,
       };
       if (o) { delete o._priority; } // no fugarse a Baileys
@@ -303,9 +334,8 @@ export function connectSocket(engine, opts) {
       // y la única que WhatsApp nombra en su propio documento sobre spam: una
       // cuenta que nunca enciende el tecleo es señal de abuso. Va dentro del
       // turno de la cola (no antes), para que el orden sea siempre el mismo.
-      const ritmo = engine.getRitmo && engine.getRitmo();
       const r = await sendQueue.enqueue(async () => {
-        const tecleando = !esLigero && ritmo && ritmo.ajustes.presencia;
+        const tecleando = !esLigero && !isPriority && ritmo && ritmo.ajustes.presencia;
         if (tecleando) await teclear(s, j, qo.messageLength, ritmo);
         try {
           return await origSM(j, c, o);
@@ -337,9 +367,13 @@ export function connectSocket(engine, opts) {
         if (pn) j = pn;
       }
       const text = m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || "";
+      const ritmo = engine.getRitmo && engine.getRitmo();
+      const esCaliente = !!(ritmo && j && ritmo.caliente(j));
       return sendQueue.enqueue(() => origRelay(j, m, o), {
         messageLength: String(text).length,
         destino: j,
+        esRespuesta: esCaliente,
+        isNewContact: Boolean(ritmo && j && !esCaliente),
         isPriority: sendQueue.inPriority(), // B1.4: tarjetas interactivas de comandos priority
         // Las ediciones y borrados que viajan como protocolMessage no
         // crean mensaje nuevo: respetan el delay pero no gastan cuota.
@@ -420,6 +454,11 @@ export function connectSocket(engine, opts) {
             msgStore.set(msg.key.remoteJid + ":" + msg.key.id, msg.message);
             if (msgStore.size > SMAX) msgStore.delete(msgStore.keys().next().value);
           }
+          // Calentar la conversación entrante: responder a quien ya escribió
+          // no gasta el cupo de chats nuevos ni se frena en descanso/madrugada.
+          if (!msg.key?.fromMe && msg.key?.remoteJid) {
+            engine.getRitmo?.()?.anotarEntrante?.(msg.key.remoteJid);
+          }
           if (onMessage) onMessage(s, msg).catch(e => log.error("onMessage: " + (e.message || e)));
         } catch (e) { log.error("msg.upsert: " + (e.message || e)); }
       }
@@ -471,10 +510,8 @@ export function connectSocket(engine, opts) {
         // Resolver metadata del canal oficial en background
         resolveChannel(s, db).catch(() => {});
 
-        // B2.2: log estilo Ginko — "Grupos: X" al conectar, y el dato queda
-        // disponible para el panel /health. Con setTimeout para no frenar la
-        // transición READY; si falla no pasa nada (el contador queda en 0).
-        setTimeout(async () => {
+        // B2.2: contador de grupos al conectar para /health.
+        const groupsTimer = setTimeout(async () => {
           try {
             const groups = await s.groupFetchAllParticipating();
             const n = Object.keys(groups || {}).length;
@@ -482,21 +519,9 @@ export function connectSocket(engine, opts) {
             log.info("Grupos: " + n);
           } catch {}
         }, 1500);
+        if (typeof groupsTimer.unref === "function") groupsTimer.unref();
         if (engine.getState() < engine.LIFECYCLE.RUNNING) engine.transit(engine.LIFECYCLE.RUNNING);
         if (watchdog) watchdog.tick();
-
-        // Detector de sordera: una conexión «abierta» que lleva 5 min sin
-        // recibir nada está sorda (#2491). Se revisa cada minuto y se pide un
-        // cierre limpio; el reinicio lo decide quien reconecta, no esto.
-        const ses = engine.getSesion?.();
-        if (ses?.activo && !ses.__sorderaTimer) {
-          ses.__sorderaTimer = setInterval(() => {
-            if (engine.getState() !== engine.LIFECYCLE.RUNNING) return;
-            ses.sordera.revisar();
-          }, 60_000);
-          // No debe mantener vivo el proceso él solo.
-          if (typeof ses.__sorderaTimer.unref === "function") ses.__sorderaTimer.unref();
-        }
       }
 
       if (isNewLogin) {
@@ -557,32 +582,23 @@ export function connectSocket(engine, opts) {
           return;
         }
 
-        // ── Sesión inválida: limpiar automáticamente como Ginko-MD ──
+        // ── Sesión inválida: limpiar automáticamente ──
         if (code === DisconnectReason.badSession) {
           log.warn("Sesión inválida — limpiando y reconectando...");
           clearSession();
           isRestarting = false;
-          setTimeout(start, 3000);
+          scheduleReconnect(3000);
           return;
         }
 
         // ── RestartRequired (515): normal después del pairing ──
-        // Backoff escalonado si se encadena. Antes este bloque hacía
-        // return ANTES de retries++ con delay fijo de 1s: si el c0 se
-        // repetía (sesión corrupta) → bucle infinito de reconnects cada
-        // segundo, que es el patrón exacto que el servidor marca como
-        // anómalo. Ahora: 1s, 1s, 15s, 60s, 5min; 6+ seguidos en <1min
-        // cada uno → sesión corrupta, limpiar (como Ginko-MD).
+        // Backoff escalonado si se encadena.
         if (code === DisconnectReason.restartRequired || code === 0) {
           const now = Date.now();
           restartStreak = (now - lastRestartAt < 60000) ? restartStreak + 1 : 1;
           lastRestartAt = now;
           if (restartStreak >= 6) {
             if (registered) {
-              // B1.1: NUNCA borrar una sesión válida. Tormenta de c0 =
-              // sesión corrupta o problema del servidor; se sale con el
-              // auth.db intacto. Si el fallo sigue al re-arrancar, el
-              // usuario borra Sessions/Owner a mano para re-vincular.
               log.fatal("Demasiados restarts seguidos (c0) — saliendo SIN borrar la sesión");
               log.warn("Si el fallo persiste al reiniciar, borra la carpeta Sessions/Owner para vincular de nuevo.");
               process.exit(1);
@@ -595,38 +611,28 @@ export function connectSocket(engine, opts) {
           const rDelay = rDelays[Math.min(restartStreak - 1, rDelays.length - 1)];
           log.gray(`Reconectando con credenciales nuevas (streak ${restartStreak}) en ${Math.round(rDelay / 1000)}s...`);
           isRestarting = false;
-          setTimeout(start, rDelay);
+          scheduleReconnect(rDelay);
           return;
         }
 
         if (!registered) {
           // B1.2: pairing paciente — aquí los reintentos NO cuentan.
-          // No hay sesión válida que proteger y el usuario necesita tiempo
-          // para teclear el código: reconexión con backoff sin límite,
-          // como Ginko-MD. (Antes: 15 cortes de red durante el pairing
-          // borraban auth.db y había que empezar de cero.)
           const pd = backoffDelay();
           log.gray(`Pairing: desconexión (${code}), reintentando en ${Math.round(pd / 1000)}s...`);
           isRestarting = false;
-          setTimeout(start, pd);
+          scheduleReconnect(pd);
           return;
         }
 
         retries++;
         if (retries > MAX_RETRIES) {
-          // B1.1 (FIX CRÍTICO): antes esto borraba auth.db tras 15
-          // desconexiones de CUALQUIER tipo — incluidos cortes de red
-          // 408/428, fatales en Termux con datos móviles (15 cortes se
-          // alcanzan en ~2 min y perdías la vinculación). Una sesión
-          // válida NUNCA se borra por cortes de red: se pasa a modo
-          // paciente (reintento cada ~5 min) hasta que vuelva la señal.
           if (!patientWarned) {
             log.warn("Muchos reintentos seguidos — modo paciente: reintento cada ~5 min, sesión intacta");
             patientWarned = true;
           }
           const pd = 300000 + Math.floor(Math.random() * 30000);
           isRestarting = false;
-          setTimeout(start, pd);
+          scheduleReconnect(pd);
           return;
         }
 
@@ -639,13 +645,14 @@ export function connectSocket(engine, opts) {
         const d = backoffDelay();
         log.warn(reasonMessages[code] || `Desconexión (${code}), reconectando en ${Math.round(d / 1000)}s...`);
         isRestarting = false;
-        setTimeout(start, d);
+        scheduleReconnect(d);
       }
     });
 
     // Pairing code flow
     if (pairingMethod === "code" && pairingNumber && !state.creds.registered) {
-      setTimeout(async () => {
+      pairingTimer = setTimeout(async () => {
+        pairingTimer = null;
         try {
           if (!state.creds.registered) {
             const phone = pairingNumber.replace(/\D/g, "");
@@ -661,6 +668,7 @@ export function connectSocket(engine, opts) {
           }
         } catch (e) { log.error("Pairing: " + (e.message || e)); }
       }, pairingDelayMs);
+      if (typeof pairingTimer.unref === "function") pairingTimer.unref();
     }
 
     isRestarting = false;

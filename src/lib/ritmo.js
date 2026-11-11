@@ -157,7 +157,7 @@ export function planDeTecleo(texto = "", ajustes = ajustesDeRitmo()) {
  * y O(1) en el normal (solo la cubeta del minuto actual cambia). No crece
  * nunca: memoria fija.
  */
-function cubetas({ minutos = MINUTOS_HORA, ahora }) {
+function cubetas({ minutos = MINUTOS_HORA } = {}) {
   const anillo = new Array(minutos).fill(null);
   let total = 0;
 
@@ -220,7 +220,7 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
   s.entrantes ||= {}; // jid → instante del último mensaje recibido
   s.porChat ||= {}; // jid → cubetas propias del chat
 
-  const hora = cubetas({ ahora: reloj() });
+  const hora = cubetas();
   const porChat = new Map();
   // Ráfaga: envíos seguidos sin esperar, con su propio techo.
   let rafagaActual = 0;
@@ -253,7 +253,7 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
   function cubetasDelChat(jid) {
     let c = porChat.get(jid);
     if (!c) {
-      c = cubetas({ ahora: reloj() });
+      c = cubetas();
       porChat.set(jid, c);
       // Poda: si hay demasiados chats vigilados, se sueltan los más viejos.
       if (porChat.size > 500) {
@@ -268,6 +268,7 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
   function cupoNuevos(t = reloj()) {
     if (!cfg.diasDeRampa) return cfg.nuevosDia;
     const inicio = new Date(`${s.inicio}T00:00:00Z`).getTime();
+    if (!Number.isFinite(inicio)) return cfg.nuevosDia;
     const dias = Math.max(0, Math.floor((t - inicio) / 86400000));
     if (dias < 3) return cfg.nuevosPrimerDia;
     if (dias < cfg.diasDeRampa) return cfg.nuevosDiaTres;
@@ -335,14 +336,16 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
         detalle: { limite: cfg.mensajesHora, enLaHora },
       };
     }
-    const delChat = cubetasDelChat(jid).contar(t);
-    if (delChat >= cfg.porChatHora) {
-      return {
-        ok: false,
-        motivo: "por-chat",
-        esperarMs: 60000,
-        detalle: { limite: cfg.porChatHora, delChat },
-      };
+    if (jid) {
+      const delChat = cubetasDelChat(jid).contar(t);
+      if (delChat >= cfg.porChatHora) {
+        return {
+          ok: false,
+          motivo: "por-chat",
+          esperarMs: 60000,
+          detalle: { limite: cfg.porChatHora, delChat },
+        };
+      }
     }
 
     // Ráfaga: las primeras N van seguidas dentro del mismo minuto (es lo que

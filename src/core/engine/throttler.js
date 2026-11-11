@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import log from "#logger";
+import { curvaCircadiana } from "../../lib/ritmo.js";
 
 function shinJitter(mean, stddev) {
   let u = 0, v = 0;
@@ -57,12 +57,13 @@ export function createThrottler(opts) {
     config[k] = opts[k] !== undefined ? opts[k] : DEFAULTS[k];
   }
 
+  const hoy = new Date().toISOString().slice(0, 10);
   const state = {
     perfil: opts.perfil || config.perfil,
-    warmUpStartDate: opts.warmUpStartDate || new Date().toISOString().slice(0, 10),
-    warmUpMsgsToday: opts.warmUpMsgsToday || 0,
-    warmUpLastReset: opts.warmUpLastReset || new Date().toISOString().slice(0, 10),
-    totalSent: 0,
+    warmUpStartDate: opts.warmUpStartDate || hoy,
+    warmUpMsgsToday: Number(opts.warmUpMsgsToday) || 0,
+    warmUpLastReset: opts.warmUpLastReset || hoy,
+    totalSent: Number(opts.totalSent) || 0,
   };
 
   function checkReset() {
@@ -83,8 +84,13 @@ export function createThrottler(opts) {
     return perfil() === "veterano" ? 0 : config.warmUpDays;
   }
 
+  function startTimestamp() {
+    const raw = new Date(state.warmUpStartDate).getTime();
+    return Number.isFinite(raw) ? raw : Date.now();
+  }
+
   function getDailyLimit() {
-    const start = new Date(state.warmUpStartDate).getTime();
+    const start = startTimestamp();
     const now = Date.now();
     const rampa = diasDeRampa();
     const day = Math.max(0, Math.min(rampa, Math.floor((now - start) / 86400000)));
@@ -111,9 +117,7 @@ export function createThrottler(opts) {
 
     // Curva de la hora: 0,8 de día, hasta 2,5 de madrugada. Suave a propósito.
     if (config.circadiano !== false) {
-      const d = new Date();
-      const lejos = Math.min(1, Math.abs(d.getHours() - 3) / 5);
-      delay *= 0.8 + 1.7 * (0.5 * (1 + Math.cos(Math.PI * lejos)));
+      delay *= curvaCircadiana(new Date()).factor;
     }
 
     return Math.round(Math.max(config.minDelayMs, Math.min(config.maxDelayMs, delay)));
@@ -144,8 +148,8 @@ export function createThrottler(opts) {
 
   function getStats() {
     checkReset();
-    const start = new Date(state.warmUpStartDate).getTime();
-    const day = Math.floor((Date.now() - start) / 86400000) + 1;
+    const start = startTimestamp();
+    const day = Math.max(1, Math.floor((Date.now() - start) / 86400000) + 1);
     return {
       perfil: perfil(),
       day: day,

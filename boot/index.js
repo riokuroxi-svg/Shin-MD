@@ -295,6 +295,19 @@ async function main() {
     const v = parseInt(process.env[nombre] || "", 10);
     return Number.isFinite(v) && v > 0 ? v : null;
   };
+  // B2.2: cargar estado persistido de warm-up y ritmo para no reiniciar
+  // cuotas ni olvidar chats calientes al reiniciar el proceso.
+  let savedWarmup = {};
+  try {
+    const raw = db.settings.get("warmup_state");
+    if (raw) savedWarmup = JSON.parse(raw);
+  } catch {}
+  let savedRitmo = {};
+  try {
+    const raw = db.settings.get("ritmo_state");
+    if (raw) savedRitmo = JSON.parse(raw);
+  } catch {}
+
   const warmupOff = /^(0|off|no|false)$/i.test((process.env.WARMUP || "").trim()) || /^(0|off|no|false)$/i.test((process.env.WARMUP_LIMIT || "").trim());
   if (warmupOff) {
     throttlerOpts.warmUpStartMsgsPerDay = Number.MAX_SAFE_INTEGER;
@@ -309,23 +322,53 @@ async function main() {
     // Coherencia: el tope final nunca puede quedar por debajo del inicial
     // (si no, getDailyLimit() decrecería con los días: absurdo).
     const ini = throttlerOpts.warmUpStartMsgsPerDay ?? 20;
-    const max = throttlerOpts.warmUpMaxMsgsPerDay ?? 500;
+    const max = throttlerOpts.warmUpMaxMsgsPerDay ?? 2000;
     if (max < ini) {
       throttlerOpts.warmUpMaxMsgsPerDay = ini;
       log.warn("WARMUP_MAX_MSGS era menor que WARMUP_START_MSGS; se igualó a " + ini);
     }
   }
+  if (savedWarmup && typeof savedWarmup === "object") {
+    if (savedWarmup.warmUpLastReset === today) {
+      throttlerOpts.warmUpMsgsToday = Number(savedWarmup.warmUpMsgsToday) || 0;
+    }
+    throttlerOpts.warmUpLastReset = savedWarmup.warmUpLastReset || today;
+    throttlerOpts.totalSent = Number(savedWarmup.totalSent) || 0;
+    if (savedWarmup.perfil) throttlerOpts.perfil = savedWarmup.perfil;
+  }
 
-  const engine = createEngine({ throttler: throttlerOpts });
+  const engine = createEngine({ throttler: throttlerOpts, ritmoEstado: savedRitmo });
   const warmupStats = engine.getThrottler().getStats();
   log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días, tope de hoy " + (warmupOff ? "SIN TOPE (WARMUP=off)" : warmupStats.dailyLimit + " mensajes"));
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
-  createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
+  const webServer = createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
 
   // Mantenimiento 24/7: temporales viejos fuera y aviso si la RAM se dispara.
-  createTempCleaner().start();
-  createMemoryMonitor().start();
+  const tempCleaner = createTempCleaner();
+  tempCleaner.start();
+  const memoryMonitor = createMemoryMonitor();
+  memoryMonitor.start();
+
+  function persistAntibanState() {
+    try {
+      const thState = engine.getThrottler()?.state;
+      if (thState) db.settings.set("warmup_state", JSON.stringify(thState));
+      const rtState = engine.getRitmo()?.estado;
+      if (rtState) db.settings.set("ritmo_state", JSON.stringify(rtState));
+    } catch {}
+  }
+  const persistTimer = setInterval(persistAntibanState, 60000);
+  if (typeof persistTimer.unref === "function") persistTimer.unref();
+
+  engine.onShutdown(async () => {
+    clearInterval(persistTimer);
+    persistAntibanState();
+    watchdog.stop();
+    tempCleaner.stop();
+    memoryMonitor.stop();
+    await webServer.close();
+  });
 
   // (Antes: si OWNER_NUMBER no existía, `undefined + "@s.whatsapp.net"`
   //  dejaba owner_jid = "undefined@s.whatsapp.net" — owner fantasma.)
