@@ -2,7 +2,7 @@
  * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
  * SPDX-License-Identifier: AGPL-3.0-only
  *
- * auditar-comandos.mjs — Pasa por los 217 comandos y busca lo que
+ * auditar-comandos.mjs — Pasa por los 213 comandos y busca lo que
  * revienta en marcha pero no se ve al leer el código.
  *
  * Lo que mira:

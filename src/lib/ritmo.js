@@ -190,10 +190,6 @@ function cubetas({ minutos = MINUTOS_HORA } = {}) {
       podar(ms);
       return total;
     },
-    limpiar() {
-      anillo.fill(null);
-      total = 0;
-    },
     get total() {
       return total;
     },
@@ -218,7 +214,6 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
   s.salidasHoy = Number(s.salidasHoy) || 0;
   s.chatsNuevos ||= {}; // jid → día en que se le abrió conversación
   s.entrantes ||= {}; // jid → instante del último mensaje recibido
-  s.porChat ||= {}; // jid → cubetas propias del chat
 
   const hora = cubetas();
   const porChat = new Map();
@@ -419,13 +414,6 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
     };
   }
 
-  /** Reinicia los contadores de ventana (útil al reconectar un socket). */
-  function refrescar() {
-    hora.limpiar();
-    porChat.clear();
-    cacheMinuto = -1;
-  }
-
   return {
     evaluar,
     anotarEntrante,
@@ -434,7 +422,6 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
     factorHorario,
     planDeTecleo: (texto) => planDeTecleo(texto, cfg),
     resumen,
-    refrescar,
     ajustes: cfg,
     estado: s,
   };
