@@ -27,20 +27,21 @@ export const BOT_PREFIXES = process.env.BOT_PREFIX
 
 export const BOT_PREFIX = BOT_PREFIXES[0] || ".";
 
-  const selfModeRef = { value: false, ts: 0 };
+const selfModeCache = new Map();
 function isSelfMode(sock) {
+  const botId = botJid(sock);
+  if (!botId) return false;
   const now = Date.now();
-  if (now - selfModeRef.ts < 30000) return selfModeRef.value;
-  selfModeRef.ts = now;
+  const cached = selfModeCache.get(botId);
+  if (cached && now - cached.ts < 30000) return cached.value;
+  let value = false;
   try {
-    const botId = botJid(sock);
-    if (!botId) { selfModeRef.value = false; return false; }
     const settings = db.getSettings(botId) || {};
-    selfModeRef.value = !!settings.self;
-  } catch {
-    selfModeRef.value = false;
-  }
-  return selfModeRef.value;
+    value = !!settings.self;
+  } catch {}
+  if (selfModeCache.size > 100) selfModeCache.clear();
+  selfModeCache.set(botId, { value, ts: now });
+  return value;
 }
 
 export function createRouter(engine, opts) {
@@ -125,6 +126,10 @@ export function createRouter(engine, opts) {
       const ctx = serializeMessage(msg, sock);
       if (!ctx.text || ctx.chatId === "status@broadcast") return;
 
+      if (!ctx.fromMe && ctx.chatId) {
+        engine?.getRitmo?.()?.anotarEntrante?.(ctx.chatId);
+      }
+
       // Detectar prefijo
       let usedPrefix = "";
       for (const p of BOT_PREFIXES) {
@@ -195,11 +200,6 @@ export function createRouter(engine, opts) {
         }
       }
 
-      // Doble palomita azul: solo en comandos reales que pasan los filtros
-      if (!ctx.fromMe && process.env.READ_RECEIPTS !== "0" && typeof sock.readMessages === "function") {
-        try { sock.readMessages([msg.key]).catch(() => {}); } catch {}
-      }
-
       // Cooldown / antispam
       if (cooldown.check({ senderId: ctx.senderId, cmd, text: ctx.text })) return;
 
@@ -208,6 +208,19 @@ export function createRouter(engine, opts) {
       if (denied) {
         await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
         return;
+      }
+
+      const sendQueue = engine?.getSendQueue?.();
+
+      // Doble palomita azul: solo en comandos autorizados cuando la cola está activa
+      if (
+        !ctx.fromMe &&
+        msg?.key?.id &&
+        process.env.READ_RECEIPTS !== "0" &&
+        typeof sock.readMessages === "function" &&
+        !sendQueue?.isPaused?.()
+      ) {
+        try { Promise.resolve(sock.readMessages([msg.key])).catch(() => {}); } catch {}
       }
 
       // Registrar ejecución del comando en DB (XP, stats, lastCmd, commandsejecut)
@@ -224,7 +237,6 @@ export function createRouter(engine, opts) {
 
       // Ejecutar
       const start = Date.now();
-      const sendQueue = engine?.getSendQueue?.();
       const usePriority = !!(cmd.priority && sendQueue && typeof sendQueue.enterPriority === "function");
       if (usePriority) sendQueue.enterPriority();
       try {

@@ -17,6 +17,7 @@ import chalk from 'chalk';
 import { patchGroupMetadata, getCachedMeta } from '#serialize';
 import { sendNativeQuickReply } from '#lib/native-reply';
 import { tiempoLargo as msToTime, esperaRestante } from "#lib/tiempo";
+import { pnDeLid } from "#lib/lid";
 import db from '../../src/services/ginko-db.js';
 
 if (!Array.isArray(global.conns)) global.conns = [];
@@ -107,7 +108,13 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
   const { state, saveCreds: saveCredsDB, close: closeAuthDB } = await useSQLiteAuthState(sessionFolder);
   const version = await getVersion();
   let saveCredsTimer = null;
-  const saveCreds = () => { clearTimeout(saveCredsTimer); saveCredsTimer = setTimeout(saveCredsDB, 2000); };
+  const saveCreds = () => {
+    clearTimeout(saveCredsTimer);
+    saveCredsTimer = setTimeout(() => {
+      Promise.resolve(saveCredsDB()).catch(() => {});
+    }, 2000);
+    if (typeof saveCredsTimer.unref === 'function') saveCredsTimer.unref();
+  };
   const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
   const msgStore = new Map();
   const msgLimit = 500;
@@ -229,8 +236,13 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
           delete reintentos[botId];
           return;
         }
+        if (!fs.existsSync(sessionFolder)) {
+          delete reintentos[botId];
+          return;
+        }
         log.info(chalk.gray(`[ ✿ ] SUB-BOT ${botId} reconectando sesión existente en ${Math.round(delay / 1000)}s...`));
-        setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
+        const rt = setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
+        if (typeof rt.unref === 'function') rt.unref();
         return;
       }
 
@@ -238,7 +250,8 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
       if ([401, 403].includes(reason)) {
         if (intentos < 5) {
           log.info(chalk.gray(`[ ✿ ] SUB-BOT ${botId} Pairing en progreso (${reason}) intento ${intentos}/5 → Reintentando en ${Math.round(delay / 1000)}s...`));
-          setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
+          const rt = setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
+          if (typeof rt.unref === 'function') rt.unref();
         } else {
           log.warn(`[ ✿ ] SUB-BOT ${botId} Código de pairing expirado. Limpiando temporales.`);
           try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch {}
@@ -247,7 +260,8 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
         return;
       }
       log.info(chalk.gray(`[ ✿ ] SUB-BOT ${botId} desconectado (${reason}), reconectando en ${Math.round(delay / 1000)}s...`));
-      setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
+      const rt = setTimeout(() => startSubBot(msg, getClient(client), caption, isCode, phone, chatId, isCommand), delay);
+      if (typeof rt.unref === 'function') rt.unref();
     }
 
     // ── Envío de Código de Emparejamiento (TODO EN UN SOLO MENSAJE CON IMAGEN + BOTÓN COPIAR) ──
@@ -298,11 +312,12 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
           sentMsgKey = fallback?.key;
         }
 
-        setTimeout(async () => {
+        const delTimer = setTimeout(async () => {
           if (sentMsgKey) {
             try { await socks.client.sendMessage(chatId, { delete: sentMsgKey }); } catch {}
           }
         }, 60000);
+        if (typeof delTimer.unref === 'function') delTimer.unref();
       } catch (err) { log.error('[Código Error]', err); }
     }
 
@@ -328,11 +343,12 @@ export async function startSubBot(msg, client, caption = '', isCode = false, pho
           caption: qrText,
         }, { quoted: msg });
 
-        setTimeout(async () => {
+        const qrDelTimer = setTimeout(async () => {
           if (msgQR?.key) {
             try { await socks.client.sendMessage(chatId, { delete: msgQR.key }); } catch {}
           }
         }, 60000);
+        if (typeof qrDelTimer.unref === 'function') qrDelTimer.unref();
       } catch (err) { log.error('[QR Error]', err); }
     }
   });
@@ -344,7 +360,7 @@ export default {
   command: ['code', 'qr', 'serbot', 'jadibot'],
   category: 'socket',
   description: 'Gestionar y vincular subbots por código o QR.',
-  run: async ({ msg, sock, args, command }) => {
+  run: async ({ msg, sock, args, command, usedPrefix = '.' }) => {
     db.setCreate('users', msg.sender, 'Subs', 0);
     const user = db.getUser(msg.sender);
     // Antes esto era `Date.now() - lastSubTime < 80000` y luego pintaba lo que
@@ -379,7 +395,16 @@ export default {
     const fullArgs = args.join(' ');
     const separatorIndex = fullArgs.search(/[|•/]/);
     const rawPhone = separatorIndex === -1 ? fullArgs.trim() : fullArgs.slice(separatorIndex + 1).trim();
-    const phone = normalizePhone(rawPhone || msg.sender.split('@')[0]);
+    let baseSender = msg.senderPn || (String(msg.sender).endsWith('@lid') ? (pnDeLid(msg.sender) || '') : msg.sender);
+    const phone = normalizePhone(rawPhone || baseSender.split('@')[0]);
+    if (!phone || phone.length < 8) {
+      delete commandFlags[msg.sender];
+      return sock.reply(
+        msg.chat,
+        `《✧》 No pude detectar tu número real desde este chat.\n> Escribe tu número junto al comando: *${usedPrefix + command} 521XXXXXXXXXX*`,
+        msg,
+      );
+    }
     await startSubBot(msg, sock, '', isCode, phone, msg.chat, true);
     db.setUser(msg.sender, 'Subs', Date.now());
   },
