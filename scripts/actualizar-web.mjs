@@ -172,6 +172,15 @@ const CIFRAS_EN_PROSA = [
         (n) => `Las ${n.categorias} categorías con sus comandos`,
       ],
       [/\b\d+ categorías\b/g, (n) => `${n.categorias} categorías`],
+      [
+        /\b\d+\/\d+ pruebas\b/g,
+        (n, numeros) => `${numeros.__PRUEBAS__}/${numeros.__PRUEBAS_TOTAL__} pruebas`,
+      ],
+      [
+        /\bpruebas en \d+ archivos\b/g,
+        (n, numeros) => `pruebas en ${numeros.__ARCHIVOS__} archivos`,
+      ],
+      [/\blas \d+ pruebas\b/g, (n, numeros) => `las ${numeros.__PRUEBAS__} pruebas`],
     ],
   ],
   [
