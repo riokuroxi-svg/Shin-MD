@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════
-#  CI de Shin-MD — tres puertas, ninguna opcional.
+#  CI de Shin-MD — cuatro puertas, ninguna opcional.
 #
 #    1. suite   → la batería completa en Node 22 (la versión que pide el
 #                 package.json; con Node 20 no arranca y eso ya pasó).
@@ -8,6 +8,9 @@
 #    3. shell   → los instaladores se analizan con `bash -n`, `sh -n` y
 #                 shellcheck, y se comprueba que las huellas de
 #                 SHA256SUMS siguen cuadrando con los archivos publicados.
+#    4. deps    → el árbol de PRODUCCIÓN no puede traer avisos altos. Antes
+#                 se instalaba con `--no-audit` y nadie miraba: un aviso de
+#                 zod entró por la cadena de Baileys y ahí siguió.
 #
 #  Lo que NO se hace aquí, a propósito: nada que hable con WhatsApp. El
 #  flujo de vinculación se prueba a mano con `npm run test:pairing`; en un
@@ -92,3 +95,21 @@ jobs:
         run: node scripts/firma-instalador.mjs --check
       - name: La ayuda del instalador no se rompe
         run: ./install.sh --help | head -40
+
+  dependencias:
+    name: dependencias · sin avisos altos
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Se instala sin auditar (la auditoría es el paso siguiente, con su
+      # propio código de salida) y se mira SOLO el árbol de producción: los
+      # avisos de desarrollo no llegan a la máquina de quien usa el bot.
+      - name: Instalar dependencias
+        run: npm ci --no-audit --no-fund
+      - name: npm audit (producción)
+        run: npm audit --omit=dev --audit-level=high

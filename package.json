@@ -91,7 +91,8 @@
   },
   "overrides": {
     "libsignal": "npm:libsignal@6.0.0",
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "zod": "4.6.6"
   },
   "repository": {
     "type": "git",
