@@ -11,10 +11,32 @@ import log from "#logger";
 // los chats. Tras este tiempo se trata como fallo y se sigue con el siguiente.
 // (La operación huérfana puede terminar más tarde en segundo plano; no es
 // cancelable, pero ya no bloquea nada.)
-const SEND_TIMEOUT_MS = 120000;
+// 120 s dejaba la cola entera parada dos minutos por una sola promesa colgada
+// (medido en el banco: un envío colgado bloquea a todos los demás). 20 s cubre
+// de sobra un envío normal —el servicio p95 medido fue de 83 ms— y libera la cola.
+const SEND_TIMEOUT_MS = 20000;
 
 // Marca de «no sé si salió». Ver el comentario de abajo, en el reintento.
 export const CODIGO_INCIERTO = "ENVIO_INCIERTO";
+// WhatsApp restringe escribir a contactos nuevos (error 463, «reachout timelock»).
+export const CODIGO_TIMELOCK = "REACHOUT_TIMELOCK";
+// La cola tiene techo: cuando se llena, se dice en vez de crecer hasta el OOM.
+export const CODIGO_COLA_LLENA = "COLA_LLENA";
+
+/**
+ * ¿El error es un timelock del servidor (463)? No es un fallo de red: la sesión
+ * está bien y los chats abiertos siguen saliendo; lo que WhatsApp bloquea es
+ * escribir a contactos nuevos. Reintentar aquí es lo peor que se puede hacer.
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+export function esTimelock(err) {
+  if (!err) return false;
+  const e = /** @type {any} */ (err);
+  if (e.code === CODIGO_TIMELOCK) return true;
+  const texto = String(e.message || e);
+  return /error\s*463|reachout.?timelock|restrict_all_companions/i.test(texto);
+}
 
 function withTimeout(promise, ms, label) {
   let t;
@@ -64,8 +86,19 @@ export function createSendQueue(throttler, health, opts = {}) {
   // darse por perdido. 5 min cubre el corte típico de datos móviles; más
   // allá de eso el que escribió ya se fue.
   const esperaReconexionMs = opts.esperaReconexionMs || 300000;
+  // Techo de la cola. 200 000 tareas medidas en el banco son ~173 MB de heap;
+  // a partir de cierto punto es mejor decir «no» que quedarse sin memoria.
+  const maxCola = Number(opts.maxCola) > 0 ? Number(opts.maxCola) : 2000;
+  // Avisos hacia afuera. La cola no sabe hablar por WhatsApp: avisa y el boot decide.
+  const alFallar = typeof opts.alFallar === "function" ? opts.alFallar : null;
+  const alRechazar = typeof opts.alRechazar === "function" ? opts.alRechazar : null;
+  const avisarTimelock = typeof opts.avisarTimelock === "function" ? opts.avisarTimelock : null;
   const queue = [];
   let processing = false;
+  let rechazadas = 0;      // no entraron: la cola estaba llena
+  let timelocks = 0;       // veces que el servidor nos frenó con 463
+  let timelockHasta = 0;   // fin del timelock activo (0 = ninguno)
+  let colaMuerta = 0;      // enviados que terminaron sin saber si llegaron
   // La pausa lleva MOTIVOS, no un booleano. Antes, cualquier `resume()`
   // reanudaba la cola aunque hubiera otro motivo para tenerla parada: el
   // watchdog la pausaba por riesgo alto y la reconexión la reanudaba tres
@@ -89,6 +122,36 @@ export function createSendQueue(throttler, health, opts = {}) {
   let avisoRitmoDado = null;
   let despertar = null;
   let despertarReanudacion = null;
+  /** ¿Hay timelock activo ahora? Si venció, se limpia y se dice. */
+  function enTimelock() {
+    if (!timelockHasta) return false;
+    if (Date.now() >= timelockHasta) {
+      timelockHasta = 0;
+      log.info("Timelock terminado: vuelve el envío a contactos nuevos");
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Registra un 463. Respeta la hora de fin que mandó el servidor; si no la
+   * mandó, asume 24 h. Avisa una sola vez por bloqueo.
+   */
+  function anotarTimelock(fin) {
+    const yaActivo = enTimelock();
+    timelocks += 1;
+    const DURA_POR_DEFECTO = 24 * 3600 * 1000;
+    timelockHasta = Number(fin) > Date.now() ? Number(fin) : Date.now() + DURA_POR_DEFECTO;
+    log.warn(
+      "Timelock (463): WhatsApp restringe escribir a contactos NUEVOS hasta " +
+        new Date(timelockHasta).toISOString() +
+        ". Los chats ya abiertos siguen saliendo; la sesión es válida y no hay que reconectar.",
+    );
+    if (!yaActivo && avisarTimelock) {
+      try { avisarTimelock({ hasta: timelockHasta, timelocks }); } catch {}
+    }
+  }
+
   function avisarTopeDiario(th) {
     if (avisoTopeDado) return;
     avisoTopeDado = true;
@@ -101,6 +164,10 @@ export function createSendQueue(throttler, health, opts = {}) {
       detalle = ` (${s.msgsToday}/${s.dailyLimit} hoy · día ${s.day} del warm-up · se reinicia en ${horas}h ${mins}m)`;
     } catch {}
     log.warn("Tope diario del warm-up alcanzado" + detalle);
+    // Esto antes solo existía en el log. Ahora el boot puede avisar por chat.
+    if (typeof opts.avisarTope === "function") {
+      try { opts.avisarTope({ detalle, stats: th.getStats ? th.getStats() : null }); } catch {}
+    }
     log.warn("Los envíos normales esperan; .menu/.ping y las reacciones siguen pasando. Ajusta con WARMUP_START_MSGS / WARMUP_MAX_MSGS / WARMUP=off en .env, o revísalo con .warmup");
   }
 
@@ -136,6 +203,18 @@ export function createSendQueue(throttler, health, opts = {}) {
 
   function enqueue(fn, opts) {
     opts = opts || {};
+    if (queue.length >= maxCola) {
+      rechazadas += 1;
+      const e = Object.assign(
+        new Error("Cola llena (" + queue.length + "/" + maxCola + "): el mensaje no se acepta"),
+        { code: CODIGO_COLA_LLENA, profundidad: queue.length, maxCola },
+      );
+      log.warn(e.message + " (" + rechazadas + " rechazados en esta sesión)");
+      if (alRechazar) {
+        try { alRechazar({ profundidad: queue.length, maxCola, rechazadas }); } catch {}
+      }
+      return Promise.reject(e);
+    }
     return new Promise((resolve, reject) => {
       queue.push({ fn, opts, resolve, reject, ts: Date.now() });
       // Si la cola está esperando (tope, ritmo o descanso), se despierta: una
@@ -205,6 +284,12 @@ export function createSendQueue(throttler, health, opts = {}) {
             t.esperaDescanso = true;
             return false;
           }
+          // Timelock: solo frena a los contactos nuevos. Un mensaje a un chat ya
+          // abierto no tiene por qué esperar 24 h por un bloqueo de prospección.
+          if (enTimelock() && o.isNewContact && !o.isPriority) {
+            t.esperaTimelock = true;
+            return false;
+          }
           if (throttler && !throttler.canSend()) return false;
           if (ritmo) {
             // Sin `ahora`: el ritmo tiene su propio reloj (inyectable en las
@@ -223,6 +308,8 @@ export function createSendQueue(throttler, health, opts = {}) {
           if (queue[0]?.esperaDescanso) {
             // En descanso se revisa cada minuto: no hay nada que calcular.
             await esperarTurno(60000);
+          } else if (enTimelock() && queue.some((t) => t.esperaTimelock)) {
+            await esperarTurno(Math.max(500, Math.min(30000, timelockHasta - Date.now())));
           } else if (throttler && !throttler.canSend()) {
             avisarTopeDiario(throttler);
             await esperarTurno(60000);
@@ -277,7 +364,19 @@ export function createSendQueue(throttler, health, opts = {}) {
               "Envío sin respuesta tras " + timeoutMs + "ms: NO lo repito para no duplicarlo. " +
                 "Puede haber llegado o no; revisa el chat. (" + inciertos + " en esta sesión)",
             );
+            colaMuerta += 1;
+            if (alFallar) { try { alFallar(task, err); } catch {} }
             task.reject(err);
+            continue;
+          }
+
+          if (esTimelock(err)) {
+            anotarTimelock(err && err.timeEnforcementEnds);
+            if (alFallar) { try { alFallar(task, err); } catch {} }
+            task.reject(Object.assign(
+              new Error("WhatsApp restringe escribir a contactos nuevos (463): no se reintenta"),
+              { code: CODIGO_TIMELOCK, hasta: timelockHasta },
+            ));
             continue;
           }
 
@@ -286,6 +385,7 @@ export function createSendQueue(throttler, health, opts = {}) {
             const volvio = await esperarReanudacion(esperaReconexionMs);
             if (!volvio) {
               log.warn("No volvió la conexión en " + Math.round(esperaReconexionMs / 60000) + " min: ese mensaje se pierde");
+              if (alFallar) { try { alFallar(task, err); } catch {} }
               task.reject(err);
               continue;
             }
@@ -323,6 +423,8 @@ export function createSendQueue(throttler, health, opts = {}) {
             } else if (health) {
               health.recordSendFail(err2);
             }
+            // Fallo definitivo: también va a la cola de muertos.
+            if (alFallar) { try { alFallar(task, err2); } catch {} }
             task.reject(err2);
           }
         }
@@ -374,7 +476,11 @@ export function createSendQueue(throttler, health, opts = {}) {
 
   /** Cuántos envíos quedaron en el aire y cuándo fue el último. */
   function getStats() {
-    return { length: queue.length, paused, motivos: [...motivosDePausa], inciertos, ultimoIncierto };
+    return {
+      length: queue.length, paused, motivos: [...motivosDePausa], inciertos, ultimoIncierto,
+      rechazadas, timelocks, colaMuerta, maxCola,
+      timelockActivo: enTimelock(), timelockHasta: timelockHasta || null,
+    };
   }
 
   return {
