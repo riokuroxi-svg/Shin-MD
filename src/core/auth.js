@@ -114,6 +114,8 @@ export async function useSQLiteAuthState(sessionDir) {
       } catch (err) {
         try { db.exec("ROLLBACK"); } catch {}
         log.error("keys.set: " + (err.message || err));
+        // Se propaga: Baileys reintenta el commit si ve el fallo (transactionOpts).
+        throw err;
       }
     },
     async remove(ids) {
@@ -133,6 +135,7 @@ export async function useSQLiteAuthState(sessionDir) {
       } catch (err) {
         try { db.exec("ROLLBACK"); } catch {}
         log.error("keys.remove: " + (err.message || err));
+        throw err;
       }
     },
   };
@@ -144,6 +147,7 @@ export async function useSQLiteAuthState(sessionDir) {
         .run(JSON.stringify(creds, BufferJSON.replacer));
     } catch (err) {
       log.error("saveCreds: " + (err.message || err));
+      throw err;
     }
   }
 

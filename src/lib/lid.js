@@ -66,6 +66,19 @@ let metasVistas = new WeakSet();
 
 const contador = { aprendidas: 0, fusiones: 0, fallos: 0, olvidadas: 0 };
 
+// Fusiones que fallaron: lid → instante del último intento. Se reintentan
+// (como mucho una vez por REINTENTO_FUSION_MS) la próxima vez que aparezca
+// la pareja, en vez de darlas por hechas.
+const REINTENTO_FUSION_MS = 60_000;
+const MAX_PENDIENTES = 500;
+const fusionesPendientes = new Map();
+
+// Consultas a la red (teléfono → LID): jid → último intento. Evita que un
+// comando público (.lid) dispare una consulta a WhatsApp por cada uso.
+const REPETIR_RED_MS = 10 * 60_000;
+const MAX_CONSULTAS_RED = 500;
+const consultasDeRed = new Map();
+
 function recortar(mapa) {
   while (mapa.size > MAX_MEMORIA) {
     const primera = mapa.keys().next().value;
@@ -121,6 +134,8 @@ export function conectorActivo() {
 export function reiniciar() {
   pnPorLid.clear();
   lidPorPn.clear();
+  fusionesPendientes.clear();
+  consultasDeRed.clear();
   backend = null;
   sesion = null;
   contador.aprendidas = 0;
@@ -145,26 +160,36 @@ export function aprender(lidJid, pnJid, opciones = {}) {
   if (usuarioDe(lid) === usuarioDe(pn)) return false;
 
   const yaEstaba = pnPorLid.get(lid) === pn && lidPorPn.get(pn) === lid;
+  const ultimoIntento = fusionesPendientes.get(lid);
+  const reintentar = yaEstaba && ultimoIntento !== undefined &&
+    Date.now() - ultimoIntento >= REINTENTO_FUSION_MS;
   recordar(lid, pn);
-  if (yaEstaba) return false;
+  if (yaEstaba && !reintentar) return false;
 
-  contador.aprendidas++;
+  if (!yaEstaba) contador.aprendidas++;
 
   if (backend) {
-    try {
-      backend.guardar(lid, pn);
-    } catch (err) {
-      avisarFallo("guardar pareja", err);
+    if (!yaEstaba) {
+      try {
+        backend.guardar(lid, pn);
+      } catch (err) {
+        avisarFallo("guardar pareja", err);
+      }
     }
     if (opciones.fusionar !== false && typeof backend.fusionar === "function") {
       try {
         if (backend.fusionar(lid, pn)) contador.fusiones++;
+        fusionesPendientes.delete(lid);
       } catch (err) {
         avisarFallo("fusionar cuentas", err);
+        fusionesPendientes.set(lid, Date.now());
+        if (fusionesPendientes.size > MAX_PENDIENTES) {
+          fusionesPendientes.delete(fusionesPendientes.keys().next().value);
+        }
       }
     }
   }
-  return true;
+  return !yaEstaba;
 }
 
 /** Teléfono de un LID ("" si todavía no se conoce). */
@@ -353,6 +378,14 @@ export async function resolverConector(jid, opciones = {}) {
       return "";
     }
     if (esTelefono(limpio) && opciones.red) {
+      const conocido = lidDePn(limpio);
+      if (conocido) return conocido;
+      const ultima = consultasDeRed.get(limpio);
+      if (ultima !== undefined && Date.now() - ultima < REPETIR_RED_MS) return "";
+      consultasDeRed.set(limpio, Date.now());
+      if (consultasDeRed.size > MAX_CONSULTAS_RED) {
+        consultasDeRed.delete(consultasDeRed.keys().next().value);
+      }
       const lidJid = normalizeJid((await store.getLIDForPN(limpio)) || "");
       if (esLid(lidJid)) {
         aprender(lidJid, limpio);
