@@ -23,7 +23,7 @@ y reduce el riesgo de bloqueo.**
 
 </div>
 
-<img src="docs/assets/perfil/cifras.svg" alt="514/514 pruebas en 57 archivos, 213 comandos en 15 categorías, 752 nombres con 539 alias, versión 3.7.9" width="100%">
+<img src="docs/assets/perfil/cifras.svg" alt="514/514 pruebas en 57 archivos, 213 comandos en 18 categorías, 752 nombres con 539 alias, versión 3.7.9" width="100%">
 
 <img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
 
@@ -79,11 +79,11 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 Escribe `.menu` dentro de WhatsApp y verás la tarjeta con botones y la lista
 desplegable por categorías.
 
-<img src="docs/assets/pastel/comandos.svg" alt="Los 213 comandos repartidos en 15 categorías" width="100%">
+<img src="docs/assets/pastel/comandos.svg" alt="Los 213 comandos repartidos en 18 categorías" width="100%">
 
-<img src="docs/assets/pastel/categorias.svg" alt="Las 15 categorías con sus comandos" width="100%">
+<img src="docs/assets/pastel/categorias.svg" alt="Las 18 categorías con sus comandos" width="100%">
 
-**213 comandos únicos · 752 nombres en total (539 alias) · 15 categorías.** Nombres de
+**213 comandos únicos · 752 nombres en total (539 alias) · 18 categorías.** Nombres de
 ejemplo: `.play` (y sus alias `yt`, `mp3`, `musica`), `.sticker` (`s`),
 `.daily` (`diario`, `recompensa`), `.w` (`work`, `trabajar`), `.x` para Twitter,
 `.ig` para Instagram y `.menu` (`ayuda`, `h`).
