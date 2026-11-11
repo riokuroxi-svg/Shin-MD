@@ -61,6 +61,7 @@ function recortar(texto, max) {
   for (let i = 0; i < texto.length; ) {
     if (texto[i] === "\x1b") {
       const fin = texto.indexOf("m", i);
+      if (fin === -1) break;
       salida += texto.slice(i, fin + 1);
       i = fin + 1;
       continue;

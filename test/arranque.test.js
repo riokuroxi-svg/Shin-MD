@@ -673,3 +673,51 @@ exec "${hayOrden("curl")}" "$@"
   assert.match(r.salida, /la red falló \(intento 1 de 4\)/);
   assert.match(r.salida, /coincide/);
 });
+
+test("shin.sh acepta --version y SHIN_VERSION sin 'v' en dash y busybox sin fallar por readonly", () => {
+  const publicado = publicar();
+  for (const shell of ["dash", "busybox"].filter((n) => hayOrden(n))) {
+    const baseArgs = shell === "busybox" ? ["sh", ARRANQUE] : [ARRANQUE];
+
+    const r1 = spawnSync(shell, [...baseArgs, "--version", "v9.9.9", "--dry-run"], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", SHIN_BASE_URL: `file://${publicado}` },
+    });
+    assert.equal(r1.status, 0, `${shell} con --version:\n${r1.stdout}${r1.stderr}`);
+    assert.match(r1.stdout, /Shin-MD v9\.9\.9/);
+
+    const r2 = spawnSync(shell, [...baseArgs, "--dry-run"], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1", SHIN_BASE_URL: `file://${publicado}`, SHIN_VERSION: "9.9.9" },
+    });
+    assert.equal(r2.status, 0, `${shell} con SHIN_VERSION=9.9.9:\n${r2.stdout}${r2.stderr}`);
+    assert.match(r2.stdout, /Shin-MD v9\.9\.9/);
+
+    const r3 = spawnSync(shell, [...baseArgs, "--version"], {
+      encoding: "utf8",
+      env: { ...process.env, NO_COLOR: "1" },
+    });
+    assert.notEqual(r3.status, 0, `${shell} con --version vacío debe fallar`);
+    assert.match(`${r3.stdout}${r3.stderr}`, /necesita una etiqueta/);
+  }
+});
+
+test("--uninstall retira su propio lanzador `shin` y no toca el de otro proyecto", () => {
+  const origen = crearOrigen();
+  const { home, proyecto } = instalar(origen);
+  const lanzador = path.join(home, ".local", "bin", "shin");
+  assert.ok(fs.existsSync(lanzador));
+
+  const r = correr(path.join(proyecto, "install.sh"), ["--uninstall"], { cwd: proyecto, home, entrada: "si\n" });
+  assert.equal(r.status, 0, r.salida);
+  assert.ok(!fs.existsSync(lanzador), "debe borrar el lanzador que apuntaba a la instalación borrada");
+
+  // Un lanzador ajeno no se toca nunca al desinstalar.
+  const otro = crearOrigen();
+  const { home: home2, proyecto: proyecto2 } = instalar(otro);
+  const ajeno = path.join(home2, ".local", "bin", "shin");
+  fs.writeFileSync(ajeno, "#!/bin/sh\necho ajeno\n", { mode: 0o755 });
+  const r2 = correr(path.join(proyecto2, "install.sh"), ["--uninstall"], { cwd: proyecto2, home: home2, entrada: "si\n" });
+  assert.equal(r2.status, 0, r2.salida);
+  assert.equal(fs.readFileSync(ajeno, "utf8"), "#!/bin/sh\necho ajeno\n");
+});
