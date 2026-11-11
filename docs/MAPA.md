@@ -41,12 +41,12 @@ para y dice la orden exacta que hay que escribir.
 | `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
 | `scripts/` | 19 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
 | `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
-| `src/` | 84 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
-| `test/` | 58 | Las pruebas. Una por tema; cada archivo corre solo. |
+| `src/` | 85 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
+| `test/` | 59 | Las pruebas. Una por tema; cada archivo corre solo. |
 | `tools/` | 13 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
 | `src/commands/` | 6 | El motor de comandos: cargador, router, contexto de mensaje y permisos. |
 | `src/core/` | 5 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
-| `src/lib/` | 54 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
+| `src/lib/` | 55 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
 | `src/network/` | 2 | Cola de salida y salud de la red (reintentos, cortes, presión). |
 | `src/services/` | 10 | Servicios con estado: base de datos del bot, economía, descargas, registro, vigía, consola. |
 | `src/storage/` | 5 | Dónde se guarda todo: SQLite, migraciones, caché y memoria de identidades. |
@@ -57,7 +57,7 @@ número a propósito: se llenan al correr el bot y al pasar las pruebas, así qu
 contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
 y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
-Son **219 archivos de comando**, **54 utilidades** en `src/lib`, **10 servicios** y **57 archivos de prueba**.
+Son **219 archivos de comando**, **55 utilidades** en `src/lib`, **10 servicios** y **58 archivos de prueba**.
 
 ## El viaje de un mensaje
 
