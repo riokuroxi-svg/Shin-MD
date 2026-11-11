@@ -86,7 +86,7 @@ que resuelve un defecto real de este bot, no la infraestructura entera.
 Lo demás de Kuroxi que **no** se trajo, y por qué: el almacén con WAL, el cifrado
 en reposo y el decodificador aislado resuelven problemas que aquí ya están
 cubiertos de otra forma (la sesión va sobre SQLite atómico en
-`src/lib/sqliteAuth.js`, y el watchdog de `src/services/watchdog.js` ya detecta
+`src/core/auth.js`, y el watchdog de `src/services/watchdog.js` ya detecta
 conexión zombi). Copiarlos habría duplicado mecanismos que funcionan.
 
 ## 4. Lo que se tomó de Shin-Lab
