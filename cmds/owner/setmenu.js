@@ -6,6 +6,7 @@
  */
 
 import { botJid } from "#serialize";
+import { sendInteractive, singleSelect } from "../../src/commands/interactive.js";
 import db from "../../src/services/ginko-db.js";
 
 const VARIANTS = {
@@ -62,7 +63,26 @@ export default {
         list += `${val.emoji} *${key.toUpperCase()}*${mark} — *${val.name}*\n`;
         list += `> _${val.desc}_\n\n`;
       }
-      return list.trim();
+      list = list.trim();
+
+      // Selector interactivo (single_select); si falla, queda el texto.
+      const rows = Object.entries(VARIANTS).map(([key, val]) => ({
+        id: `setmenu ${key}`,
+        title: `${val.emoji} ${key.toUpperCase()}${val.id === actual ? " ✓" : ""} — ${val.name}`,
+        description: val.desc,
+      }));
+      try {
+        await sendInteractive(sock, ctx.chatId, {
+          title: "🎨 Estilo de menú",
+          body: list,
+          footer: "反魂 Shin-MD · Estilo de menú",
+          buttons: [singleSelect("Elige una variante", [{ title: "Variantes", rows }])],
+          fallbackText: list,
+        });
+        return null;
+      } catch {
+        return list;
+      }
     }
 
     const selected = VARIANTS[target];

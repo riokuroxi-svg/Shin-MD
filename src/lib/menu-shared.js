@@ -26,6 +26,7 @@ export const CAT_LABELS = {
   economy: "ECONOMÍA",
   games: "JUEGOS",
   fun: "DIVERSIÓN",
+  religi: "RELIGIÓN",
   gacha: "GACHA & RPG",
   group: "GRUPOS & ADMIN",
   profile: "PERFIL",
@@ -46,6 +47,7 @@ export const CAT_ICONS = {
   economy: "💰",
   games: "🎮",
   fun: "🎉",
+  religi: "☪️",
   gacha: "🎰",
   group: "👥",
   profile: "👤",
@@ -57,7 +59,7 @@ export const CAT_ICONS = {
 
 export const CAT_ORDER = [
   "info", "main", "downloads", "stickers", "anime", "utils", "utility",
-  "economy", "gacha", "games", "fun", "group", "profile", "socket", "nsfw", "owner", "otros",
+  "economy", "gacha", "games", "fun", "religi", "group", "profile", "socket", "nsfw", "owner", "otros",
 ];
 
 let _cachedVersion = null;
