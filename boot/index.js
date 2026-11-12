@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
+import { crearEntrada } from "#lib/entrada";
 import { normalizePhone, parseArgs } from "../src/lib/cli-args.js";
 import { estadoSesion, hayTerminalDetras, leerDeTerminal, planDeVinculacion } from "../src/lib/vinculacion.js";
 import * as ui from "../src/services/consola.js";
@@ -453,12 +454,37 @@ async function main() {
   const router = createRouter(engine, { onCommand: logCommand, onMessage: logIncomingMessage });
   await router.init();
 
+  // D6: los mensajes que llegan pasan por una puerta con tope. Antes se
+  // lanzaba un handler por mensaje sin límite: una avalancha eran cientos de
+  // handlers peleando por la misma base y la misma CPU.
+  //
+  // Medido: el tope NO acelera nada (con 300 mensajes, el trabajo de CPU tarda
+  // lo mismo con o sin puerta) y cuesta latencia (con 32 a la vez, 300
+  // mensajes tardan 1 s en vez de 0,1 s). Lo que compra es un techo: 300
+  // handlers a la vez dejan de ser posibles. Va con holgura para que una
+  // ráfaga normal pase entera; ENTRADA_CONCURRENTES=0 la apaga.
+  const entrada = crearEntrada({
+    concurrentes: process.env.ENTRADA_CONCURRENTES !== undefined
+      ? Number(process.env.ENTRADA_CONCURRENTES)
+      : 32,
+    enEspera: Number(process.env.ENTRADA_EN_ESPERA) || 1000,
+    alDescartar: ({ enEspera, atendidos, descartados }) => {
+      // Un aviso por episodio, no uno por mensaje.
+      if (descartados === 1 || descartados % 50 === 0) {
+        log.warn(
+          "Entrada llena: " + enEspera + " mensajes esperando, " + atendidos +
+            " atendidos, " + descartados + " descartados desde el arranque.",
+        );
+      }
+    },
+  });
+
   const sockModule = connectSocket(engine, {
     sessionDir,
     // Siempre por código: el QR se retiró de la consola.
     pairingMethod: "code",
     pairingNumber: phoneNumber,
-    onMessage: (s, m) => router.handle(s, m),
+    onMessage: (s, m) => entrada.ejecutar(() => router.handle(s, m)),
     onReady: async s => {
       globalThis.sock = s;
       try {
