@@ -321,6 +321,9 @@ async function main() {
     if (iniEnv) throttlerOpts.warmUpStartMsgsPerDay = iniEnv;
     if (maxEnv) throttlerOpts.warmUpMaxMsgsPerDay = maxEnv;
     if (diasEnv) throttlerOpts.warmUpDays = diasEnv;
+    // Rampa del perfil veterano: 0 (por defecto) = tope completo desde hoy.
+    const rampaVet = parseInt(process.env.RAMPA_VETERANO_DIAS || "", 10);
+    if (Number.isFinite(rampaVet) && rampaVet > 0) throttlerOpts.rampaVeteranoDias = rampaVet;
     // Coherencia: el tope final nunca puede quedar por debajo del inicial
     // (si no, getDailyLimit() decrecería con los días: absurdo).
     const ini = throttlerOpts.warmUpStartMsgsPerDay ?? 20;
