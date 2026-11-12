@@ -31,6 +31,7 @@
  * Lo que este archivo NO hace: garantizar que una cuenta no caiga. Baja el
  * parecido con un robot; no da inmunidad.
  */
+import { diaLocal, diasEntre } from "./dia.js";
 import log from "#logger";
 
 /** Minutos que se recuerdan para el tope por hora. */
@@ -209,8 +210,9 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
   const reloj = typeof ahora === "function" ? ahora : () => Date.now();
   const s = estado || {};
 
-  s.inicio ||= new Date(reloj()).toISOString().slice(0, 10);
-  s.ultimoDia ||= new Date(reloj()).toISOString().slice(0, 10);
+  // «Día» en hora local, igual que la curva circadiana (ver lib/tiempo.js).
+  s.inicio ||= diaLocal(reloj());
+  s.ultimoDia ||= diaLocal(reloj());
   s.salidasHoy = Number(s.salidasHoy) || 0;
   s.chatsNuevos ||= {}; // jid → día en que se le abrió conversación
   s.entrantes ||= {}; // jid → instante del último mensaje recibido
@@ -236,7 +238,7 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
   }
 
   function revisarDia(t = reloj()) {
-    const dia = new Date(t).toISOString().slice(0, 10);
+    const dia = diaLocal(t);
     if (s.ultimoDia !== dia) {
       s.ultimoDia = dia;
       s.salidasHoy = 0;
@@ -262,9 +264,7 @@ export function crearRitmo({ estado, ajustes, ahora } = {}) {
   /** Cuántos chats nuevos permite abrir hoy (sube con los días de vida). */
   function cupoNuevos(t = reloj()) {
     if (!cfg.diasDeRampa) return cfg.nuevosDia;
-    const inicio = new Date(`${s.inicio}T00:00:00Z`).getTime();
-    if (!Number.isFinite(inicio)) return cfg.nuevosDia;
-    const dias = Math.max(0, Math.floor((t - inicio) / 86400000));
+    const dias = Math.max(0, diasEntre(s.inicio, diaLocal(t)));
     if (dias < 3) return cfg.nuevosPrimerDia;
     if (dias < cfg.diasDeRampa) return cfg.nuevosDiaTres;
     return cfg.nuevosDia;

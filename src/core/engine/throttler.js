@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { curvaCircadiana } from "../../lib/ritmo.js";
+import { diaLocal, diasEntre, esDia } from "../../lib/dia.js";
 
 function shinJitter(mean, stddev) {
   let u = 0, v = 0;
@@ -57,7 +58,8 @@ export function createThrottler(opts) {
     config[k] = opts[k] !== undefined ? opts[k] : DEFAULTS[k];
   }
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  // El «día» es el del reloj del sistema (TZ del proceso), no UTC.
+  const hoy = diaLocal();
   const state = {
     perfil: opts.perfil || config.perfil,
     warmUpStartDate: opts.warmUpStartDate || hoy,
@@ -67,7 +69,7 @@ export function createThrottler(opts) {
   };
 
   function checkReset() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = diaLocal();
     if (state.warmUpLastReset !== today) {
       state.warmUpMsgsToday = 0;
       state.warmUpLastReset = today;
@@ -84,16 +86,15 @@ export function createThrottler(opts) {
     return perfil() === "veterano" ? 0 : config.warmUpDays;
   }
 
-  function startTimestamp() {
-    const raw = new Date(state.warmUpStartDate).getTime();
-    return Number.isFinite(raw) ? raw : Date.now();
+  /** Día de rampa en que estamos (0 = el primero). Tolera fechas corruptas. */
+  function diaDeRampa() {
+    if (!esDia(state.warmUpStartDate)) return 0;
+    return Math.max(0, diasEntre(state.warmUpStartDate, diaLocal()));
   }
 
   function getDailyLimit() {
-    const start = startTimestamp();
-    const now = Date.now();
     const rampa = diasDeRampa();
-    const day = Math.max(0, Math.min(rampa, Math.floor((now - start) / 86400000)));
+    const day = Math.min(rampa, diaDeRampa());
     const progress = rampa > 0 ? (day / rampa) : 1;
     const range = config.warmUpMaxMsgsPerDay - config.warmUpStartMsgsPerDay;
     return Math.round(config.warmUpStartMsgsPerDay + range * progress);
@@ -148,8 +149,7 @@ export function createThrottler(opts) {
 
   function getStats() {
     checkReset();
-    const start = startTimestamp();
-    const day = Math.max(1, Math.floor((Date.now() - start) / 86400000) + 1);
+    const day = diaDeRampa() + 1;
     return {
       perfil: perfil(),
       day: day,
