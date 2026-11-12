@@ -47,6 +47,12 @@ const DEFAULTS = {
   warmUpStartMsgsPerDay: 20,
   warmUpMaxMsgsPerDay: 2000,
   perfil: "auto",
+  // El perfil veterano existe porque nadie quiere esperar días (es su motivo de
+  // ser). Saltar de 20 a 2000 el primer día es el patrón de un disparo masivo,
+  // así que hay una rampa comprimida disponible... pero APAGADA por defecto:
+  // encenderla devuelve la espera que este perfil vino a quitar. Quien quiera
+  // el escalón suave pone RAMPA_VETERANO_DIAS=4 y lo sabe.
+  rampaVeteranoDias: 0,
   // De noche una persona contesta más despacio: la espera se estira.
   circadiano: true,
 };
@@ -83,7 +89,8 @@ export function createThrottler(opts) {
 
   /** Días de rampa que toca hoy. Veterano es rampa cero. */
   function diasDeRampa() {
-    return perfil() === "veterano" ? 0 : config.warmUpDays;
+    if (perfil() !== "veterano") return config.warmUpDays;
+    return Math.max(0, Number(config.rampaVeteranoDias) || 0);
   }
 
   /** Día de rampa en que estamos (0 = el primero). Tolera fechas corruptas. */
@@ -96,6 +103,14 @@ export function createThrottler(opts) {
     const rampa = diasDeRampa();
     const day = Math.min(rampa, diaDeRampa());
     const progress = rampa > 0 ? (day / rampa) : 1;
+    // Veterano: crecimiento geométrico (×4 por día) en vez de lineal. Parte del
+    // mismo tope del día 1 del warm-up y llega al máximo en `rampaVeteranoDias`.
+    if (perfil() === "veterano") {
+      const tope = config.warmUpMaxMsgsPerDay;
+      if (!diasDeRampa()) return tope; // sin rampa: el tope completo, como siempre
+      const inicio = Math.max(1, config.warmUpStartMsgsPerDay);
+      return Math.round(Math.min(tope, inicio * 4 ** day));
+    }
     const range = config.warmUpMaxMsgsPerDay - config.warmUpStartMsgsPerDay;
     return Math.round(config.warmUpStartMsgsPerDay + range * progress);
   }

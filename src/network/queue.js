@@ -93,6 +93,53 @@ export function createSendQueue(throttler, health, opts = {}) {
     if (!alEnviar) return;
     try { alEnviar(); } catch {}
   }
+  // Anti-ban: cuántas veces se reintenta un fallo normal y cuánto se espera.
+  // Antes eran 2 intentos separados por un tiempo fijo: todos los mensajes que
+  // fallaban a la vez reintentaban a la vez, y eso es un pico.
+  const reintentos = opts.reintentos !== undefined ? Math.max(0, Number(opts.reintentos) || 0) : 3;
+  const reintentoBaseMs = opts.reintentoBaseMs || 2000;
+  const reintentoTopeMs = opts.reintentoTopeMs || 60000;
+  // Anti-ban: techo global de salida por minuto, independiente del ritmo por
+  // mensaje. El ritmo dice «este mensaje espera 1,2 s»; esto dice «en total no
+  // salen más de N por minuto», que es como lo cuenta el servidor.
+  const maxPorMinuto = Number(opts.maxPorMinuto) || 0;
+  // Arranca con una ráfaga pequeña, no con el minuto entero: si el cubo empieza
+  // lleno, al reiniciar el bot salen N mensajes de golpe — justo el pico que se
+  // quiere evitar. La ráfaga es configurable por si hace falta más margen.
+  const rafagaInicial = Math.min(maxPorMinuto, Number(opts.rafagaInicial) || 10);
+  let fichas = maxPorMinuto ? rafagaInicial : 0;
+  let ultimaRecarga = Date.now();
+  function recargarFichas() {
+    if (!maxPorMinuto) return;
+    const ahora = Date.now();
+    fichas = Math.min(maxPorMinuto, fichas + ((ahora - ultimaRecarga) * maxPorMinuto) / 60000);
+    ultimaRecarga = ahora;
+  }
+  function hayFicha() {
+    if (!maxPorMinuto) return true;
+    recargarFichas();
+    return fichas >= 1;
+  }
+  function gastarFicha() {
+    if (!maxPorMinuto) return;
+    recargarFichas();
+    fichas = Math.max(0, fichas - 1);
+  }
+  function msHastaFicha() {
+    if (!maxPorMinuto) return 0;
+    return Math.max(50, Math.ceil(((1 - fichas) * 60000) / maxPorMinuto));
+  }
+
+  /**
+   * Espera antes del intento `intento` (1 = primer reintento).
+   * Exponencial y con jitter: dos fallos simultáneos no vuelven a salir juntos.
+   */
+  function esperaDeReintento(intento, messageLength) {
+    const exponencial = Math.min(reintentoTopeMs, reintentoBaseMs * 2 ** (intento - 1));
+    const conJitter = Math.round(exponencial * (0.5 + Math.random() * 0.5));
+    const porRitmo = throttler ? throttler.calcDelay({ messageLength: messageLength || 0 }) : 0;
+    return Math.max(conJitter, porRitmo);
+  }
   // Techo de la cola. 200 000 tareas medidas en el banco son ~173 MB de heap;
   // a partir de cierto punto es mejor decir «no» que quedarse sin memoria.
   const maxCola = Number(opts.maxCola) > 0 ? Number(opts.maxCola) : 2000;
@@ -298,6 +345,10 @@ export function createSendQueue(throttler, health, opts = {}) {
             return false;
           }
           if (throttler && !throttler.canSend()) return false;
+          if (!hayFicha()) {
+            t.esperaLimite = true;
+            return false;
+          }
           if (ritmo) {
             // Sin `ahora`: el ritmo tiene su propio reloj (inyectable en las
             // pruebas). Pasarle Date.now() aquí rompía la calidez del chat.
@@ -317,6 +368,8 @@ export function createSendQueue(throttler, health, opts = {}) {
             await esperarTurno(60000);
           } else if (enTimelock() && queue.some((t) => t.esperaTimelock)) {
             await esperarTurno(Math.max(500, Math.min(30000, timelockHasta - Date.now())));
+          } else if (!hayFicha()) {
+            await esperarTurno(msHastaFicha());
           } else if (throttler && !throttler.canSend()) {
             avisarTopeDiario(throttler);
             await esperarTurno(60000);
@@ -352,6 +405,7 @@ export function createSendQueue(throttler, health, opts = {}) {
         }
 
         const gastaCuota = task.opts.countsForQuota !== false;
+        if (gastaCuota && !task.opts.isPriority) gastarFicha();
 
         try {
           const result = await withTimeout(task.fn(), timeoutMs, "envío");
@@ -412,30 +466,40 @@ export function createSendQueue(throttler, health, opts = {}) {
           }
 
           log.error("Send failed: " + (err.message || err), err);
-          try {
-            // Reintento que RESPETA el throttler (nunca 3s fijos a tope de
-            // velocidad: esto es un bot anti-ban). Mínimo 2s.
-            const retryDelay = throttler
-              ? Math.max(2000, throttler.calcDelay({ messageLength: task.opts.messageLength || 0 }))
-              : 3000;
-            await new Promise(r => setTimeout(r, retryDelay));
-            const result2 = await withTimeout(task.fn(), timeoutMs, "reintento");
-            if (throttler && gastaCuota) throttler.recordSent();
-            if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-            task.resolve(result2);
-            if (health) health.recordSend();
-            avisarEnvio();
-          } catch (err2) {
-            if (err2 && err2.code === CODIGO_INCIERTO) {
-              inciertos += 1;
-              ultimoIncierto = Date.now();
-              log.warn("El reintento también quedó sin respuesta; no hay un tercer envío.");
-            } else if (health) {
-              health.recordSendFail(err2);
+          let ultimoError = err;
+          let resuelto = false;
+          for (let intento = 1; intento <= reintentos && !resuelto; intento += 1) {
+            // Si el que frena es el techo por minuto, se espera su ficha antes
+            // de dormir el backoff: dormir dos veces no hace más humano.
+            while (!hayFicha()) await esperarTurno(msHastaFicha());
+            await new Promise(r => setTimeout(r, esperaDeReintento(intento, task.opts.messageLength)));
+            if (gastaCuota && !task.opts.isPriority) gastarFicha();
+            try {
+              const resultado = await withTimeout(task.fn(), timeoutMs, "reintento " + intento);
+              if (throttler && gastaCuota) throttler.recordSent();
+              if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
+              if (health) health.recordSend();
+              avisarEnvio();
+              task.resolve(resultado);
+              resuelto = true;
+            } catch (errRe) {
+              ultimoError = errRe;
+              if (errRe && errRe.code === CODIGO_INCIERTO) {
+                inciertos += 1;
+                ultimoIncierto = Date.now();
+                log.warn("El reintento " + intento + " quedó sin respuesta; no se insiste más para no duplicar.");
+                break;
+              }
+              if (health) health.recordSendFail(errRe);
+              // Un fallo por conexión no se reintenta aquí: eso lo lleva la rama
+              // de conexión, que espera a que vuelva en vez de insistir.
+              if (esFalloDeConexion(errRe)) break;
             }
+          }
+          if (!resuelto) {
             // Fallo definitivo: también va a la cola de muertos.
-            if (alFallar) { try { alFallar(task, err2); } catch {} }
-            task.reject(err2);
+            if (alFallar) { try { alFallar(task, ultimoError); } catch {} }
+            task.reject(ultimoError);
           }
         }
       }
