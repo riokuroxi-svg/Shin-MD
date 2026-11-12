@@ -30,7 +30,16 @@ export function createEngine(opts) {
   // Las piezas de sesión: calma tras reconectar, detector de sordera, portón de
   // reentrada y descanso diario. Ver src/lib/sesion.js.
   const sesion = crearSesion(opts.sesion);
-  const sendQueue = createSendQueue(throttler, health, { ritmo, sesion, avisarRitmo, alEnviar: opts.alEnviar });
+  const sendQueue = createSendQueue(throttler, health, {
+    ritmo,
+    sesion,
+    avisarRitmo,
+    alEnviar: opts.alEnviar,
+    // Anti-ban: se configura desde el boot (variables de entorno).
+    maxPorMinuto: opts.maxPorMinuto,
+    reintentos: opts.reintentos,
+    reintentoBaseMs: opts.reintentoBaseMs,
+  });
   const listeners = {};
   const shutdownHooks = [];
 
