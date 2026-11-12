@@ -356,7 +356,21 @@ async function main() {
     }
   };
 
-  const engine = createEngine({ throttler: throttlerOpts, ritmoEstado: savedRitmo, alEnviar });
+  // Anti-ban configurable: sin tope por defecto (0 = sin límite), para no
+  // cambiar el comportamiento de quien ya lo tiene funcionando.
+  const maxPorMinuto = Math.max(0, parseInt(process.env.MAX_POR_MINUTO || "0", 10) || 0);
+  const reintentos = process.env.REINTENTOS !== undefined
+    ? Math.max(0, parseInt(process.env.REINTENTOS, 10) || 0)
+    : 3;
+  if (maxPorMinuto > 0) log.info("Techo de salida: " + maxPorMinuto + " mensajes por minuto como máximo.");
+
+  const engine = createEngine({
+    throttler: throttlerOpts,
+    ritmoEstado: savedRitmo,
+    alEnviar,
+    maxPorMinuto,
+    reintentos,
+  });
   const warmupStats = engine.getThrottler().getStats();
   log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días, tope de hoy " + (warmupOff ? "SIN TOPE (WARMUP=off)" : warmupStats.dailyLimit + " mensajes"));
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
