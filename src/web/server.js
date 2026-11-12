@@ -119,6 +119,19 @@ export function createWebServer(engine, opts) {
     });
   });
 
+  // Diagnóstico: qué le pasa al bot, por qué, y qué hacer. Una línea para
+  // el móvil (/salud) y el detalle para cuando hay que mirar (/salud?json=1).
+  app.get("/salud", (req, res) => {
+    const v = opts.salud ? opts.salud.veredicto() : null;
+    if (!v) return res.status(503).json({ ok: false, error: "diagnóstico no montado" });
+    if (req.query && (req.query.json === "1" || req.query.json === "true")) {
+      return res.json({ ok: true, ...v });
+    }
+    return res.type("text/plain; charset=utf-8").send(
+      v.resumen + "\n" + v.causas.map((c) => `\n[${c.gravedad.toUpperCase()}] ${c.codigo}\n  qué pasa: ${c.sintoma}\n  por qué:   ${c.causa}\n  qué hacer: ${c.remedio}`).join("\n") + "\n",
+    );
+  });
+
   app.get("/health", (req, res) => {
     const h = engine.getHealth().getStatus();
     const q = engine.getSendQueue();
@@ -133,6 +146,7 @@ export function createWebServer(engine, opts) {
       uncertain: q && typeof q.getStats === "function" ? q.getStats().inciertos : 0,
       groups: typeof engine.getGroupCount === "function" ? engine.getGroupCount() : 0,
       memoryMB: Math.round(process.memoryUsage().rss / 1048576),
+      diagnostico: opts.salud ? opts.salud.veredicto().resumen : null,
     });
   });
 
