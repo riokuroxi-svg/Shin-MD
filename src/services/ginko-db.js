@@ -60,6 +60,7 @@ const EXTRAS = {
   ],
   g_settings: [
     ["botprem", "INTEGER DEFAULT 0"], ["botmod", "INTEGER DEFAULT 0"],
+    ["payments", "TEXT DEFAULT '{}'"],
   ],
 };
 
