@@ -5,6 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { crearEntrada } from "#lib/entrada";
+import { crearSalud } from "#server-salud";
 import { normalizePhone, parseArgs } from "../src/lib/cli-args.js";
 import { estadoSesion, hayTerminalDetras, leerDeTerminal, planDeVinculacion } from "../src/lib/vinculacion.js";
 import * as ui from "../src/services/consola.js";
@@ -357,7 +358,35 @@ async function main() {
   log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días, tope de hoy " + (warmupOff ? "SIN TOPE (WARMUP=off)" : warmupStats.dailyLimit + " mensajes"));
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
-  const webServer = createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
+  // Diagnóstico: qué le pasa al bot, por qué y qué hacer (ver informe 10).
+  const salud = crearSalud({ engine });
+  const webServer = createWebServer(engine, {
+    port: parseInt(process.env.PORT || "3000", 10),
+    salud,
+  });
+
+  // Aviso cuando el estado CAMBIA, no en cada vuelta: un bot que grita cada
+  // minuto se ignora. La recuperación también se avisa.
+  let ultimoEstado = "sano";
+  const saludTimer = setInterval(() => {
+    try {
+      const v = salud.veredicto();
+      if (v.estado === ultimoEstado) return;
+      const mejora = v.estado === "sano";
+      ultimoEstado = v.estado;
+      if (mejora) {
+        log.success("Salud: el bot volvió a estar sano. " + v.resumen);
+      } else {
+        log.warn("Salud: " + v.resumen);
+        for (const c of v.causas) {
+          log.warn("  · " + c.codigo + ": " + c.sintoma);
+          log.warn("    qué hacer: " + c.remedio);
+        }
+      }
+    } catch {}
+  }, 60000);
+  if (typeof saludTimer.unref === "function") saludTimer.unref();
+  engine.onShutdown(() => clearInterval(saludTimer));
 
   // Mantenimiento 24/7: temporales viejos fuera y aviso si la RAM se dispara.
   const tempCleaner = createTempCleaner();
