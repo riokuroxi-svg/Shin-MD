@@ -1,4 +1,10 @@
 /**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+/**
  * Pruebas del saneamiento de `Subs` (parches/limpiar-subs-2083.mjs).
  * Sólo la lógica pura: la parte de `node:sqlite` necesita Node >= 22.5 y aquí
  * se comprueba aparte, aplicando el SQL emitido sobre una base de verdad.

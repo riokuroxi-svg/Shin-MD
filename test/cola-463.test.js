@@ -1,4 +1,10 @@
 /**
+ * Shin-MD - https://github.com/riokuroxi-svg/Shin-MD
+ * Copyright (C) 2026 riokuroxi-svg
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
+ */
+/**
  * Pruebas de la cola: timelock 463, techo y cola de muertos.
  * Corren sin WhatsApp: throttler y transportes de mentira, relojes cortos.
  *
