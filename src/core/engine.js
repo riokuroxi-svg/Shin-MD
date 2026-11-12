@@ -30,7 +30,7 @@ export function createEngine(opts) {
   // Las piezas de sesión: calma tras reconectar, detector de sordera, portón de
   // reentrada y descanso diario. Ver src/lib/sesion.js.
   const sesion = crearSesion(opts.sesion);
-  const sendQueue = createSendQueue(throttler, health, { ritmo, sesion, avisarRitmo });
+  const sendQueue = createSendQueue(throttler, health, { ritmo, sesion, avisarRitmo, alEnviar: opts.alEnviar });
   const listeners = {};
   const shutdownHooks = [];
 

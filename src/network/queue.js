@@ -86,6 +86,13 @@ export function createSendQueue(throttler, health, opts = {}) {
   // darse por perdido. 5 min cubre el corte típico de datos móviles; más
   // allá de eso el que escribió ya se fue.
   const esperaReconexionMs = opts.esperaReconexionMs || 300000;
+  // D8: se avisa de cada envío que salió, para que quien lleva la cuenta de la
+  // cuota pueda guardarla sin esperar al temporizador de un minuto.
+  const alEnviar = typeof opts.alEnviar === "function" ? opts.alEnviar : null;
+  function avisarEnvio() {
+    if (!alEnviar) return;
+    try { alEnviar(); } catch {}
+  }
   // Techo de la cola. 200 000 tareas medidas en el banco son ~173 MB de heap;
   // a partir de cierto punto es mejor decir «no» que quedarse sin memoria.
   const maxCola = Number(opts.maxCola) > 0 ? Number(opts.maxCola) : 2000;
@@ -351,6 +358,7 @@ export function createSendQueue(throttler, health, opts = {}) {
           if (throttler && gastaCuota) throttler.recordSent();
           if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
           if (health) health.recordSend();
+          avisarEnvio();
           task.resolve(result);
         } catch (err) {
           if (health) health.recordSendFail(err);
@@ -394,6 +402,7 @@ export function createSendQueue(throttler, health, opts = {}) {
               if (throttler && gastaCuota) throttler.recordSent();
               if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
               if (health) health.recordSend();
+              avisarEnvio();
               task.resolve(result3);
             } catch (err3) {
               if (health) health.recordSendFail(err3);
@@ -415,6 +424,7 @@ export function createSendQueue(throttler, health, opts = {}) {
             if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
             task.resolve(result2);
             if (health) health.recordSend();
+            avisarEnvio();
           } catch (err2) {
             if (err2 && err2.code === CODIGO_INCIERTO) {
               inciertos += 1;

@@ -338,7 +338,21 @@ async function main() {
     if (savedWarmup.perfil) throttlerOpts.perfil = savedWarmup.perfil;
   }
 
-  const engine = createEngine({ throttler: throttlerOpts, ritmoEstado: savedRitmo });
+  // D8: la cuota se guardaba sólo cada 60 s. Un corte en medio dejaba al bot
+  // creyendo que había enviado menos de lo que envió y, al volver, con cupo
+  // que ya había gastado. Ahora también se guarda cada N envíos.
+  const GUARDAR_CADA = Number(process.env.GUARDAR_CUOTA_CADA) || 10;
+  let persistirCuota = () => {};
+  let enviosSinGuardar = 0;
+  const alEnviar = () => {
+    enviosSinGuardar += 1;
+    if (enviosSinGuardar >= GUARDAR_CADA) {
+      enviosSinGuardar = 0;
+      persistirCuota();
+    }
+  };
+
+  const engine = createEngine({ throttler: throttlerOpts, ritmoEstado: savedRitmo, alEnviar });
   const warmupStats = engine.getThrottler().getStats();
   log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días, tope de hoy " + (warmupOff ? "SIN TOPE (WARMUP=off)" : warmupStats.dailyLimit + " mensajes"));
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
@@ -361,6 +375,7 @@ async function main() {
       log.warn("No se pudo guardar el estado antiban: " + (err?.message || err));
     }
   }
+  persistirCuota = persistAntibanState;
   const persistTimer = setInterval(persistAntibanState, 60000);
   if (typeof persistTimer.unref === "function") persistTimer.unref();
 
