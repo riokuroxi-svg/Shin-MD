@@ -1,11 +1,11 @@
 <div align="center">
 
-<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos y 526 pruebas" width="100%">
+<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 214 comandos y 565 pruebas" width="100%">
 
 <br>
 
-<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="526/526 pruebas"></a>
-<a href="#instalación"><img src="docs/assets/perfil/insignias/comandos.svg" height="50" alt="213 comandos"></a>
+<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="565/565 pruebas"></a>
+<a href="#instalación"><img src="docs/assets/perfil/insignias/comandos.svg" height="50" alt="214 comandos"></a>
 <a href="#licencia-y-marca"><img src="docs/assets/perfil/insignias/licencia.svg" height="50" alt="Licencia AGPL-3.0-only"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/node.svg" height="50" alt="Node 22.5 o superior"></a>
 <a href="https://ko-fi.com/kuroxisvg"><img src="docs/assets/perfil/insignias/kofi.svg" height="50" alt="Invítame un café"></a>
@@ -23,7 +23,7 @@ y reduce el riesgo de bloqueo.**
 
 </div>
 
-<img src="docs/assets/perfil/cifras.svg" alt="526/526 pruebas en 58 archivos, 213 comandos en 18 categorías, 752 nombres con 539 alias, versión 3.7.9" width="100%">
+<img src="docs/assets/perfil/cifras.svg" alt="565/565 pruebas en 64 archivos, 214 comandos en 18 categorías, 754 nombres con 540 alias, versión 3.7.9" width="100%">
 
 <img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
 
@@ -74,16 +74,16 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 
 </details>
 
-<h2 id="los-comandos">Los 213 comandos</h2>
+<h2 id="los-comandos">Los 214 comandos</h2>
 
 Escribe `.menu` dentro de WhatsApp y verás la tarjeta con botones y la lista
 desplegable por categorías.
 
-<img src="docs/assets/pastel/comandos.svg" alt="Los 213 comandos repartidos en 18 categorías" width="100%">
+<img src="docs/assets/pastel/comandos.svg" alt="Los 214 comandos repartidos en 18 categorías" width="100%">
 
 <img src="docs/assets/pastel/categorias.svg" alt="Las 18 categorías con sus comandos" width="100%">
 
-**213 comandos únicos · 752 nombres en total (539 alias) · 18 categorías.** Nombres de
+**214 comandos únicos · 754 nombres en total (540 alias) · 18 categorías.** Nombres de
 ejemplo: `.play` (y sus alias `yt`, `mp3`, `musica`), `.sticker` (`s`),
 `.daily` (`diario`, `recompensa`), `.w` (`work`, `trabajar`), `.x` para Twitter,
 `.ig` para Instagram y `.menu` (`ayuda`, `h`).
@@ -302,7 +302,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 526 pruebas
+npm test               # las 565 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot

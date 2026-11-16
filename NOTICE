@@ -42,4 +42,10 @@ Se aplican términos adicionales permitidos por la Sección 7 de AGPL-3.0:
    este proyecto es una obra derivada y queda sujeto a AGPL-3.0-only y
    a los términos de este NOTICE.
 
+Juego Snake de prueba
+  Basado en wa-games-kit, por TEAM ABIX (https://github.com/Jalalkhan96/wa-games-kit),
+  commit 602cdf7470a55d3369438091849fdd007d2e6d99.
+  Copyright (c) 2025 TEAM ABIX. Licencia MIT: extras/licencias/wa-games-kit-MIT.txt.
+  Adaptación para Shin-MD: riokuroxi-svg (2026).
+
 SPDX-License-Identifier: AGPL-3.0-only
