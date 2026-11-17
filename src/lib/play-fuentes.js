@@ -24,6 +24,7 @@ import { getAudioUrl } from "#downloader";
 import { searchYouTube, getVideoInfoById } from "#lib/youtubeSearch";
 import { fastFetch, globalFetchCache, isYtdlpAvailable, resolveYtdlpBinary } from "#lib/fastFetch";
 import { downloadAudioSourceYtdlp, processMp3ForWhatsApp, isMp3Valid } from "#lib/mp3Utils";
+import { obtenerAudioPo } from "#lib/po-play";
 import log from "#logger";
 
 // ── Red y archivos ──────────────────────────────────────────
@@ -145,8 +146,14 @@ export async function getVideoInfo(input, video_id) {
   return null;
 }
 
-// ── Caché RAM + Disco de Audio Procesado ─────────────────────
-
+// En modo PO, el alias directo también necesita resolver búsquedas a un ID.
+export async function resolverAudioPoDirecto(job, buscar = getVideoInfo) {
+  if (job.videoId) return job;
+  const info = await buscar(job.title || job.url, null);
+  const id = getVideoId(info?.videoId || info?.url || "");
+  if (!id) throw new Error("No se encontró un video para el audio solicitado");
+  return { ...job, videoId: id, url: `https://youtu.be/${id}`, title: info.title || job.title, channel: info.author?.name || job.channel };
+}
 
 // ── Caché RAM + Disco de Audio Procesado ─────────────────────
 const audioProcesadoCache = new Map();
@@ -232,6 +239,9 @@ async function descargarAudioSmart(job) {
 }
 
 async function prepararAudioProcesado(job) {
+  const modo = String(process.env.SHIN_PO_MODE || "legacy").trim();
+  if (modo === "bgutil") return await obtenerAudioPo(job);
+  if (modo !== "legacy") throw new Error("Modo de audio no reconocido");
   const title = sanitizeFilename(job.title || "Audio");
   const cached = leerAudioDiskCache(job);
   if (cached) return cached;
@@ -267,7 +277,8 @@ async function prepararAudioProcesado(job) {
 
 export function obtenerAudioProcesado(job) {
   limpiarAudioCache();
-  const key = audioCacheKey(job);
+  const id = audioCacheKey(job);
+  const key = id ? `${String(process.env.SHIN_PO_MODE || "legacy").trim()}:${id}` : null;
   const cached = key ? audioProcesadoCache.get(key) : null;
   if (cached && cached.expires > Date.now()) return cached.promise;
   const promise = prepararAudioProcesado(job).catch(e => {
@@ -283,6 +294,8 @@ export function obtenerAudioProcesado(job) {
  * apenas se envía la tarjeta visual, eliminando la espera del usuario.
  */
 export function precalentarAudio(job) {
+  // En el modo experimental no se solicitan tokens antes de que el usuario elija audio.
+  if (String(process.env.SHIN_PO_MODE || "legacy").trim() === "bgutil") return;
   obtenerAudioProcesado(job).catch(() => {});
 }
 
