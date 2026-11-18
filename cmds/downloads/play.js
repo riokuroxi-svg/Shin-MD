@@ -18,7 +18,7 @@ import { buildBottomSheet, buildMessageParams } from "#lib/native-params";
 import { createProgress } from "#lib/progress";
 import {
   descargarBuffer, sanitizeFilename, esMp4Valido, getVideoId, getVideoInfo,
-  obtenerAudioProcesado, precalentarAudio, descargarVideoApis, prepararYtdlp,
+  obtenerAudioProcesado, precalentarAudio, descargarVideoApis, prepararYtdlp, resolverAudioPoDirecto,
 } from "#lib/play-fuentes";
 
 
@@ -263,7 +263,9 @@ export default {
 
   async handler(sock, ctx, engine) {
     try {
-      const hayYtdlp = await prepararYtdlp();
+      const modoPo = String(process.env.SHIN_PO_MODE || "legacy").trim() === "bgutil";
+      // En PO experimental no se instala ni se selecciona otro yt-dlp automáticamente.
+      const hayYtdlp = modoPo ? false : await prepararYtdlp();
 
       if (!ctx.arg) {
         return "🎵 *SHIN MUSIC PLAYER*\n\n" +
@@ -282,11 +284,12 @@ export default {
         const prog = createProgress(sock, ctx.chatId, { quoted: ctx.full });
         await prog.start({ title: "Descargando audio", detail: input, pct: 20 });
         try {
-          const job = {
+          let job = {
             url: videoId ? `https://youtu.be/${videoId}` : input,
             videoId,
             title: input,
           };
+          if (modoPo) job = await resolverAudioPoDirecto(job);
           const procesado = await obtenerAudioProcesado(job);
           const safeName = `${sanitizeFilename(input)}.mp3`;
           const audioPayload = {

@@ -71,6 +71,7 @@ export default {
         title: `${val.emoji} ${key.toUpperCase()}${val.id === actual ? " ✓" : ""} — ${val.name}`,
         description: val.desc,
       }));
+      if (typeof sock?.sendMessage !== "function") return list;
       try {
         await sendInteractive(sock, ctx.chatId, {
           title: "🎨 Estilo de menú",

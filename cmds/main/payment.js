@@ -32,7 +32,7 @@ function leerPagos(botId) {
 
 export default {
   name: "payment",
-  aliases: ["pay", "pagos", "donar"],
+  aliases: ["pagos", "donar"],
   category: "info",
   description: "Muestra los métodos de pago con botones para copiar",
   usage: ".payment [set <método> <número> | del <método>]",

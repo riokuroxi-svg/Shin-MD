@@ -42,7 +42,8 @@ config.private.js
 cookies.txt
 *.cookies.txt
 audit/
-.vista-readme-*.html   # copia temporal para revisar el README
+# Copia temporal generada para revisar el README.
+.vista-readme-*.html
 
 # Installer state (one per installation, never committed)
 .shin-install

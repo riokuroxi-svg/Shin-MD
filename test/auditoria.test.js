@@ -29,9 +29,12 @@ test("ninguna escritura apunta a una columna que no existe", () => {
   assert.match(salida, /Ninguna escritura apunta a una columna inexistente/);
 });
 
-test("los 217 comandos cargan, no se pisan y hablan español", () => {
+test("los comandos cargan, no se pisan y hablan español", () => {
   const { salida } = correr("scripts/auditar-comandos.mjs");
-  assert.match(salida, /cargan: 21\d/, "algún comando no carga:\n" + salida);
+  const resumen = salida.match(/Comandos revisados: (\d+) · cargan: (\d+)/);
+  assert.ok(resumen, "no encontré el resumen del auditor:\n" + salida);
+  assert.ok(Number(resumen[1]) >= 200, "el auditor no encontró el catálogo completo:\n" + salida);
+  assert.equal(resumen[2], resumen[1], "algún comando no carga:\n" + salida);
   assert.ok(!salida.includes("── no carga"), "hay comandos rotos:\n" + salida);
   assert.ok(!salida.includes("── nombre repetido"), "dos comandos con el mismo nombre: el segundo no se ejecuta\n" + salida);
   assert.ok(!salida.includes("── mensaje en inglés"), "quedan mensajes en inglés:\n" + salida);
