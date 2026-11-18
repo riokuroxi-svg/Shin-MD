@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { searchYouTube, getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
+import { getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
 import { argsClienteYtdlp } from "#lib/ytdlp-cliente";
 
 const exec = promisify(execFile);
@@ -62,29 +62,15 @@ function parseDurationSeconds(durationStr, ms) {
   return 0;
 }
 
-// ── B3: Cookies de YouTube ──────────────────────────────────
-let cookiesWarned = false;
-export function loadYtCookies() {
+// ── B3: Archivo de cookies Netscape para yt-dlp ─────────────
+function resolveCookiesArgs() {
   try {
     const file = process.env.COOKIES_FILE || path.resolve("cookies.txt");
-    if (!fs.existsSync(file)) return "";
-    const raw = fs.readFileSync(file, "utf8");
-    const pairs = [];
-    for (const line of raw.split(/\r?\n/)) {
-      const t = line.trim();
-      if (!t || t.startsWith("#")) continue;
-      const f = t.split("\t");
-      if (f.length < 7) continue;
-      const domain = f[0], name = f[5], value = f[6];
-      if (!/youtube\.com|google\.com|googlevideo\.com/i.test(domain)) continue;
-      if (name) pairs.push(name + "=" + value);
+    if (fs.existsSync(file) && fs.statSync(file).isFile()) {
+      return ["--cookies", file];
     }
-    if (pairs.length && !cookiesWarned) {
-      cookiesWarned = true;
-      log.info("Cookies de YouTube cargadas (" + pairs.length + " entradas)");
-    }
-    return pairs.join("; ");
-  } catch { return ""; }
+  } catch {}
+  return [];
 }
 
 /**
@@ -242,6 +228,7 @@ async function resolveYtdlpLocal(videoUrl) {
     "-f", "bestaudio[ext=m4a]/bestaudio",
     "-g",
     "--no-playlist",
+    ...resolveCookiesArgs(),
     ...argsClienteYtdlp(),
     videoUrl,
   ];
@@ -344,4 +331,4 @@ export async function getAudioUrl(query) {
   throw new Error("❌ No se pudo descargar el audio en este momento. Intenta con `.spotify <nombre>` o `.playsc <nombre>`.");
 }
 
-export default { getAudioUrl, loadYtCookies };
+export default { getAudioUrl };

@@ -6,8 +6,6 @@
  */
 // Runtime — estado del bot
 
-import os from "os";
-
 export default {
   name: "runtime",
   aliases: ["uptime"],

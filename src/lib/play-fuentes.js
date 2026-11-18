@@ -41,12 +41,9 @@ export async function descargarBuffer(url, timeoutMs = 5000) {
 // ── Caché de audio: RAM y disco ─────────────────────────────
 const MAX_MB_AUDIO = 50 * 1024 * 1024;
 
-const MB = 1024 * 1024;
-
 const AUDIO_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_AUDIO_CACHE_ENTRIES = 10;
 const DISK_AUDIO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const MAX_DISK_AUDIO_CACHE_BYTES = 350 * MB;
 const DISK_AUDIO_CACHE_DIR = path.join(process.cwd(), "cache", "play-audio");
 
 

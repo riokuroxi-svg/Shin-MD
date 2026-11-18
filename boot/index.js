@@ -18,7 +18,6 @@ import { instalarAPIs } from "../src/lib/apis.js";
 
 import "dotenv/config";
 import chalk from "chalk";
-import moment from "moment-timezone";
 import readlineSync from "readline-sync";
 import fs from "fs";
 import path from "path";
@@ -125,8 +124,16 @@ function __dirname() {
 // entraba soltaba un cuadro de siete filas con colores distintos a los del
 // resto de la consola: en un grupo activo eso es ilegible. Ahora se lee
 // como un registro y comparte la paleta del resto.
+const RELOJ_CONSOLA = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "America/Mexico_City",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
 function logIncomingMessage(ctx, usedPrefix) {
-  const t = moment().tz("America/Mexico_City").format("HH:mm:ss");
+  const t = RELOJ_CONSOLA.format(new Date());
   const donde = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "privado";
   log.ui(ui.mensaje({
     hora: t,
@@ -138,7 +145,7 @@ function logIncomingMessage(ctx, usedPrefix) {
 }
 
 function logCommand(ctx, cmdName, ms) {
-  const t = moment().tz("America/Mexico_City").format("HH:mm:ss");
+  const t = RELOJ_CONSOLA.format(new Date());
   const donde = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "privado";
   log.ui(ui.mensaje({
     hora: t,
@@ -376,7 +383,13 @@ async function main() {
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
   // Diagnóstico: qué le pasa al bot, por qué y qué hacer (ver informe 10).
-  const salud = crearSalud({ engine });
+  // `entrada` se construye al levantar el router; la referencia la conecta
+  // al diagnóstico para que los descartes de entrada no queden invisibles.
+  let entrada = null;
+  const salud = crearSalud({
+    engine,
+    entrada: () => (entrada ? entrada.stats() : undefined),
+  });
   const webServer = createWebServer(engine, {
     port: parseInt(process.env.PORT || "3000", 10),
     salud,
@@ -524,7 +537,7 @@ async function main() {
   // mensajes tardan 1 s en vez de 0,1 s). Lo que compra es un techo: 300
   // handlers a la vez dejan de ser posibles. Va con holgura para que una
   // ráfaga normal pase entera; ENTRADA_CONCURRENTES=0 la apaga.
-  const entrada = crearEntrada({
+  entrada = crearEntrada({
     concurrentes: process.env.ENTRADA_CONCURRENTES !== undefined
       ? Number(process.env.ENTRADA_CONCURRENTES)
       : 32,

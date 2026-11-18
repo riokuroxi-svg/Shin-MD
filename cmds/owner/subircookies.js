@@ -7,7 +7,7 @@
 // ── .subircookies (B3) — guarda el cookies.txt de YouTube por WhatsApp ──
 // Envía el archivo cookies.txt como DOCUMENTO con caption .subircookies
 // (o responde al documento con .subircookies). El bot lo guarda en
-// ./cookies.txt y el downloader lo usa con YTDL_ENABLED=1.
+// ./cookies.txt y yt-dlp lo usa automáticamente cuando existe.
 // Las cookies expiran cada 1-2 meses: cuando .play vuelva a fallar en el
 // servidor, exportas de nuevo y repites el comando.
 import fs from "node:fs";
@@ -62,9 +62,10 @@ export default {
       return "🚫 Esto no parece un cookies.txt de YouTube (no encontré dominios youtube/google).";
     }
 
-    fs.writeFileSync(TARGET, buf);
+    fs.writeFileSync(TARGET, buf, { mode: 0o600 });
+    try { fs.chmodSync(TARGET, 0o600); } catch {}
     return "✓ Cookies guardadas (`cookies.txt`, " + buf.length + " bytes).\n" +
-      "· Se usan en `.play` con `YTDL_ENABLED=1` en .env.\n" +
+      "· Se usan automáticamente con `yt-dlp` cuando está disponible.\n" +
       "· Expiran cada 1-2 meses: cuando falle de nuevo, exporta y repite.\n" +
       "· El archivo NUNCA se sube a GitHub (.gitignore).";
   },

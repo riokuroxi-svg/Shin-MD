@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import fetch from 'node-fetch'
-
 /**
  * Comando .pin / .pinterest — actualmente FUERA DE SERVICIO.
  *

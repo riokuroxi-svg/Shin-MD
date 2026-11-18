@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { loadCharacters } from "#lib/gacha-shared";
-import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 

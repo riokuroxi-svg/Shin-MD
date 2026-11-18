@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { promises as fs } from 'fs';
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 import { flattenCharacters, loadCharacters } from "#lib/gacha-shared";

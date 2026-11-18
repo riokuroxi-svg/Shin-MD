@@ -9,8 +9,6 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import axios from "axios";
-import ytdl from "@distube/ytdl-core";
-import { loadYtCookies } from "#downloader";
 import { searchYouTube, getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
 import { getChannelContext } from "../../src/lib/contextBuilder.js";
 
@@ -148,38 +146,7 @@ export default {
         return null;
       }
 
-      // 2. Fallback a ytdl-core si está configurado
-      if (process.env.YTDL_ENABLED === "1" || process.env.YTDL_ENABLED === "true") {
-        const cookies = loadYtCookies();
-        const requestOptions = cookies
-          ? { headers: { Cookie: cookies, "User-Agent": UA } }
-          : undefined;
-
-        const infoFull = await ytdl.getInfo(targetVideoUrl, { quality: "lowest", requestOptions });
-        const format = ytdl.chooseFormat(infoFull.formats, { quality: "lowest" });
-
-        if (format?.url) {
-          const safeTitle = (infoFull.videoDetails?.title || videoTitle).replace(/[/\\?*:<>|"]/g, "").slice(0, 75);
-          let caption = `╭┈┈⫹⫺ *SHIN VIDEO PLAYER* ⫹⫺┈┈╮\n`;
-          caption += `│ ◈ *Título* : *${safeTitle}*\n`;
-          caption += `│ ◈ *Servidor* : \`ytdl-core direct\`\n`;
-          caption += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯`;
-
-          await sock.sendMessage(ctx.chatId, {
-            video: { url: format.url },
-            caption,
-            fileName: `${safeTitle}.mp4`,
-            contextInfo: channelCtx,
-          }, { quoted: ctx.full });
-
-          if (key) {
-            try { await sock.sendMessage(ctx.chatId, { text: "✅ *Video entregado!*", edit: key }, { _priority: true }); } catch {}
-          }
-          return null;
-        }
-      }
-
-      const errMsg = "❌ No se pudo descargar el video en este momento. Intenta con `.play <nombre>` para audio.";
+      const errMsg = "❌ No se pudo descargar el video en este momento. Intenta con `.ytdlp <enlace>` o `.play <nombre>` para audio.";
       if (key) await sock.sendMessage(ctx.chatId, { text: errMsg, edit: key });
       return null;
     } catch (err) {

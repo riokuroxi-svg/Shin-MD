@@ -36,8 +36,9 @@ export function createWatchdog(engine, opts = {}) {
   let lastRisk = 0;
   let strikes = 0;
   let lastStrike = 0;
+  let breakerTripped = false;
   const MAX_STRIKES = 3;
-  const STRIKE_COOLDOWN_MS = 120000;
+  const STRIKE_COOLDOWN_MS = opts.strikeCooldownMs ?? 120000;
 
   function wsReady(sock) {
     // Baileys: sock.ws.ready (booleano) o readyState (1 = OPEN)
@@ -53,14 +54,15 @@ export function createWatchdog(engine, opts = {}) {
   function doReconnect(reason) {
     const sock = engine.getSock();
     if (!wsReady(sock)) return;
-    if (Date.now() - lastStrike < STRIKE_COOLDOWN_MS) return; // breaker
-    strikes++;
-    lastStrike = Date.now();
-    if (strikes > MAX_STRIKES) {
-      log.error("Watchdog: " + MAX_STRIKES + " reconnects forzados sin alivio — riesgo de BAN; revisar sesión/red (intento manual)");
-      strikes = 0; // espera a que el riesgo baje para volver a intentar
+    if (breakerTripped) return;
+    if (lastStrike > 0 && Date.now() - lastStrike < STRIKE_COOLDOWN_MS) return; // cooldown
+    if (strikes >= MAX_STRIKES) {
+      breakerTripped = true;
+      log.error("Watchdog: " + MAX_STRIKES + " reconnects forzados sin alivio — riesgo de BAN; reconexión forzada pausada hasta recuperación");
       return;
     }
+    strikes++;
+    lastStrike = Date.now();
     log.warn("Watchdog: reconnect forzado #" + strikes + " (" + reason + ")");
     try {
       sock.ws.close(); // Baileys reabre la conexión solo
@@ -101,7 +103,8 @@ export function createWatchdog(engine, opts = {}) {
       const ses = typeof engine.getSesion === "function" ? engine.getSesion() : null;
       const sordera = state === engine.LIFECYCLE.RUNNING && ses?.activo && ses.sordera?.revisar?.();
       const idle = Date.now() - lastActivity;
-      if ((state >= engine.LIFECYCLE.CONNECT && idle > stuckThresholdMs) || sordera) {
+      const stuck = state >= engine.LIFECYCLE.CONNECT && idle > stuckThresholdMs;
+      if (stuck || sordera) {
         if (wsReady(sock)) {
           doReconnect(
             sordera
@@ -119,10 +122,11 @@ export function createWatchdog(engine, opts = {}) {
         doReconnect("riesgo crítico " + score);
       }
 
-      // 4) Riesgo recuperado → resetear breaker
-      if (score < riskThreshold && strikes > 0) {
-        log.info("Watchdog: riesgo recuperado — contador de reconnects reseteado");
+      // 4) Conexión y riesgo recuperados → rearmar breaker
+      if (score < riskThreshold && !stuck && !sordera && (strikes > 0 || breakerTripped)) {
+        log.info("Watchdog: riesgo y actividad recuperados — contador de reconnects reseteado");
         strikes = 0;
+        breakerTripped = false;
       }
     } catch (err) {
       // El watchdog NUNCA debe tumbar el bot por su propio fallo.
@@ -146,6 +150,8 @@ export function createWatchdog(engine, opts = {}) {
     start, stop, check, tick,
     isPaused: () => paused,
     getLastRisk: () => lastRisk,
+    getStrikes: () => strikes,
+    isBreakerTripped: () => breakerTripped,
   };
 }
 

@@ -98,12 +98,14 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
     avisar("arrancado", { pid });
     estado = "activo";
 
+    let pidioReinicio = false;
     hijo.on("message", (mensaje) => {
-      if (mensaje === "restart") {
+      if (mensaje === "restart" && !pidioReinicio) {
+        pidioReinicio = true;
         reinicios += 1;
         estado = "reiniciando";
         avisar("pidioReiniciar", { reinicios });
-        hijo.kill("SIGTERM");
+        try { hijo?.kill("SIGTERM"); } catch {}
       }
     });
 
@@ -119,8 +121,9 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
       return "parar";
     }
 
-    // SIGTERM tras un reinicio pedido: se levanta sin contarlo como caída.
-    if (signal === "SIGTERM") {
+    // Reinicio pedido explícitamente por IPC: se levanta sin contarlo como
+    // caída. Un SIGTERM externo sin petición sí cuenta en el presupuesto.
+    if (pidioReinicio && (signal === "SIGTERM" || code === 0)) {
       estado = "reiniciando";
       avisar("reiniciando", { reinicios });
       await espera(400);

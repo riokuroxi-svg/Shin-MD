@@ -36,6 +36,9 @@ export async function useSQLiteAuthState(sessionDir) {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA synchronous = NORMAL");
   db.exec("PRAGMA busy_timeout = 5000");
+  for (const sufijo of ["-wal", "-shm"]) {
+    try { if (fs.existsSync(dbPath + sufijo)) fs.chmodSync(dbPath + sufijo, 0o600); } catch {}
+  }
 
   // B1.3: checkpoint WAL al abrir. Tras un corte brusco (batería, kill)
   // puede quedar un -wal huérfano; el checkpoint lo pliega a la DB
@@ -62,7 +65,9 @@ export async function useSQLiteAuthState(sessionDir) {
     const n = importJsonFallback(db, dbPath + ".json");
     if (n > 0) log.info("Sesión recuperada del respaldo JSON: " + n + " filas");
   } catch (err) {
-    log.warn("No se pudo leer el respaldo JSON de la sesión: " + (err.message || err));
+    log.error("Migración de sesión falló; se conservó el respaldo: " + (err.message || err));
+    try { db.close(); } catch {}
+    throw err;
   }
 
   const credsRow = db.prepare("SELECT data FROM creds WHERE id = 1").get();
@@ -75,8 +80,8 @@ export async function useSQLiteAuthState(sessionDir) {
         value = { keyData: Buffer.from(value.keyData, "base64") };
       }
       return value;
-    } catch {
-      return null;
+    } catch (err) {
+      throw new Error("Credencial Signal ilegible; se requiere revisión", { cause: err });
     }
   }
 

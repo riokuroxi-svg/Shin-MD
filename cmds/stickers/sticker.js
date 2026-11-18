@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import fs from 'fs';
-import path from 'path';
 import { spawn } from 'child_process';
 import fetch from 'node-fetch';
 import exif from '#core/exif';

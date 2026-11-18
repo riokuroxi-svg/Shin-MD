@@ -8,9 +8,15 @@ import log from "#logger";
 import { botJid, deleteCachedMeta, getCachedMeta, normalizeJid, resolveJidSync, resolveParticipantJid, setCachedMeta } from "#serialize";
 import { aprenderDeGrupo, mismaPersona } from "#lib/lid";
 import chalk from 'chalk';
-import moment from 'moment-timezone';
 import db from '../src/services/ginko-db.js';
 import { generateWelcomeCard } from '../src/lib/cardGenerator.js';
+
+const RELOJ_EVENTO = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'America/Bogota',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: true,
+});
 
 function getGroupAdmins(participants) {
   return (participants ?? []).filter(p => p.admin === 'admin' || p.admin === 'superadmin').map(p => p.id).filter(Boolean);
@@ -51,7 +57,7 @@ export default async (sock) => {
       const now = new Date();
       const colombianTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
       const tiempo = colombianTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/,/g, '');
-      const tiempo2 = moment.tz('America/Bogota').format('hh:mm A');
+      const tiempo2 = RELOJ_EVENTO.format(now);
       const memberCount = metadata?.participants?.length || 0;
       const isSelf = (settings.self ?? false) || (chat.isMute ?? false);
       if (isSelf) return;

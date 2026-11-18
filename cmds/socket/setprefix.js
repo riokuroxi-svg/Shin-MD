@@ -6,8 +6,9 @@
  */
 import { botJid } from "#serialize";
 import { esDuenoSocket } from "#permissions";
-import GraphemeSplitter from 'grapheme-splitter';
 import db from '../../src/services/ginko-db.js';
+
+const GRAFEMAS = new Intl.Segmenter('es', { granularity: 'grapheme' });
 
 export default {
   command: ['setprefix', 'setbotprefix'],
@@ -31,8 +32,7 @@ export default {
       db.setSettings(idBot, 'prefix', 1);
       return msg.reply(`❀ Se cambio al modo sin prefijos para el Socket correctamente\n> Ahora el bot responderá a comandos *sin prefijos*.`);
     }
-    const splitter = new GraphemeSplitter();
-    const graphemes = splitter.splitGraphemes(value);
+    const graphemes = Array.from(GRAFEMAS.segment(value), s => s.segment);
     const lista = [];
     for (const g of graphemes) {
       if (/^[a-zA-Z]+$/.test(g)) continue;

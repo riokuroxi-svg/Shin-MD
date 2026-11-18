@@ -5,9 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import fs from 'fs';
 import os from 'os';
-import { sizeFormatter } from 'human-readable';
 import db from '../../src/services/ginko-db.js';
 
 function getDefaultHostId() {
@@ -17,7 +15,14 @@ function getDefaultHostId() {
   return 'Default_host_id';
 }
 
-const format = sizeFormatter({ std: 'JEDEC', decimalPlaces: 2, keepTrailingZeroes: false, render: (literal, symbol) => `${literal} ${symbol}B` });
+function format(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)) - 1, units.length - 1);
+  const val = parseFloat((n / (1024 ** (i + 1))).toFixed(2));
+  return `${val} ${units[i]}`;
+}
 
 export default {
   command: ['status', 'estado'],

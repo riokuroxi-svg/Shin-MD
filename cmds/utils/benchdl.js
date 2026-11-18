@@ -30,27 +30,22 @@ export default {
     let key;
     if (sent && sent.key) key = sent.key;
 
-    const providers = ["ytdl-core", "custom", "nikkatools", "ytmp3convert"];
+    const attempts = [1, 2, 3];
     const results = [];
 
-    for (const provider of providers) {
+    for (const attempt of attempts) {
       const start = Date.now();
       try {
-        if (provider === "ytdl-core" && process.env.YTDL_ENABLED !== "1" && process.env.YTDL_ENABLED !== "true") {
-          results.push(`⏭️ *ytdl-core:* desactivado (.env)`);
-          continue;
-        }
-
         const res = await getAudioUrl(testUrl);
         const ms = Date.now() - start;
-        results.push(`✅ *${res.provider}* → ${ms}ms`);
+        results.push(`✅ *#${attempt} (${res.provider})* → ${ms}ms`);
       } catch (e) {
         const ms = Date.now() - start;
-        results.push(`❌ *${provider}* → ${ms}ms · ${e.message?.slice(0, 50)}`);
+        results.push(`❌ *#${attempt}* → ${ms}ms · ${e.message?.slice(0, 50)}`);
       }
     }
 
-    const resultText = `⏱️ *Benchmark Resultados*\n\n` + results.join("\n") + `\n\n_Nota: ytdl-core solo funciona si YTDL_ENABLED=1_`;
+    const resultText = `⏱️ *Benchmark Resultados*\n\n` + results.join("\n");
 
     if (key) {
       try {

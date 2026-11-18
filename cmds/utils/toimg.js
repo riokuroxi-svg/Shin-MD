@@ -4,15 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import fetch from 'node-fetch';
-import FormData from 'form-data';
 import * as cheerio from 'cheerio';
+
+function adjuntarImagenEzgif(form, source) {
+  const isUrl = typeof source === 'string' && /https?:\/\//.test(source);
+  form.append('new-image-url', isUrl ? source : '');
+  if (!isUrl) {
+    form.append('new-image', new Blob([source], { type: 'image/webp' }), 'image.webp');
+  } else {
+    form.append('new-image', new Blob([], { type: 'application/octet-stream' }), '');
+  }
+}
 
 async function webp2mp4(source) {
   const form = new FormData();
-  const isUrl = typeof source === 'string' && /https?:\/\//.test(source);
-  form.append('new-image-url', isUrl ? source : '');
-  form.append('new-image', source, 'image.webp');
+  adjuntarImagenEzgif(form, source);
   const res = await fetch('https://ezgif.com/webp-to-mp4', { method: 'POST', body: form, signal: AbortSignal.timeout(25000) });
   if (!res.ok) throw new Error(`ezgif HTTP ${res.status}`);
   const html = await res.text();
@@ -41,9 +47,7 @@ async function webp2mp4(source) {
 
 async function webp2png(source) {
   const form = new FormData();
-  const isUrl = typeof source === 'string' && /https?:\/\//.test(source);
-  form.append('new-image-url', isUrl ? source : '');
-  form.append('new-image', source, 'image.webp');
+  adjuntarImagenEzgif(form, source);
   const res = await fetch('https://ezgif.com/webp-to-png', { method: 'POST', body: form, signal: AbortSignal.timeout(25000) });
   if (!res.ok) throw new Error(`ezgif HTTP ${res.status}`);
   const html = await res.text();

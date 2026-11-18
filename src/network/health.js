@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import log from "#logger";
-
 export function createHealthMonitor() {
   const events = [];
   const MAX_EVENTS = 1000;

@@ -6,7 +6,7 @@
  */
 // ═══════════════════════════════════════════════════════════════════
 //  socket.js — Conexión Baileys de Shin-MD
-//  Auto-limpieza de sesión corrupta + saveCreds + cola anti-ban
+//  Protección de sesión + saveCreds + cola anti-ban
 // ═══════════════════════════════════════════════════════════════════
 
 import makeWASocket, {
@@ -23,8 +23,7 @@ import { resolveChannel } from "../lib/channel.js";
 import { analizarCortes, podarCortes } from "../lib/cortes.js";
 import db from "../services/ginko-db.js";
 import pino from "pino";
-import fs from "fs";
-import path from "path";
+import { clasificarDesconexion } from "./politica-sesion.js";
 import NodeCache from "node-cache";
 import log from "#logger";
 import { estilizar } from "#lib/theme";
@@ -132,6 +131,7 @@ export function connectSocket(engine, opts) {
   let retries = 0;
   let isRestarting = false;
   let reconnectTimer = null;
+  let sesionRequiereRevision = false;
   let pairingTimer = null;
   let restartStreak = 0;
   let lastRestartAt = 0;
@@ -148,10 +148,11 @@ export function connectSocket(engine, opts) {
   const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
 
   function scheduleReconnect(delayMs) {
+    if (sesionRequiereRevision) return;
     if (reconnectTimer) clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
-      start();
+      if (!sesionRequiereRevision) start();
     }, delayMs);
     if (typeof reconnectTimer.unref === "function") reconnectTimer.unref();
   }
@@ -173,20 +174,6 @@ export function connectSocket(engine, opts) {
     });
   }
 
-  // Cierre de la auth.db de la conexión en curso (lo fija start()).
-  let cerrarAuthActual = null;
-
-  function clearSession() {
-    try { cerrarAuthActual?.(); } catch {}
-    try {
-      if (!fs.existsSync(sessionDir)) return;
-      for (const f of fs.readdirSync(sessionDir)) {
-        try { fs.unlinkSync(path.join(sessionDir, f)); } catch {}
-      }
-      log.warn("Sesión limpiada");
-    } catch (e) { log.error("clearSession: " + (e.message || e)); }
-  }
-
   // Cortes de conexión recientes, para poder explicar una seguidilla en
   // vez de dejarla en «reconectando...» para siempre.
   const marcasDeCorte = [];
@@ -199,6 +186,7 @@ export function connectSocket(engine, opts) {
   }
 
   async function start() {
+    if (sesionRequiereRevision) return;
     if (isRestarting) return;
     isRestarting = true;
 
@@ -213,20 +201,21 @@ export function connectSocket(engine, opts) {
       authCerrada = true;
       try { cerrarBaseAuth?.(); } catch {}
     };
-    cerrarAuthActual = cerrarAuth;
 
     let ver;
     try { const v = await obtenerVersion(); ver = v.version; }
     // Fallback verificado en vivo (2026-09): 1044802095 conecta y da QR.
     catch { ver = [2, 3000, 1044802095]; }
 
-    let saveTimer;
+    // Persistir al recibir la actualización, antes de que una revocación
+    // cancele la conexión. sc() escribe sincrónicamente antes de resolver;
+    // un fallo se informa y no se declara guardado exitoso.
     const saveCreds = () => {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        Promise.resolve(sc()).catch((e) => log.warn("saveCreds: " + (e?.message || e)));
-      }, 2000);
-      if (typeof saveTimer.unref === "function") saveTimer.unref();
+      if (sesionRequiereRevision || authCerrada) return;
+      Promise.resolve(sc()).catch((e) => {
+        health.recordError(e);
+        log.error("saveCreds falló; credenciales no persistidas: " + (e?.message || e));
+      });
     };
 
     console.info = () => {};
@@ -502,9 +491,7 @@ export function connectSocket(engine, opts) {
         if (Date.now() - lastRestartAt > 60000) restartStreak = 0;
 
         // FORZAR guardado inmediato de credenciales ANTES de que se cierre
-        clearTimeout(saveTimer);
         try { await sc(); } catch (e) { log.warn("saveCreds al conectar: " + (e?.message || e)); }
-        saveTimer = null;
 
         conectadoDesde = Date.now();
         if (podarCortes(marcasDeCorte).length === 0) pistaDeCortesDada = false;
@@ -539,9 +526,7 @@ export function connectSocket(engine, opts) {
       if (isNewLogin) {
         log.info("Nuevo dispositivo vinculado");
         // Forzar saveCreds inmediato cuando se vincula
-        clearTimeout(saveTimer);
         try { await sc(); } catch (e) { log.warn("saveCreds al vincular: " + (e?.message || e)); }
-        saveTimer = null;
       }
 
       if (connection === "close") {
@@ -550,18 +535,32 @@ export function connectSocket(engine, opts) {
         // aviso) espera aquí y sale al reconectar. Antes no se pausaba:
         // esos envíos morían contra el socket cerrado y se perdían.
         try { engine.getSendQueue()?.pause?.("conexion"); } catch {}
+        if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = null; }
 
         remove(s);
 
+        const code = lastDisconnect?.error?.output?.statusCode || 0;
+        const motivoInicial = clasificarDesconexion(code, DisconnectReason);
+        if (motivoInicial === "revision") {
+          sesionRequiereRevision = true;
+          isRestarting = false;
+          watchdog?.stop?.();
+          health.recordError(new Error("session_requires_review"));
+          log.error("Sesión requiere intervención administrativa (" + code + "). Credenciales conservadas; reconexión automática detenida.");
+          // No guardar, borrar, mover ni renombrar credenciales tras esta señal.
+          const cierre = setTimeout(cerrarAuth, 3000);
+          if (typeof cierre.unref === "function") cierre.unref();
+          return;
+        }
+
         // Última escritura de credenciales y cierre diferido de la auth.db
         // (da margen a escrituras en vuelo del socket que acaba de caer).
-        clearTimeout(saveTimer);
-        try { await sc(); } catch (e) { log.warn("saveCreds al cerrar: " + (e?.message || e)); }
-        saveTimer = null;
+        if (!authCerrada) {
+          try { await sc(); } catch (e) { log.warn("saveCreds al cerrar: " + (e?.message || e)); }
+        }
         const cierre = setTimeout(cerrarAuth, 3000);
         if (typeof cierre.unref === "function") cierre.unref();
 
-        const code = lastDisconnect?.error?.output?.statusCode || 0;
         const registered = !!state.creds.registered;
 
         // B1.2: el riesgo solo cuenta con sesión YA válida. Durante el
@@ -588,26 +587,9 @@ export function connectSocket(engine, opts) {
           log.warn(corte.pista);
         }
 
-        if ([DisconnectReason.loggedOut, DisconnectReason.forbidden,
-             DisconnectReason.multideviceMismatch].includes(code)) {
-          log.warn("Desvinculado (" + code + ") — limpiando sesión");
-          health.recordError(new Error("logged_out"));
-          clearSession();
-          process.exit(1);
-        }
-
-        if (code === DisconnectReason.connectionReplaced) {
-          log.warn("Conexión reemplazada.");
+        if (motivoInicial === "reemplazada") {
+          log.warn("Conexión reemplazada; no se reconecta automáticamente.");
           isRestarting = false;
-          return;
-        }
-
-        // ── Sesión inválida: limpiar automáticamente ──
-        if (code === DisconnectReason.badSession) {
-          log.warn("Sesión inválida — limpiando y reconectando...");
-          clearSession();
-          isRestarting = false;
-          scheduleReconnect(3000);
           return;
         }
 
@@ -617,15 +599,13 @@ export function connectSocket(engine, opts) {
           const now = Date.now();
           restartStreak = (now - lastRestartAt < 60000) ? restartStreak + 1 : 1;
           lastRestartAt = now;
-          if (restartStreak >= 6) {
-            if (registered) {
-              log.fatal("Demasiados restarts seguidos (c0) — saliendo SIN borrar la sesión");
-              log.warn("Si el fallo persiste al reiniciar, borra la carpeta Sessions/Owner para vincular de nuevo.");
-              process.exit(1);
-            }
-            log.fatal("Demasiados restarts seguidos (c0) — limpiando sesión");
-            clearSession();
-            process.exit(1);
+          if (clasificarDesconexion(code, DisconnectReason, restartStreak) === "revision") {
+            sesionRequiereRevision = true;
+            isRestarting = false;
+            watchdog?.stop?.();
+            health.recordError(new Error("session_requires_review"));
+            log.error("Demasiados reinicios de sesión; reconexión detenida. Credenciales conservadas; requiere intervención administrativa.");
+            return;
           }
           const rDelays = [1000, 1000, 15000, 60000, 300000];
           const rDelay = rDelays[Math.min(restartStreak - 1, rDelays.length - 1)];
@@ -674,7 +654,7 @@ export function connectSocket(engine, opts) {
       pairingTimer = setTimeout(async () => {
         pairingTimer = null;
         try {
-          if (!state.creds.registered) {
+          if (!state.creds.registered && !sesionRequiereRevision && !authCerrada) {
             const phone = pairingNumber.replace(/\D/g, "");
             // Marca de diagnóstico: deja constancia en la consola de que el
             // bot SÍ llegó a pedir el código. La usa scripts/verificar-pairing.js,
