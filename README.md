@@ -15,9 +15,9 @@
 **El bot de WhatsApp que sobrevive a los cortes de red, no pierde tu sesión
 y reduce el riesgo de bloqueo.**
 
-[Anti-ban](#el-anti-ban-por-dentro) · [Comandos](#los-comandos) ·
-[Galería](#galería) · [Instalación](#instalación) · [Guías](#las-guías) ·
-[Conector](#el-conector) · [LID](#identidades-lid) ·
+[Anti-ban](#el-anti-ban-por-dentro) · [Seguridad](#seguridad-y-resistencia) ·
+[Comandos](#los-comandos) · [Galería](#galería) · [Instalación](#instalación) ·
+[Guías](#las-guías) · [Conector](#el-conector) · [LID](#identidades-lid) ·
 [Licencia](#licencia-y-marca) · [Shin-Lab](https://github.com/riokuroxi-svg/Shin-Lab) ·
 [Apoyar](#apoyar-el-proyecto)
 
@@ -73,6 +73,38 @@ Si ves esos parámetros exactos en otro bot, es una obra derivada de Shin-MD y
 debe cumplir la atribución de la Sección 7 del `NOTICE`.
 
 </details>
+
+<h2 id="seguridad-y-resistencia">🛡️ Seguridad y resistencia</h2>
+
+El motor se ha auditado y se ha sometido a carga hostil hasta romperlo. No se
+rompió: aguantó **más de 240.000 mensajes en 30 segundos** —8.109 por
+segundo, muy por encima de cualquier grupo real— **sin colapsar y sin perder
+memoria**. En la prueba de resistencia sostenida fueron 351.304 mensajes más y
+la memoria terminó *por debajo* de donde empezó.
+
+<img src="docs/assets/pastel/seguridad.svg" alt="Tabla: lo que se probó, cómo se probó y qué salió" width="100%">
+
+| Lo que se probó | Cómo | Resultado |
+|---|---|---|
+| inundación sin frenos | 60 clientes a la vez, 30 s | 243.278 mensajes · **0 fatales** · RSS sin crecer |
+| resistencia sostenida | 60 s de ataque sin parar | 351.304 mensajes · memoria **estable**, sin fuga |
+| amplificación de spam | repetir un comando que el bot rechaza | de **1 respuesta por mensaje a 1 cada 30 s** |
+| dependencia troyanizada | cambiar un archivo de `node_modules` a mano | **se detecta al arrancar** |
+
+Dos defensas que no existían y ahora sí:
+
+- **Sello de Integridad de Dependencias.** El bot guarda una huella de su
+  `node_modules` y la compara en cada arranque (`node index.js --sellar` la
+  fija). Si una dependencia cambia sin que la hayas cambiado tú —el patrón
+  exacto de un paquete comprometido— lo dice en la consola y en `/health`. Con
+  `SHIN_INTEGRIDAD=estricto`, además, se niega a arrancar.
+- **Mitigación de amplificación.** El atajo de los comandos de dueño solo vale
+  para el dueño real: antes, un desconocido que insistía con un comando que no
+  podía usar conseguía una respuesta del bot por cada mensaje suyo.
+
+La suite lo cubre: las **614/614 pruebas** (73 archivos) que vigilan esto,
+incluidas las regresiones de cada fallo. Si un commit rompe alguna, GitHub lo
+marca.
 
 <h2 id="los-comandos">Los 216 comandos</h2>
 

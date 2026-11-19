@@ -36,7 +36,7 @@ para y dice la orden exacta que hay que escribir.
 | `boot/` | 1 | El arranque: licencia, banner, vinculación y carga de servicios. Un solo archivo, en orden. |
 | `cmds/` | 222 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
 | `data/` | — | La base de datos del bot y su respaldo JSON. Se crea sola. |
-| `docs/` | 95 | Documentación para quien lee y para quien toca el código. |
+| `docs/` | 96 | Documentación para quien lee y para quien toca el código. |
 | `logs/` | — | El registro diario del bot. |
 | `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
 | `scripts/` | 18 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
