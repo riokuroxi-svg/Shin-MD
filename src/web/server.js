@@ -24,6 +24,25 @@ function esHostLoopback(host) {
   return false;
 }
 
+/**
+ * Estado de la cadena de suministro para /health: si el árbol de
+ * node_modules coincide con el sello, o qué cambió. Sin sello, lo dice.
+ */
+function integridadParaSalud() {
+  const r = globalThis.__shinIntegridad;
+  if (!r) return { estado: "sin-datos", nota: "la comprobación no corrió en este arranque" };
+  if (r.estado === "igual") return { estado: "ok", paquetes: r.paquetes, selloEn: r.selloEn };
+  if (r.estado === "sin-sello") return { estado: "sin-sello", nota: "node index.js --sellar" };
+  if (r.estado === "sellado") return { estado: "ok", paquetes: r.paquetes };
+  return {
+    estado: "cambio",
+    cambiados: (r.cambiados || []).length,
+    nuevos: (r.nuevos || []).length,
+    faltan: (r.faltan || []).length,
+    ejemplos: [...(r.cambiados || []), ...(r.nuevos || [])].slice(0, 5),
+  };
+}
+
 export function createWebServer(engine, opts) {
   opts = opts || {};
   const port = opts.port !== undefined
@@ -149,6 +168,9 @@ export function createWebServer(engine, opts) {
       groups: typeof engine.getGroupCount === "function" ? engine.getGroupCount() : 0,
       memoryMB: Math.round(process.memoryUsage().rss / 1048576),
       diagnostico: opts.salud ? opts.salud.veredicto().resumen : null,
+      // Cadena de suministro: un árbol de dependencias cambiado no debe
+      // ser invisible desde fuera.
+      integridad: integridadParaSalud(),
     });
   });
 

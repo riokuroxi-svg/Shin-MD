@@ -36,6 +36,7 @@ import { installLogFilter } from "../src/services/log-filter.js";
 import { installAntiCrash } from "../src/services/anti-crash.js";
 import { createTempCleaner } from "../src/services/temp-cleaner.js";
 import { createMemoryMonitor } from "../src/services/memory-monitor.js";
+import { pasoDeIntegridad } from "../src/services/integridad-arranque.js";
 
 // Consola limpia (sin el ruido de cifrado de libsignal) y que un corte de
 // red suelto no tumbe al bot. Van antes de conectar con WhatsApp.
@@ -66,6 +67,15 @@ printBanner();
   }
   // La versión y el autor ya los dice el banner: aquí solo se comprueba
   // que la copia trae lo que la licencia exige.
+}
+
+// ─── Cadena de suministro ───────────────────────────────────────
+// Compara node_modules con el sello guardado (node index.js --sellar).
+// Un archivo que cambió sin que tú lo cambiaras es el patrón de una
+// dependencia comprometida; esto lo convierte en un aviso visible en vez
+// de en un silencio. Con SHIN_INTEGRIDAD=estricto, además, no arranca.
+if (!pasoDeIntegridad(process.argv.slice(2))) {
+  process.exit(0);
 }
 
 // Red de seguridad del conector: el npm install aplica los parches a

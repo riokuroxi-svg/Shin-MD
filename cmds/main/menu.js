@@ -52,13 +52,31 @@ export default {
     const { cats, seenNames } = collectCategories(commands, { exclude: ["menu"] });
     const sub = (ctx.arg || "").toLowerCase().trim();
 
+    // El menú se reconstruye entero (222 comandos, cajas, badges) en cada
+    // invocación y el comando es `priority: true`: un atacante que lo repite
+    // obliga a ese trabajo por cada mensaje, saltándose el tope diario.
+    // Se cachea 60 s POR USUARIO (el menú lleva su nombre, su rango y su
+    // número: cachearlo por chat se los enseñaría a otro). Solo se cachean
+    // las respuestas de TEXTO: las tarjetas llevan un token de un solo uso.
+    const __claveMenu = "menu:" + (ctx.senderId || ctx.chatId || "?") + ":" + prefix + ":" + sub + ":" + (ctx.pushName || "");
+    const __cache = globalThis.__shinMenuCache || (globalThis.__shinMenuCache = new Map());
+    const __hit = __cache.get(__claveMenu);
+    if (__hit && !__hit.esTarjeta && Date.now() - __hit.ts < 60000) return __hit.valor;
+    const __guardarMenu = (valor, esTarjeta) => {
+      try {
+        if (__cache.size > 400) __cache.clear();
+        __cache.set(__claveMenu, { valor, ts: Date.now(), esTarjeta: !!esTarjeta });
+      } catch { /* la caché nunca debe tumbar el menú */ }
+      return valor;
+    };
+
     // Submenú específico si se pasa argumento (.menu descargas)
     if (sub) {
       const matchedCat = Object.keys(CAT_LABELS).find(c => c === sub || sub.startsWith(c) || c.startsWith(sub)) || sub;
       const list = cats.get(matchedCat) || [];
 
       if (list.length === 0) {
-        return `❌ La categoría *${sub}* no existe o está vacía.\n\n💡 *Categorías disponibles:*\n> ${CAT_ORDER.filter(c => cats.has(c)).join(", ")}`;
+        return __guardarMenu(`❌ La categoría *${sub}* no existe o está vacía.\n\n💡 *Categorías disponibles:*\n> ${CAT_ORDER.filter(c => cats.has(c)).join(", ")}`, false);
       }
 
       const emoji = CATEGORY_EMOJIS[matchedCat] || "📁";
@@ -69,9 +87,9 @@ export default {
       const banner = getRandomBanner();
       if (banner) {
         await sock.sendMessage(ctx.chatId, { image: banner, caption: text }, { quoted: ctx.full });
-        return null;
+        return __guardarMenu(null, true);
       }
-      return text;
+      return __guardarMenu(text, false);
     }
 
     // Recuperar variante de menú configurada usando JID normalizado del bot

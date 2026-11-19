@@ -226,12 +226,17 @@ if (!_DatabaseSync) {
         return { changes: 0, lastInsertRowid: 0 };
       }
 
-      // INSERT OR REPLACE / INSERT INTO
+      // INSERT / INSERT OR REPLACE / INSERT OR IGNORE
       if (lower.startsWith("insert")) {
-        const m = sql.match(/insert\s+(?:or\s+replace\s+into|into)\s+([a-zA-Z0-9_]+)\s*\(([^)]+)\)\s*values/i);
+        // OR IGNORE faltaba: ginko-db crea las filas con
+        // `INSERT OR IGNORE INTO g_users (id) VALUES (?)`, así que sin esta
+        // rama la fila NO se creaba y getUser/getChat/getSettings devolvían
+        // undefined para siempre (el bot parecía sano y perdía los datos).
+        const m = sql.match(/insert\s+(?:or\s+(replace|ignore)\s+into|into)\s+([a-zA-Z0-9_]+)\s*\(([^)]+)\)\s*values/i);
         if (m) {
-          const tableName = m[1];
-          const cols = m[2].split(",").map(c => c.trim().toLowerCase());
+          const esIgnore = /or\s+ignore/i.test(sql);
+          const tableName = m[2];
+          const cols = m[3].split(",").map(c => c.trim().toLowerCase());
           const table = this._getTable(tableName);
           // Parsear la lista VALUES para distinguir literales (1, 'x', NULL)
           // de placeholders (?). Antes se mapeaban params por posición de
@@ -274,6 +279,10 @@ if (!_DatabaseSync) {
             row[pk[0]] = max + 1;
           }
           const keyVal = pk.map(c => String(row[c])).join("\u0000");
+          if (esIgnore && table.has(keyVal)) {
+            // Como SQLite: la fila existente se queda como está.
+            return { changes: 0, lastInsertRowid: 0 };
+          }
           table.set(keyVal, row);
           this._save();
           return { changes: 1, lastInsertRowid: table.size };
@@ -313,6 +322,63 @@ if (!_DatabaseSync) {
           return rows;
         }
         return mode === "all" ? [] : undefined;
+      }
+
+      // UPDATE ... SET col = ?, col2 = valor WHERE ...
+      // Faltaba por completo: `db.prepare("UPDATE g_users SET coins = ? WHERE
+      // id = ?").run(...)` devolvía null y NO escribía nada. En el respaldo
+      // JSON eso significa que el bot guardaba en el vacío (economía, XP,
+      // warnings, ajustes). Se implementa con el mismo lector de condiciones
+      // que SELECT/DELETE, respetando los literales del SET.
+      if (lower.startsWith("update")) {
+        const m = sql.match(/update\s+([a-zA-Z0-9_]+)\s+set\s+(.+?)(?:\s+where\s+(.+))?\s*$/i);
+        if (m) {
+          const tableName = m[1];
+          const setClause = m[2].trim();
+          const whereClause = m[3] ? m[3].trim() : "";
+          const table = this._getTable(tableName);
+
+          // "a = ?, b = 0, c = 'x'" → [[a, "?"], [b, "0"], [c, "'x'"]]
+          const asignaciones = [];
+          let pIdx = 0;
+          for (const trozo of setClause.split(",")) {
+            const am = trozo.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+?)\s*$/);
+            if (!am) continue;
+            const col = am[1].toLowerCase();
+            const tok = am[2];
+            let valor;
+            if (tok === "?") {
+              valor = params[pIdx] !== undefined ? params[pIdx] : null;
+              pIdx++;
+            } else if (/^'.*'$/.test(tok)) {
+              valor = tok.slice(1, -1);
+            } else if (/^-?\d+(\.\d+)?$/.test(tok)) {
+              valor = Number(tok);
+            } else if (/^null$/i.test(tok)) {
+              valor = null;
+            } else if (/^(true|false)$/i.test(tok)) {
+              valor = /^true$/i.test(tok) ? 1 : 0;
+            } else {
+              valor = params[pIdx] !== undefined ? params[pIdx] : null;
+              pIdx++;
+            }
+            asignaciones.push([col, valor]);
+          }
+
+          const conds = whereClause ? leerCondiciones(whereClause, params.slice(pIdx)) : [];
+          let changes = 0;
+          for (const [k, fila] of table.entries()) {
+            const coincide = conds.length
+              ? conds.every(([col, val]) => String(fila[col]) === String(val))
+              : true;
+            if (!coincide) continue;
+            for (const [col, valor] of asignaciones) fila[col] = valor;
+            table.set(k, fila);
+            changes++;
+          }
+          if (changes) this._save();
+          return { changes, lastInsertRowid: 0 };
+        }
       }
 
       // DELETE

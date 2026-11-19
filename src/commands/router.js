@@ -27,6 +27,19 @@ export const BOT_PREFIXES = process.env.BOT_PREFIX
 
 export const BOT_PREFIX = BOT_PREFIXES[0] || ".";
 
+// Avisos de "no tienes permiso": uno cada 30 s por chat+usuario. Sin esto,
+// cada mensaje denegado produce una respuesta (amplificación).
+const avisosDenegado = new Map();
+function obtenerCacheAvisos() {
+  return {
+    get(k) { const v = avisosDenegado.get(k); if (v && Date.now() - v.ts < 30000) return v; if (v) avisosDenegado.delete(k); return null; },
+    set(k, _v, ttl) {
+      if (avisosDenegado.size > 500) avisosDenegado.clear();
+      avisosDenegado.set(k, { ts: Date.now(), ttl });
+    },
+  };
+}
+
 const selfModeCache = new Map();
 function isSelfMode(sock) {
   const botId = botJid(sock);
@@ -200,13 +213,23 @@ export function createRouter(engine, opts) {
         }
       }
 
-      // Cooldown / antispam
-      if (cooldown.check({ senderId: ctx.senderId, cmd, text: ctx.text })) return;
+      // Cooldown / antispam. `esDueno` es lo que decide si el atajo de
+      // ownerOnly aplica: un desconocido que invoca un comando de dueño
+      // se frena como cualquier otro (antes no se frenaba nunca).
+      if (cooldown.check({ senderId: ctx.senderId, cmd, text: ctx.text, esDueno: isOwnerUser })) return;
 
-      // Permisos
+      // Permisos. El rechazo NO se responde a cada mensaje: un atacante
+      // que insiste convertiría esto en un amplificador (1 entrada = 1
+      // salida). Se avisa una vez cada 30 s por chat, y el resto se
+      // ignora en silencio.
       const denied = await checkPermissions(sock, ctx, cmd, engine);
       if (denied) {
-        await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
+        const claveAviso = "denegado:" + ctx.chatId + ":" + (ctx.senderId || "?");
+        const cacheAvisos = obtenerCacheAvisos();
+        if (!cacheAvisos.get(claveAviso)) {
+          cacheAvisos.set(claveAviso, 1, 30000);
+          await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
+        }
         return;
       }
 

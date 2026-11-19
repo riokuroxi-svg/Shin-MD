@@ -102,12 +102,26 @@ test("el brain bloquea una ráfaga que el techo de 10/min dejaba pasar", () => {
   assert.equal(bloqueado, true, "30 mensajes en 1,5s es una ráfaga evidente");
 });
 
-test("el dueño no se ve afectado por ninguna de las dos capas", () => {
+// El atajo de ownerOnly es SOLO para el dueño. Antes este test pasaba 40
+// comprobaciones sin decir quién era el dueño: codificaba el propio bug
+// (cualquiera que invocara un comando de dueño se saltaba Brain y el techo,
+// y el router le contestaba el rechazo a cada mensaje: 1 entrada = 1 salida).
+test("el dueño real no se ve afectado por ninguna de las dos capas", () => {
   const cd = createCooldown();
   const cmd = { name: "menu", cooldown: 0, ownerOnly: true };
   for (let i = 0; i < 40; i++) {
-    assert.equal(cd.check({ senderId: "dueño", cmd, text: ".menu" }), false);
+    assert.equal(cd.check({ senderId: "dueño", cmd, text: ".menu", esDueno: true }), false);
   }
+});
+
+test("un desconocido con un comando ownerOnly SÍ se frena (sin amplificación)", () => {
+  const cd = createCooldown();
+  const cmd = { name: "get", cooldown: 0, ownerOnly: true };
+  let bloqueados = 0;
+  for (let i = 0; i < 40; i++) {
+    if (cd.check({ senderId: "atacante", cmd, text: ".get http://x" + i })) bloqueados++;
+  }
+  assert.ok(bloqueados > 0, "sin ser dueño, el antispam y el brain deben aplicar igual");
 });
 
 test("SHIN_BRAIN=0 deja el antispam de siempre, sin el brain", () => {

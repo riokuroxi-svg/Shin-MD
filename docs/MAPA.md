@@ -41,14 +41,14 @@ para y dice la orden exacta que hay que escribir.
 | `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
 | `scripts/` | 18 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
 | `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
-| `src/` | 94 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
-| `test/` | 73 | Las pruebas. Una por tema; cada archivo corre solo. |
+| `src/` | 96 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
+| `test/` | 74 | Las pruebas. Una por tema; cada archivo corre solo. |
 | `tools/` | 13 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
 | `src/commands/` | 6 | El motor de comandos: cargador, router, contexto de mensaje y permisos. |
 | `src/core/` | 6 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
-| `src/lib/` | 62 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
+| `src/lib/` | 63 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
 | `src/network/` | 2 | Cola de salida y salud de la red (reintentos, cortes, presión). |
-| `src/services/` | 11 | Servicios con estado: base de datos del bot, economía, descargas, registro, vigía, consola. |
+| `src/services/` | 12 | Servicios con estado: base de datos del bot, economía, descargas, registro, vigía, consola. |
 | `src/storage/` | 5 | Dónde se guarda todo: SQLite, migraciones, caché y memoria de identidades. |
 | `src/web/` | 1 | El panel HTTP local del bot. |
 
@@ -57,7 +57,7 @@ número a propósito: se llenan al correr el bot y al pasar las pruebas, así qu
 contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
 y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
-Son **222 archivos de comando**, **62 utilidades** en `src/lib`, **11 servicios** y **72 archivos de prueba**.
+Son **222 archivos de comando**, **63 utilidades** en `src/lib`, **12 servicios** y **73 archivos de prueba**.
 
 ## El viaje de un mensaje
 
