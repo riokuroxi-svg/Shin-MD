@@ -20,7 +20,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import axios from "axios";
-import { getAudioUrl } from "#downloader";
+import { getAudioUrl, invalidateAudioUrl } from "#downloader";
 import { searchYouTube, getVideoInfoById } from "#lib/youtubeSearch";
 import { fastFetch, globalFetchCache, isYtdlpAvailable, resolveYtdlpBinary } from "#lib/fastFetch";
 import { downloadAudioSourceYtdlp, processMp3ForWhatsApp, isMp3Valid } from "#lib/mp3Utils";
@@ -212,8 +212,12 @@ async function descargarAudioFuenteYtdlp(url) {
   return { buffer: src.buffer, origen: "raw-local", ext: src.ext };
 }
 
-async function descargarAudioSmart(job) {
-  // 1. Probar yt-dlp local si está disponible
+export async function descargarAudioSmart(job, deps = {}) {
+  const resolver = deps.getAudioUrl || getAudioUrl;
+  const fetchStream = deps.fastFetch || fastFetch;
+  const invalidar = deps.invalidateAudioUrl || invalidateAudioUrl;
+
+  // 1. Probar yt-dlp local si está disponible.
   if (ytdlpDisponible && job.url) {
     try {
       const src = await descargarAudioFuenteYtdlp(job.url);
@@ -221,18 +225,47 @@ async function descargarAudioSmart(job) {
     } catch {}
   }
 
-  // 2. Probar Turbo Downloader CDN (Spotify Izuka, Nexray, SoundCloud Progressive)
+  // 2. Un CDN puede entregar una URL firmada que ya caducó o responder 502.
+  //    Invalida esa URL y prueba una vez con cada proveedor alternativo.
   const query = job.title ? `${job.title} ${job.channel || ""}` : (job.url || "");
-  const audioData = await getAudioUrl(query);
-  if (audioData?.url) {
-    const res = await fastFetch(audioData.url, { timeout: 20000 });
-    if (!res.ok) throw new Error(`HTTP ${res.status} al descargar stream`);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length < 20 * 1024) throw new Error("Audio corrupto o muy pequeño");
-    return { buffer, origen: audioData.provider || "turbo-cdn", seconds: audioData.seconds || 0 };
+  const excluidos = new Set();
+  let ultimoError = null;
+
+  for (let intento = 0; intento < 3; intento++) {
+    let audioData;
+    try {
+      audioData = await resolver(query, {
+        refresh: intento > 0,
+        excludeProviders: [...excluidos],
+      });
+    } catch (error) {
+      if (!ultimoError) ultimoError = error;
+      break;
+    }
+
+    if (!audioData?.url) break;
+    const proveedor = audioData.provider || `fuente-${intento + 1}`;
+
+    try {
+      const res = await fetchStream(audioData.url, { timeout: 20000 });
+      if (!res?.ok) {
+        const status = Number(res?.status) || 0;
+        try { await res?.body?.cancel(); } catch {}
+        throw new Error(`HTTP ${status || "desconocido"} al descargar stream`);
+      }
+
+      const buffer = Buffer.from(await res.arrayBuffer());
+      if (buffer.length < 20 * 1024) throw new Error("Audio corrupto o muy pequeño");
+      return { buffer, origen: proveedor || "turbo-cdn", seconds: audioData.seconds || 0 };
+    } catch (error) {
+      ultimoError = error;
+      excluidos.add(proveedor);
+      try { await invalidar(query); } catch {}
+      if (intento < 2) log.warn(`[play] stream de ${proveedor} falló (${error.message}); probando otra fuente`);
+    }
   }
 
-  throw new Error("No se pudo obtener el audio de ninguna fuente");
+  throw ultimoError || new Error("No se pudo obtener el audio de ninguna fuente");
 }
 
 async function prepararAudioProcesado(job) {

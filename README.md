@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 606 pruebas" width="100%">
+<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 608 pruebas" width="100%">
 
 <br>
 
-<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="606/606 pruebas"></a>
+<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="608/608 pruebas"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/comandos.svg" height="50" alt="216 comandos"></a>
 <a href="#licencia-y-marca"><img src="docs/assets/perfil/insignias/licencia.svg" height="50" alt="Licencia AGPL-3.0-only"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/node.svg" height="50" alt="Node 22.5 o superior"></a>
@@ -23,7 +23,7 @@ y reduce el riesgo de bloqueo.**
 
 </div>
 
-<img src="docs/assets/perfil/cifras.svg" alt="606/606 pruebas en 72 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
+<img src="docs/assets/perfil/cifras.svg" alt="608/608 pruebas en 72 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
 
 <img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
 
@@ -302,7 +302,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 606 pruebas
+npm test               # las 608 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot
