@@ -180,7 +180,7 @@ Vincular con número de teléfono**, y tecleas el código.
 ╭ en línea ──────────────────────────────────────────────╮
 │ cuenta   Shin-MD                                       │
 │ versión  v3.7.9                                        │
-│ comandos 213                                           │
+│ comandos 216                                           │
 │ prefijo  .                                             │
 │ panel    http://127.0.0.1:3000                         │
 ╰────────────────────────────────────────────────────────╯

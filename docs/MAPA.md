@@ -36,17 +36,17 @@ para y dice la orden exacta que hay que escribir.
 | `boot/` | 1 | El arranque: licencia, banner, vinculación y carga de servicios. Un solo archivo, en orden. |
 | `cmds/` | 222 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
 | `data/` | — | La base de datos del bot y su respaldo JSON. Se crea sola. |
-| `docs/` | 96 | Documentación para quien lee y para quien toca el código. |
+| `docs/` | 97 | Documentación para quien lee y para quien toca el código. |
 | `logs/` | — | El registro diario del bot. |
 | `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
-| `scripts/` | 18 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
+| `scripts/` | 19 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
 | `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
-| `src/` | 96 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
-| `test/` | 74 | Las pruebas. Una por tema; cada archivo corre solo. |
+| `src/` | 98 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
+| `test/` | 77 | Las pruebas. Una por tema; cada archivo corre solo. |
 | `tools/` | 13 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
 | `src/commands/` | 6 | El motor de comandos: cargador, router, contexto de mensaje y permisos. |
 | `src/core/` | 6 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
-| `src/lib/` | 63 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
+| `src/lib/` | 65 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
 | `src/network/` | 2 | Cola de salida y salud de la red (reintentos, cortes, presión). |
 | `src/services/` | 12 | Servicios con estado: base de datos del bot, economía, descargas, registro, vigía, consola. |
 | `src/storage/` | 5 | Dónde se guarda todo: SQLite, migraciones, caché y memoria de identidades. |
@@ -57,7 +57,7 @@ número a propósito: se llenan al correr el bot y al pasar las pruebas, así qu
 contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
 y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
-Son **222 archivos de comando**, **63 utilidades** en `src/lib`, **12 servicios** y **73 archivos de prueba**.
+Son **222 archivos de comando**, **65 utilidades** en `src/lib`, **12 servicios** y **76 archivos de prueba**.
 
 ## El viaje de un mensaje
 

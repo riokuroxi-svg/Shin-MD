@@ -24,7 +24,9 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export const VENTANA_MS = 120_000;
 export const MAX_CAIDAS = 5;
@@ -78,7 +80,13 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
     // Capturando, se lee aquí para pintarlo dentro del panel; si nadie
     // leyera el tubo, el bot se quedaría clavado al llenarse.
     const flujo = capturar ? "pipe" : "inherit";
-    hijo = spawn(process.execPath, [entrada, ...argumentos], {
+    // El preload de seguridad va ANTES del bot: en ESM los imports del
+    // entry ya se ejecutaron cuando su código empieza, así que una
+    // comprobación que viva dentro del bot llega tarde. Con `--import`
+    // el árbol se revisa antes de cargar `baileys`.
+    const preload = path.join(raiz, "scripts", "preload-integridad.mjs");
+    const previos = fs.existsSync(preload) ? ["--import", pathToFileURL(preload).href] : [];
+    hijo = spawn(process.execPath, [...previos, entrada, ...argumentos], {
       cwd: raiz,
       stdio: [capturar ? "ignore" : "inherit", flujo, flujo, "ipc"],
       env: { ...process.env, ...env, SHIN_VIGILADO: "1" },

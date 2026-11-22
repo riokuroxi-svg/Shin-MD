@@ -70,12 +70,20 @@ printBanner();
 }
 
 // ─── Cadena de suministro ───────────────────────────────────────
-// Compara node_modules con el sello guardado (node index.js --sellar).
-// Un archivo que cambió sin que tú lo cambiaras es el patrón de una
-// dependencia comprometida; esto lo convierte en un aviso visible en vez
-// de en un silencio. Con SHIN_INTEGRIDAD=estricto, además, no arranca.
-if (!pasoDeIntegridad(process.argv.slice(2))) {
-  process.exit(0);
+// Las cinco capas del blindaje viven en src/services/integridad-arranque.js.
+// Normalmente ya corrieron en el preload (`--import`), o sea ANTES de que
+// este archivo cargara `baileys`; aquí solo se confirma el resultado.
+// Si alguien arranca con `node index.js` a secas, esta es la última red:
+// comprueba igual, pero ya con las dependencias cargadas (por eso el
+// camino bueno es `npm start`, que sí pone el preload).
+//   · `--sellar` fija la foto actual y sale, sin arrancar el bot.
+//   · SHIN_INTEGRIDAD=estricto: un árbol cambiado no arranca (falla cerrado).
+{
+  const __args = process.argv.slice(2);
+  const __sella = __args.includes("--sellar") || __args.includes("--seal");
+  if (!pasoDeIntegridad(__args)) {
+    process.exit(__sella ? 0 : 1);
+  }
 }
 
 // Red de seguridad del conector: el npm install aplica los parches a

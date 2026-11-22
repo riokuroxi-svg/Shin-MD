@@ -25,10 +25,28 @@ function esHostLoopback(host) {
 }
 
 /**
- * Estado de la cadena de suministro para /health: si el árbol de
- * node_modules coincide con el sello, o qué cambió. Sin sello, lo dice.
+ * Estado del blindaje para /health: las cinco capas, con lo que encontró
+ * cada una. Un árbol cambiado o una dependencia con señales raras no debe
+ * ser invisible desde fuera del bot.
  */
 function integridadParaSalud() {
+  const s = globalThis.__shinSeguridad;
+  if (s) {
+    return {
+      estado: s.estado,
+      modo: s.modo,
+      ok: s.ok,
+      bloquea: s.bloquea,
+      motivos: s.motivos,
+      capas: s.capas,
+      hallazgos: (s.hallazgos || []).slice(0, 10).map((h) => ({
+        regla: h.regla,
+        gravedad: h.gravedad,
+        archivo: h.archivo,
+      })),
+    };
+  }
+  // Compatibilidad con el formato viejo (por si el preload no corrió).
   const r = globalThis.__shinIntegridad;
   if (!r) return { estado: "sin-datos", nota: "la comprobación no corrió en este arranque" };
   if (r.estado === "igual") return { estado: "ok", paquetes: r.paquetes, selloEn: r.selloEn };

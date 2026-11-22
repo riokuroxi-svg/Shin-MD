@@ -45,6 +45,10 @@ audit/
 # Copia temporal generada para revisar el README.
 .vista-readme-*.html
 
+# Sello de integridad y su clave HMAC: son de ESTA instalación, no del repo.
+data/.shin-integridad.json
+data/.shin-clave
+
 # Installer state (one per installation, never committed)
 .shin-install
 .npm-instalar.log

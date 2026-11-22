@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 614 pruebas" width="100%">
+<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 660 pruebas" width="100%">
 
 <br>
 
-<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="614/614 pruebas"></a>
+<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="660/660 pruebas"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/comandos.svg" height="50" alt="216 comandos"></a>
 <a href="#licencia-y-marca"><img src="docs/assets/perfil/insignias/licencia.svg" height="50" alt="Licencia AGPL-3.0-only"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/node.svg" height="50" alt="Node 22.5 o superior"></a>
@@ -23,7 +23,7 @@ y reduce el riesgo de bloqueo.**
 
 </div>
 
-<img src="docs/assets/perfil/cifras.svg" alt="614/614 pruebas en 73 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
+<img src="docs/assets/perfil/cifras.svg" alt="660/660 pruebas en 76 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
 
 <img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
 
@@ -82,6 +82,12 @@ segundo, muy por encima de cualquier grupo real— **sin colapsar y sin perder
 memoria**. En la prueba de resistencia sostenida fueron 351.304 mensajes más y
 la memoria terminó *por debajo* de donde empezó.
 
+**Resistente no es invulnerable**, y el README lo dice así a propósito: ningún
+bot sobre WhatsApp es inmune a que le suspendan la cuenta, y ningún detector de
+lo que se ejecuta dentro de la máquina puede prometer que lo verá todo. Lo que
+sí se puede afirmar es que el motor aguanta esta carga, que los fallos que se
+encontraron están cerrados y que cada uno tiene su prueba.
+
 <img src="docs/assets/pastel/seguridad.svg" alt="Tabla: lo que se probó, cómo se probó y qué salió" width="100%">
 
 | Lo que se probó | Cómo | Resultado |
@@ -89,20 +95,66 @@ la memoria terminó *por debajo* de donde empezó.
 | inundación sin frenos | 60 clientes a la vez, 30 s | 243.278 mensajes · **0 fatales** · RSS sin crecer |
 | resistencia sostenida | 60 s de ataque sin parar | 351.304 mensajes · memoria **estable**, sin fuga |
 | amplificación de spam | repetir un comando que el bot rechaza | de **1 respuesta por mensaje a 1 cada 30 s** |
-| dependencia troyanizada | cambiar un archivo de `node_modules` a mano | **se detecta al arrancar** |
+| dependencia troyanizada | cambiar un archivo de `node_modules` a mano | **se detecta al arrancar** y, en modo estricto, **no deja arrancar** |
 
-Dos defensas que no existían y ahora sí:
+### El blindaje de dependencias, en cinco capas
 
-- **Sello de Integridad de Dependencias.** El bot guarda una huella de su
-  `node_modules` y la compara en cada arranque (`node index.js --sellar` la
-  fija). Si una dependencia cambia sin que la hayas cambiado tú —el patrón
-  exacto de un paquete comprometido— lo dice en la consola y en `/health`. Con
-  `SHIN_INTEGRIDAD=estricto`, además, se niega a arrancar.
+Esto es lo único de esta sección que conviene leer entero, porque es donde es
+fácil que te vendan humo:
+
+> **El Sello de Integridad no es un antivirus.** Es un detector de integridad
+> con análisis encima: compara lo instalado con una foto anterior y busca
+> señales concretas. Detecta cambios y da evidencia; no sabe de intenciones.
+
+Y, sobre todo: **por defecto solo avisa**. El bot arranca igual. Solo se niega a
+iniciar si pones `SHIN_INTEGRIDAD=estricto`.
+
+| Capa | Qué hace | Dónde |
+|---|---|---|
+| **1 · Integridad** | huella sha256 de **todos** los archivos de `node_modules`, sin extensiones perdonadas ni carpetas ignoradas | `src/lib/integridad.js` |
+| **2 · Anomalías** | lo instalado contra `package-lock.json`: registro ajeno, HTTP sin cifrar, paquetes que nadie declaró, identidad cambiada, scripts de instalación fuera de la lista explicada | `src/lib/analisis-dependencias.js` |
+| **3 · Análisis** | reglas de contenido sobre lo que cambió: `eval` sobre base64, webhooks de exfiltración, `curl \| sh`, `process.env` saliendo fuera, dependencias que leen la sesión de WhatsApp | idem |
+| **4 · Prevención** | la comprobación corre con `--import` **antes** de cargar `baileys`, no después | `scripts/preload-integridad.mjs` |
+| **5 · Auditoría** | cada arranque deja una línea JSON en `logs/seguridad-AAAA-MM-DD.jsonl` y un resumen en `/health` | `src/lib/auditoria-seguridad.js` |
+
+El detalle de cada capa, los tres modos y lo que este sistema **no** puede hacer
+están en **[docs/SEGURIDAD.md](docs/SEGURIDAD.md)**.
+
+El sello se activa una vez, después de instalar y revisar (`node index.js
+--sellar`): guarda la foto en `data/` —fuera de `node_modules`, para que `npm
+ci` no se la lleve— firmada con HMAC-SHA256 y una clave (`data/.shin-clave`,
+0600). **Detecta al arrancar y, en modo estricto, se niega a iniciar**; en el
+modo normal deja arrancar y lo cuenta.
+
+| Modo | Qué pasa si el árbol no cuadra |
+|---|---|
+| `SHIN_INTEGRIDAD=off` | no comprueba nada |
+| `SHIN_INTEGRIDAD=avisar` *(por defecto)* | lo dice en la consola y en `/health`, y el bot arranca |
+| `SHIN_INTEGRIDAD=estricto` | **no arranca** hasta que revises y vuelvas a sellar |
+
+Lo que se corrigió de la versión anterior del sello, porque era un detector de
+anomalías presentado como antivirus:
+
+| Fallo que tenía | Cómo está ahora |
+|---|---|
+| eximía `baileys/lib` y `baileys/esm` **enteros** — justo la librería que ve los mensajes | no se exime nada; el sello se toma después de los parches y un cambio ahí se ve |
+| solo miraba `.js/.json/.node` y saltaba carpetas llamadas `test` | se hashea **todo archivo**, sin lista de extensiones |
+| el sello vivía dentro de `node_modules` y `npm ci` lo borraba en silencio | vive en `data/`, y su ausencia ya no se confunde con «todo bien» |
+| un sello ausente o ilegible se aceptaba con un aviso suave | la firma que no cuadra es un estado propio, y en estricto **falla cerrado** |
+| cualquiera podía re-sellar y el cambio quedaba perdonado | el sello va firmado con HMAC; re-sellar es un comando explícito y queda en el registro |
+| la comprobación corría **después** de los `import` estáticos, o sea después de que la dependencia ya se ejecutó | corre en el preload, **antes** de cargar el bot |
+
+**Su límite, dicho sin adornos:** quien pueda escribir archivos *y* leer la
+clave (un paquete que corre como tu usuario) puede volver a sellar. Esto no es
+una firma de autor; lo que consigue es que re-sellar deje de ser silencioso y
+que, en modo estricto, el código sospechoso no llegue a ejecutarse. No
+reemplaza a tener el número en un teléfono que no uses para nada más.
+
 - **Mitigación de amplificación.** El atajo de los comandos de dueño solo vale
   para el dueño real: antes, un desconocido que insistía con un comando que no
   podía usar conseguía una respuesta del bot por cada mensaje suyo.
 
-La suite lo cubre: las **614/614 pruebas** (73 archivos) que vigilan esto,
+La suite lo cubre: las **660/660 pruebas** (76 archivos) que vigilan esto,
 incluidas las regresiones de cada fallo. Si un commit rompe alguna, GitHub lo
 marca.
 
@@ -129,7 +181,7 @@ gratuita cerró.*
 <details>
 <summary><b>Ver la lista completa de comandos (se genera del propio bot)</b></summary>
 
-La página **[docs/web/index.html](docs/web/index.html)** lleva los 213 con su
+La página **[docs/web/index.html](docs/web/index.html)** lleva los 216 con su
 buscador, filtros por categoría y descripción. Para regenerarla cuando añadas
 comandos:
 
@@ -334,7 +386,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 614 pruebas
+npm test               # las 660 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot

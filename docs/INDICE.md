@@ -30,6 +30,7 @@ no encaja en ninguna, no debería existir.
 | Documento | Responde a |
 | --- | --- |
 | [MAPA.md](MAPA.md) | el plano: qué hay en cada carpeta, el viaje de un mensaje, cada dependencia y qué se retiró. **Se regenera con `npm run mapa` y falla en la suite si se queda viejo** |
+| [SEGURIDAD.md](SEGURIDAD.md) | el blindaje de dependencias por capas: qué vigila de verdad, qué no, los tres modos y el texto con el que se puede anunciar |
 | [PERSISTENCIA.md](PERSISTENCIA.md) | SQLite, respaldo JSON, migración transaccional y cuándo se detiene la reconexión para conservar la sesión |
 | [DESARROLLO.md](DESARROLLO.md) | montarlo en local, tu primer comando, botones, base de datos y migraciones |
 | [AUDIO-PO.md](AUDIO-PO.md) | modo opcional de audio con proveedor PO local, requisitos y límites |
