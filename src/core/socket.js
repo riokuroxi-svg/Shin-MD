@@ -25,6 +25,7 @@ import { analizarCortes, podarCortes } from "../lib/cortes.js";
 import db from "../services/ginko-db.js";
 import pino from "pino";
 import { clasificarDesconexion } from "./politica-sesion.js";
+import { marcarSesionMuerta, limpiarMarcaSesionMuerta } from "#lib/vinculacion";
 import NodeCache from "node-cache";
 import { LRUCache } from "lru-cache";
 import log from "#logger";
@@ -568,6 +569,9 @@ export function connectSocket(engine, opts) {
 
       if (isNewLogin) {
         log.info("Nuevo dispositivo vinculado");
+        // Si veníamos de una sesión rechazada, la marca ya no vale:
+        // esta vinculación es nueva y buena.
+        limpiarMarcaSesionMuerta(sessionDir);
         // Forzar saveCreds inmediato cuando se vincula
         try { await sc(); } catch (e) { log.warn("saveCreds al vincular: " + (e?.message || e)); }
       }
@@ -589,7 +593,18 @@ export function connectSocket(engine, opts) {
           isRestarting = false;
           watchdog?.stop?.();
           health.recordError(new Error("session_requires_review"));
+          // LA SESIÓN YA NO SIRVE. Antes solo se paraba la reconexión y
+          // se conservaban las credenciales tal cual: el archivo seguía
+          // diciendo `registered: true`, el próximo arranque contestaba
+          // «no hace falta vincular nada» y volvía a chocar con el 401.
+          // Bucle cerrado, sin forma de recuperar el bot. Se deja una
+          // marca para que el arranque vuelva a pedir el número; las
+          // credenciales se conservan para poder mirarlas.
+          const marca = marcarSesionMuerta(sessionDir, "WhatsApp cerró la sesión (" + code + ")");
           log.error("Sesión requiere intervención administrativa (" + code + "). Credenciales conservadas; reconexión automática detenida.");
+          if (marca) {
+            log.warn("Sesión marcada como rechazada: al reiniciar se volverá a pedir el número (nada de borrar nada a mano).");
+          }
           // No guardar, borrar, mover ni renombrar credenciales tras esta señal.
           const cierre = setTimeout(cerrarAuth, 3000);
           if (typeof cierre.unref === "function") cierre.unref();

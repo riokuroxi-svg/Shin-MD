@@ -228,3 +228,65 @@ test("ni el arranque ni la consola pueden dibujar un QR", () => {
   }
   assert.deepEqual(conQr, [], `hay ${conQr.length} forma(s) de volver a dibujar un QR`);
 });
+
+// ─── La sesión que WhatsApp ya rechazó ──────────────────────────────
+//
+// EL BUG QUE ESTO VIGILA (reportado con captura)
+// El archivo `auth.db` seguía diciendo `registered: true` aunque
+// WhatsApp hubiera cerrado la sesión (401). El arranque contestaba
+// «sesión existente: no hace falta vincular nada», el bot chocaba con
+// el 401 y se paraba. En cada reinicio, lo mismo. El usuario no tenía
+// forma de volver a vincular sin borrar archivos a mano.
+
+test("una sesión rechazada por WhatsApp no cuenta como buena", async (t) => {
+  const { estadoSesion, marcarSesionMuerta, limpiarMarcaSesionMuerta } = await import(
+    "../src/lib/vinculacion.js"
+  );
+  const { DatabaseSync } = await import("node:sqlite");
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shin-sesion-muerta-"));
+  try {
+    // Una sesión perfectamente registrada…
+    const db = new DatabaseSync(path.join(dir, "auth.db"));
+    db.exec("CREATE TABLE creds (id INTEGER PRIMARY KEY, data TEXT)");
+    db.prepare("INSERT INTO creds (id, data) VALUES (1, ?)").run(
+      JSON.stringify({ registered: true, me: { id: "5215500000000:1@s.whatsapp.net" } }),
+    );
+    db.close();
+
+    assert.equal(estadoSesion(dir).registrada, true, "sin marca, la sesión sirve");
+
+    // …que WhatsApp rechazó.
+    assert.equal(marcarSesionMuerta(dir, "WhatsApp cerró la sesión (401)"), true);
+    const estado = estadoSesion(dir);
+    assert.equal(estado.registrada, false, "marcada como muerta, ya no sirve");
+    assert.match(estado.motivo, /401/, "y se recuerda el motivo");
+
+    // Al volver a vincular, la marca desaparece y la sesión vale otra vez.
+    limpiarMarcaSesionMuerta(dir);
+    assert.equal(estadoSesion(dir).registrada, true, "tras revincular vuelve a servir");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("con la sesión rechazada, el plan vuelve a preguntar (no dice «nada»)", async () => {
+  const { planDeVinculacion } = await import("../src/lib/vinculacion.js");
+
+  const rechazada = { hay: true, registrada: false, motivo: "WhatsApp cerró la sesión (401)" };
+  const plan = planDeVinculacion({ sesion: rechazada, hayTerminal: true });
+  assert.equal(plan.accion, "revincular", "hay que volver a vincular, no ignorarlo");
+  assert.match(plan.motivo, /401/);
+
+  // Y si el usuario pone el número a mano, se usa ese y no se pregunta.
+  const conNumero = planDeVinculacion({ args: { phone: "5215500000000" }, sesion: rechazada, hayTerminal: true });
+  assert.equal(conNumero.accion, "usar");
+
+  // Una sesión a medias (nunca llegó a registrarse) es otra cosa: se
+  // pregunta normal, sin el aviso de "rechazada".
+  const aMedias = { hay: true, registrada: false, motivo: "la vinculación quedó a medias" };
+  assert.equal(planDeVinculacion({ sesion: aMedias, hayTerminal: true }).accion, "preguntar");
+});

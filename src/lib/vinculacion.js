@@ -33,6 +33,73 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { normalizePhone } from "./cli-args.js";
 
+// ─── La marca de sesión muerta ──────────────────────────────────────
+//
+// EL BUCLE SIN SALIDA QUE ESTO ARREGLA
+// Cuando WhatsApp invalida la sesión (401 `loggedOut`), el archivo
+// `auth.db` sigue diciendo `registered: true`. En cada reinicio el bot
+// leía eso, contestaba «sesión existente: no hace falta vincular nada»
+// y volvía a chocar con el 401 sin pedir nunca el número. El usuario se
+// quedaba sin forma de recuperar el bot desde la propia consola.
+//
+// La marca es un archivo de texto junto a la sesión: dice que ESA sesión
+// concreta ya murió. Mientras exista, la sesión no cuenta como buena y
+// el arranque pregunta el número otra vez. Se borra sola al vincular.
+const ARCHIVO_MUERTA = "sesion-muerta.txt";
+
+/**
+ * ¿Esta sesión ya fue rechazada por WhatsApp?
+ *
+ * @param {string} sessionDir
+ * @returns {{muerta: boolean, motivo: string}}
+ */
+export function sesionMuerta(sessionDir) {
+  const ruta = path.join(sessionDir, ARCHIVO_MUERTA);
+  try {
+    if (!fs.existsSync(ruta)) return { muerta: false, motivo: "" };
+    const texto = fs.readFileSync(ruta, "utf8").trim();
+    return { muerta: true, motivo: texto || "WhatsApp rechazó esta sesión" };
+  } catch {
+    return { muerta: false, motivo: "" };
+  }
+}
+
+/**
+ * Deja constancia de que la sesión ya no sirve.
+ *
+ * Se llama cuando el servidor cierra con 401 (sesión cerrada), 403
+ * (prohibido), badSession o multideviceMismatch. NO borra credenciales
+ * (por si hay que diagnosticar), solo marca el archivo para que el
+ * próximo arranque vuelva a preguntar el número.
+ *
+ * @param {string} sessionDir
+ * @param {string} [motivo]
+ * @returns {boolean} si la marca quedó escrita
+ */
+export function marcarSesionMuerta(sessionDir, motivo = "") {
+  try {
+    fs.mkdirSync(sessionDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sessionDir, ARCHIVO_MUERTA),
+      `${new Date().toISOString()} · ${motivo || "WhatsApp rechazó esta sesión"}\n`,
+      "utf8",
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** La sesión se vinculó de nuevo: la marca deja de valer. */
+export function limpiarMarcaSesionMuerta(sessionDir) {
+  try {
+    fs.rmSync(path.join(sessionDir, ARCHIVO_MUERTA), { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Cómo está la sesión guardada, sin optimismo.
  *
@@ -48,6 +115,12 @@ import { normalizePhone } from "./cli-args.js";
 export function estadoSesion(sessionDir) {
   const authDb = path.join(sessionDir, "auth.db");
   if (!fs.existsSync(authDb)) return { hay: false, registrada: false, motivo: "no hay sesión" };
+
+  // Una sesión que WhatsApp ya rechazó no sirve aunque el archivo diga
+  // que está registrada: es justo lo que dejaba al bot en el bucle de
+  // «no hace falta vincular nada» + 401.
+  const { muerta, motivo: motivoMuerta } = sesionMuerta(sessionDir);
+  if (muerta) return { hay: true, registrada: false, motivo: motivoMuerta };
   let db;
   try {
     db = new DatabaseSync(authDb);
@@ -109,7 +182,21 @@ export function planDeVinculacion({ args = {}, env = {}, sesion, hayTerminal }) 
   }
   // Un número escrito a mano manda siempre: ni se pregunta ni se adivina.
   if (escrito) return { accion: "usar", numero: escrito, motivo: "número indicado" };
-  if (hayTerminal) return { accion: "preguntar", numero: "", motivo: sesion.motivo };
+
+  // Sesión que existe pero que WhatsApp ya rechazó (401 y compañía): no
+  // es «no hay sesión», es «hay que volver a vincular». Se distingue
+  // para poder avisar en vez de dejar al usuario en el bucle.
+  const rechazada = sesion.hay && !sesion.registrada && /rechaz|cerró|401|403|invalid/i.test(sesion.motivo || "");
+
+  if (hayTerminal) {
+    return {
+      accion: rechazada ? "revincular" : "preguntar",
+      numero: "",
+      motivo: sesion.motivo,
+    };
+  }
+  // Sin terminal no se puede preguntar, pero el mensaje tiene que decir
+  // la verdad: la sesión murió y hay que vincular de nuevo.
   return { accion: "salir", numero: "", motivo: sesion.motivo };
 }
 

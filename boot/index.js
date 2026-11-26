@@ -239,6 +239,21 @@ switch (plan.accion) {
   case "nada":
     console.log(ui.estado("ok", "sesión existente: no hace falta vincular nada."));
     break;
+  case "revincular":
+    // La sesión guardada existe pero WhatsApp ya la rechazó. Se dice sin
+    // rodeos y se pide el número como si fuera la primera vez: decir
+    // «no hace falta vincular nada» aquí era mentirle al usuario y
+    // dejarlo en un bucle con el 401.
+    console.warn("");
+    console.warn(ui.estado("warn", "la sesión guardada ya no sirve (" + plan.motivo + ")."));
+    console.warn("  " + chalk.hex("#8B82A3")("WhatsApp la cerró; hay que vincular el número otra vez. Las credenciales viejas se conservan."));
+    console.warn("");
+    phoneNumber = preguntarNumero();
+    if (!phoneNumber) {
+      console.error(ui.estado("error", "ese número no tiene dígitos usables."));
+      process.exit(1);
+    }
+    break;
   case "usar":
     phoneNumber = plan.numero;
     console.log(ui.estado("ok", `vinculando con el número ${phoneNumber}.`));
@@ -482,7 +497,15 @@ async function main() {
     const ownerJidReal = (ownerAlias || ownerNum) + "@s.whatsapp.net";
     db.settings.set("owner_jid", ownerJidReal);
     engine.setOwnerJid(ownerJidReal);
-    if (ownerAlias) log.info("Owner móvil MX: acepto «" + ownerNum + "» y su forma en JID «" + ownerAlias + "».");
+    // El número del dueño se muestra TAPADO: la consola queda en el
+    // historial de la terminal y, en Termux, en las capturas que se
+    // comparten. Con los últimos 4 dígitos basta para reconocerlo.
+    const tapar = (n) => (n && n.length > 4 ? "*".repeat(n.length - 4) + n.slice(-4) : "****");
+    if (ownerAlias) {
+      log.info(
+        "Owner móvil MX: acepto «" + tapar(ownerNum) + "» y su forma en JID «" + tapar(ownerAlias) + "».",
+      );
+    }
   }
 
   // ── Globals legacy de Ginko ─────────────────────────────────────
