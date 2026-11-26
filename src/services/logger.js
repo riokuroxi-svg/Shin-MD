@@ -65,6 +65,11 @@ const log = {
   info: (...args) => { const msg = unir(args); writeLog("INFO", msg); console.log(chalk.cyan(" ◐ "), chalk.white(msg)); },
   success: (...args) => { const msg = unir(args); writeLog("SUCCESS", msg); console.log(chalk.green(" ✓ "), chalk.greenBright(msg)); },
   warn: (...args) => { const msg = unir(args); writeLog("WARN", msg); console.log(chalk.yellow(" ◑ "), chalk.yellow(msg)); },
+  // `debug` y `trace` existen porque la librería del conector los llama
+  // internamente (si no están, revienta con "logger.debug is not a
+  // function"). Se escriben al archivo pero no a la consola: son ruido.
+  debug: (...args) => { writeLog("DEBUG", unir(args)); },
+  trace: (...args) => { writeLog("TRACE", unir(args)); },
   error: (msg, err) => {
     const suelto = typeof err === "string" ? " " + err : "";
     writeLog("ERROR", msg + suelto + (err?.stack ? "\n" + err.stack : ""));

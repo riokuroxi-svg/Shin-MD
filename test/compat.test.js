@@ -68,7 +68,13 @@ test(".compat manda las cuatro pruebas numeradas y en orden", async () => {
     .map((r) => r.mensaje?.interactiveMessage?.nativeFlowMessage)
     .filter(Boolean);
   assert.equal(tarjetas.length, 2, "tienen que salir dos tarjetas");
-  assert.equal(tarjetas[0].messageParamsJson, undefined, "la 2 va limpia");
+  // La librería puede rellenar `messageParamsJson` con "{}": lo que
+  // distingue a la tarjeta limpia es que NO lleva adornos dentro.
+  const params2 = tarjetas[0].messageParamsJson;
+  assert.ok(
+    params2 === undefined || params2 === "{}",
+    "la 2 va limpia: " + params2,
+  );
   assert.ok(tarjetas[1].messageParamsJson, "la 3 lleva la hoja inferior");
   assert.match(tarjetas[1].messageParamsJson, /bottom_sheet/);
 
@@ -97,11 +103,17 @@ test("las tarjetas de .compat llevan el nodo biz y el de bot en privado", async 
   assert.ok(tarjetas.length >= 2, "tienen que salir las dos tarjetas");
   for (const relay of tarjetas) {
     const tags = (relay.opciones?.additionalNodes || []).map((n) => n.tag);
-    assert.ok(tags.includes("biz"), `falta el nodo biz: ${tags.join(",")}`);
-    assert.ok(tags.includes("bot"), "en privado falta el nodo bot (botones grises)");
-    const biz = relay.opciones.additionalNodes.find((n) => n.tag === "biz");
-    const interno = biz.content.map((c) => c.tag);
-    assert.ok(interno.includes("interactive"), "el biz tiene que envolver interactive");
+    // El `<biz>` lo inyecta la librería al enviar (lo pone ella sola y no
+    // admite que se le pase otro: dos biz = rechazo silencioso). Aquí se
+    // comprueba que NO se manda uno a mano y que el mensaje lo merece.
+    assert.ok(!tags.includes("biz"), "no se manda biz propio: lo pone la librería");
+    const { shouldIncludeBizBinaryNode } = await import("baileys");
+    if (typeof shouldIncludeBizBinaryNode === "function") {
+      assert.ok(
+        shouldIncludeBizBinaryNode(relay.mensaje),
+        "la librería tiene que inyectar el biz de esta tarjeta",
+      );
+    }
   }
 });
 

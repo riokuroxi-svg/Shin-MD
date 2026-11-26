@@ -3,131 +3,107 @@
  * Copyright (C) 2026 riokuroxi-svg
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
- *
- * Lee la duración y el tamaño de un MP4 directamente del contenedor.
- *
- * ¿Por qué hace falta? Baileys calcula `width`/`height` sólo si hay
- * una librería de imagen (sharp/jimp) instalada, y NUNCA calcula
- * `seconds` para vídeo. Sin esos tres campos el cliente de WhatsApp
- * no puede pintar el reproductor y muestra la tarjeta como un archivo
- * para descargar («649 KB» con la flecha) en vez de reproducirla.
- *
- * Se recorre la caja `moov` del MP4 a mano: son unas decenas de bytes
- * y no necesita ffmpeg ni binarios nativos, así que funciona igual en
- * Termux que en un servidor.
  */
-
-import fs from "node:fs";
-
-const CAJAS_CONTENEDOR = new Set(["moov", "trak", "mdia", "minf", "stbl"]);
+// ═══════════════════════════════════════════════════════════════════
+//  mp4-info.js — Duración y medidas de un MP4, sin dependencias.
+//
+//  POR QUÉ EXISTE
+//  Al mandar un vídeo dentro de una tarjeta, el teléfono necesita
+//  `seconds` y `width`/`height` para pintar el REPRODUCTOR. Si faltan,
+//  muestra la tarjeta como un archivo («649 KB» con una flecha): eso es
+//  lo que se veía como "el vídeo no se envía". La librería no calcula
+//  esos datos sin una librería de imagen, así que se leen del propio
+//  archivo: el átomo `moov` del MP4 los tiene.
+// ═══════════════════════════════════════════════════════════════════
 
 /**
- * Recorre cajas MP4 dentro de un rango y llama a `visitar` con cada una.
+ * Lee la duración (segundos) y el tamaño del primer `trak` de un MP4.
+ *
+ * Recorre las cajas de primer nivel hasta `moov`, y dentro busca:
+ *   - `mvhd` → duración en unidades de su `timescale` (×1000 ms en la v0)
+ *   - `trak > tkhd` → ancho y alto en 16.16 fijo
+ *
  * @param {Buffer} buf
- * @param {number} desde
- * @param {number} hasta
- * @param {(tipo:string, inicio:number, fin:number) => void} visitar
+ * @returns {{seconds?: number, width?: number, height?: number}|null}
  */
-function recorrerCajas(buf, desde, hasta, visitar) {
-  let p = desde;
-  while (p + 8 <= hasta) {
-    let tam = buf.readUInt32BE(p);
-    const tipo = buf.toString("latin1", p + 4, p + 8);
-    let cabecera = 8;
-    if (tam === 1) {
-      // tamaño de 64 bits
-      if (p + 16 > hasta) break;
-      tam = Number(buf.readBigUInt64BE(p + 8));
-      cabecera = 16;
-    } else if (tam === 0) {
-      tam = hasta - p; // hasta el final
-    }
-    if (tam < cabecera || p + tam > hasta) break;
-    visitar(tipo, p + cabecera, p + tam);
-    p += tam;
-  }
-}
-
-/**
- * @param {string|Buffer} entrada ruta del archivo o su contenido
- * @returns {{seconds:number, width:number, height:number}|null}
- */
-export function datosDelVideo(entrada) {
-  let buf = entrada;
+export function datosDelVideo(buf) {
   try {
-    if (typeof entrada === "string") {
-      // Sólo hace falta la cabecera para el moov en la mayoría de MP4;
-      // pero si el moov va al final (habitual), hay que leerlo entero.
-      // 3-4 MB es asumible y evita dos lecturas.
-      buf = fs.readFileSync(entrada);
+    if (!Buffer.isBuffer(buf) || buf.length < 32) return null;
+
+    const leerCaja = (pos, limite) => {
+      if (pos + 8 > limite) return null;
+      const tamano = buf.readUInt32BE(pos);
+      return { tamano, tipo: buf.toString("latin1", pos + 4, pos + 8), pos };
+    };
+
+    // Cajas de primer nivel: buscar `moov`
+    let moov = null;
+    for (let p = 0; p + 8 <= buf.length; ) {
+      const caja = leerCaja(p, buf.length);
+      if (!caja || caja.tamano < 8) break;
+      if (caja.tipo === "moov") {
+        moov = { inicio: p + 8, fin: p + caja.tamano };
+        break;
+      }
+      p += caja.tamano;
     }
-  } catch {
-    return null;
-  }
-  if (!Buffer.isBuffer(buf) || buf.length < 16) return null;
+    if (!moov) return null;
 
-  const res = { seconds: 0, width: 0, height: 0 };
+    /** Recorre las cajas hijas de un rango. */
+    const hijos = (inicio, fin) => {
+      const lista = [];
+      for (let p = inicio; p + 8 <= fin; ) {
+        const caja = leerCaja(p, fin);
+        if (!caja || caja.tamano < 8) break;
+        lista.push(caja);
+        p += caja.tamano;
+      }
+      return lista;
+    };
 
-  const buscar = (desde, hasta, profundidad = 0) => {
-    if (profundidad > 6) return;
-    recorrerCajas(buf, desde, hasta, (tipo, ini, fin) => {
-      if (CAJAS_CONTENEDOR.has(tipo)) {
-        buscar(ini, fin, profundidad + 1);
-        return;
+    const datos = {};
+
+    for (const caja of hijos(moov.inicio, moov.fin)) {
+      // ── Duración (mvhd) ──
+      if (caja.tipo === "mvhd") {
+        const d = caja.pos + 8; // tras tamaño+tipo
+        const version = buf[d];
+        if (version === 0) {
+          const timescale = buf.readUInt32BE(d + 12);
+          const duracion = buf.readUInt32BE(d + 16);
+          if (timescale > 0) datos.seconds = Math.round(duracion / timescale);
+        } else if (version === 1) {
+          const timescale = buf.readUInt32BE(d + 20);
+          const duracion = Number(buf.readBigUInt64BE(d + 24));
+          if (timescale > 0) datos.seconds = Math.round(duracion / timescale);
+        }
       }
-      if (tipo === "mvhd") {
-        // version 0: creation(4) mod(4) timescale(4) duration(4)
-        // version 1: creation(8) mod(8) timescale(4) duration(8)
-        const v = buf[ini];
-        try {
-          if (v === 1) {
-            const escala = buf.readUInt32BE(ini + 20);
-            const dur = Number(buf.readBigUInt64BE(ini + 24));
-            if (escala > 0 && dur > 0) res.seconds = dur / escala;
-          } else {
-            const escala = buf.readUInt32BE(ini + 12);
-            const dur = buf.readUInt32BE(ini + 16);
-            if (escala > 0 && dur > 0) res.seconds = dur / escala;
-          }
-        } catch { /* caja cortada: se ignora */ }
-        return;
-      }
-      if (tipo === "tkhd") {
-        // width/height son los dos últimos UInt32 (16.16 fixed point).
-        // Los desplazamientos se cuentan desde el primer byte de datos
-        // de la caja (justo tras ver+flags):
-        //   v0: 4+4+4+4+4+8+2+2+2+2+36 = 76  → W en 76, H en 80
-        //   v1: los tiempos son de 8 bytes → W en 88, H en 92
-        try {
-          const v = buf[ini];
-          const off = v === 1 ? 88 : 76;
-          if (ini + off + 8 <= fin) {
-            const w = buf.readUInt32BE(ini + off) >>> 16;
-            const h = buf.readUInt32BE(ini + off + 4) >>> 16;
-            // el track de audio trae 0×0: sólo interesa el de vídeo
-            if (w > 0 && h > 0) {
-              res.width = w;
-              res.height = h;
+
+      // ── Medidas (trak > tkhd) ──
+      if (caja.tipo === "trak" && datos.width == null) {
+        for (const hijo of hijos(caja.pos + 8, caja.pos + caja.tamano)) {
+          if (hijo.tipo !== "tkhd") continue;
+          const d = hijo.pos + 8;
+          const version = buf[d];
+          // 16.16 fijo: el entero son los 16 bits altos
+          const offAncho = version === 0 ? 76 : 88;
+          const offAlto = version === 0 ? 80 : 92;
+          if (d + offAlto + 4 <= buf.length) {
+            const ancho = buf.readUInt32BE(d + offAncho) / 65536;
+            const alto = buf.readUInt32BE(d + offAlto) / 65536;
+            if (ancho >= 1 && alto >= 1) {
+              datos.width = Math.round(ancho);
+              datos.height = Math.round(alto);
             }
           }
-        } catch { /* caja cortada */ }
-        return;
+        }
       }
-    });
-  };
+    }
 
-  try {
-    buscar(0, buf.length);
+    return Object.keys(datos).length ? datos : null;
   } catch {
     return null;
   }
-
-  if (!res.seconds && !res.width) return null;
-  return {
-    seconds: Math.max(1, Math.round(res.seconds)),
-    width: res.width,
-    height: res.height,
-  };
 }
 
-export default datosDelVideo;
+export default { datosDelVideo };

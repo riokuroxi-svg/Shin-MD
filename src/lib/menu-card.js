@@ -5,256 +5,96 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  menu-card.js — El menú de una sola tarjeta con botones nativos.
+//  menu-card.js — El menú: una foto, el texto y los botones nativos.
 //
-//  LAS CUATRO REGLAS QUE HACEN QUE EL TELÉFONO LO PINTE
-//  ────────────────────────────────────────────────────
-//  1. NADA de `viewOnceMessage`. Envolver la tarjeta en viewOnce hace
-//     que el servidor la acepte y los clientes nuevos la descarten
-//     (es lo primero que se quitó en las librerías que sí funcionan).
-//     Va el InteractiveMessage suelto con messageContextInfo.
-//  2. NADA de `title`/`subtitle` vacíos en el header. Un header con
-//     title:"" y subtitle:"" se codifica igual, el servidor lo acusa,
-//     llegan los recibos de WhatsApp Web… y el teléfono principal
-//     nunca lo pinta. Si no hay título, el campo se OMITE.
-//  3. `hasMediaAttachment` sólo cuando de verdad hay media dentro.
-//  4. contextInfo con forwardingScore 99 + isForwarded y canal con
-//     serverMessageId 1 (0 es inválido).
+//  POR QUÉ SE USA LA API DE ALTO NIVEL DE LA LIBRERÍA
+//  ────────────────────────────────────────────────
+//  `generateWAMessageContent` con `image` + `caption` + `nativeFlow`
+//  arma el mensaje entero y coloca cada cosa en su sitio:
 //
-//  LO QUE SE CONSERVA DEL DISEÑO ANTERIOR
-//  ─────────────────────────────────────
-//  El video se sube UNA vez y se guarda en data/media-cache.json.
-//  Subirlo en cada envío costaba 10-18 s por redes móviles.
+//    - `image` + `caption`        → cabecera con foto y cuerpo de texto
+//    - `offerText`/`offerCode`    → la tarjeta de oferta con el código
+//    - `optionTitle`/`optionText` → la hoja inferior desplegable
+//    - `nativeFlow: [...]`        → los botones (`sections` = selector,
+//                                   `id` = respuesta rápida)
+//
+//  Armar el proto a mano era la fuente del bug de "la foto no llega":
+//  los campos de la imagen (`url`, `mediaKey`, `fileLength`...) se le
+//  pasaban sueltos al `Header`, que los acepta al crear pero los TIRA
+//  al serializar. El mensaje decía `hasMediaAttachment: true` y no
+//  llevaba media. Aquí eso no puede pasar: la media va anidada.
+//
+//  LA SUBIDA SE PAGA UNA VEZ
+//  ─────────────────────────
+//  La media se pasa como `{ url: <ruta local> }`. La librería la lee de
+//  disco y, si el socket trae `mediaCache` (ver src/core/socket.js),
+//  reaprovecha la subida en los envíos siguientes. Con un Buffer no
+//  habría caché: su índice es la `url` del medio, y un Buffer no tiene.
 // ═══════════════════════════════════════════════════════════════════
 
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import path from "node:path";
-import { createHash } from "node:crypto";
-import { generateWAMessageFromContent, proto, prepareWAMessageMedia } from "baileys";
+import { prepareWAMessageMedia, generateWAMessageFromContent } from "baileys";
 import { datosDelVideo } from "#lib/mp4-info";
 import log from "#logger";
 
-const CACHE_FILE = path.join(process.cwd(), "data", "media-cache.json");
-const CACHE_VERSION = 2; // v2: formato nuevo, invalida la caché vieja
-
-// ── Serialización con Buffers ─────────────────────────────────────
-// mediaKey, fileSha256 y fileEncSha256 son Buffer en el videoMessage.
-// JSON.stringify los convierte en {"type":"Buffer","data":[...]} o en
-// string, y al revivirlos el mensaje viaja con claves corruptas: el
-// servidor lo acepta y el teléfono NO lo pinta. Se guardan en base64
-// con una marca y se reconstruyen como Buffer al leer.
-const ES_BUFFER = "__buf__";
-
-function empaquetar(objeto) {
-  return JSON.stringify(objeto, (k, v) => {
-    if (Buffer.isBuffer(v)) return { [ES_BUFFER]: v.toString("base64") };
-    // objetos que ya vienen como {type:"Buffer",data:[...]}
-    if (v && typeof v === "object" && v.type === "Buffer" && Array.isArray(v.data)) {
-      return { [ES_BUFFER]: Buffer.from(v.data).toString("base64") };
-    }
-    return v;
-  });
-}
-
-function desenvolver(objeto) {
-  return JSON.parse(JSON.stringify(objeto), (k, v) => {
-    if (v && typeof v === "object" && typeof v[ES_BUFFER] === "string") {
-      return Buffer.from(v[ES_BUFFER], "base64");
-    }
-    return v;
-  });
-}
-
-function leerCache() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(CACHE_FILE, "utf8"));
-    if (raw?.version !== CACHE_VERSION) return {};
-    return desenvolver(raw.media || {});
-  } catch {
-    return {};
-  }
-}
-
-function escribirCache(media) {
-  try {
-    fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
-    fs.writeFileSync(CACHE_FILE, empaquetar({ version: CACHE_VERSION, media }));
-  } catch (err) {
-    log.warn("menu-card: caché no guardada (" + (err.message || err) + ")");
-  }
-}
-
-function huella(buf) {
-  return createHash("sha256").update(buf).digest("hex").slice(0, 16);
-}
-
-const MEMORIA = new Map();
-
-/** ¿La clave de medio sirve para reenviar? Buffer no vacío o base64 no vacío. */
-function claveValida(k) {
-  if (Buffer.isBuffer(k)) return k.length > 0;
-  return typeof k === "string" && k.length >= 16;
-}
 
 /**
- * Sube el video la PRIMERA vez y reutiliza el `videoMessage` después.
- * Ese objeto (url, mediaKey, directPath, fileSha256...) es lo que
- * `prepareWAMessageMedia` devuelve y lo que el cliente necesita para
- * pintar el bucle sin volver a subir nada.
- */
-/**
- * Miniatura JPEG del primer fotograma útil del vídeo.
+ * Miniatura JPEG del primer fotograma del vídeo.
  *
- * WhatsApp usa la miniatura como carátula del reproductor. Sin ella
- * el cliente no tiene qué pintar mientras descarga y, si además faltan
- * las dimensiones, termina mostrando la tarjeta como un archivo.
+ * WhatsApp la usa como carátula mientras descarga. Sin ella el cliente
+ * no tiene qué pintar y, si además faltan las medidas, termina
+ * enseñando la tarjeta como un archivo. Se genera con ffmpeg si está
+ * instalado; si no, se devuelve null y la tarjeta sale igual (sin
+ * carátula).
  *
- * Se genera con ffmpeg si está en el PATH (Termux lo trae) y queda
- * cacheada en disco. Si no hay ffmpeg no pasa nada: la tarjeta sale
- * igual, sólo que sin carátula.
- *
- * @param {string} filePath
+ * @param {string} rutaVideo
  * @returns {Buffer|null}
  */
-function miniaturaDeVideo(filePath) {
-  if (!filePath) return null;
-  const destino = path.join(
-    process.cwd(), "data", "media-cache",
-    path.basename(filePath, path.extname(filePath)) + "-thumb.jpg",
-  );
+function miniaturaDeVideo(rutaVideo) {
+  // ffmpeg puede no estar en el PATH (Termux lo trae, otros entornos
+  // no): se prueban el del PATH y las rutas habituales, y si no hay
+  // ninguno se devuelve null (la tarjeta sale sin carátula).
+  const candidatos = [
+    process.env.FFMPEG_PATH,
+    "ffmpeg",
+    "/usr/bin/ffmpeg",
+    "/data/data/com.termux/files/usr/bin/ffmpeg",
+  ].filter(Boolean);
+  const bin = candidatos.find((b) => {
+    try {
+      if (b === "ffmpeg") { execFileSync(b, ["-version"], { timeout: 3000, stdio: "ignore" }); return true; }
+      return fs.existsSync(b);
+    } catch { return false; }
+  });
+  if (!bin) return null;
   try {
-    if (fs.existsSync(destino)) {
-      const guardada = fs.readFileSync(destino);
-      if (guardada.length > 200) return guardada;
-    }
-  } catch { /* sigue abajo */ }
-
-  // Si no hay ffmpeg, se usa la carátula que viene con el bot (misma
-  // ruta relativa al video: menu.mp4 → menu-thumb.jpg).
-  const delRepo = path.join(
-    path.dirname(filePath),
-    path.basename(filePath, path.extname(filePath)) + "-thumb.jpg",
-  );
-
-  try {
-    fs.mkdirSync(path.dirname(destino), { recursive: true });
-    execFileSync(
-      "ffmpeg",
-      ["-y", "-ss", "1", "-i", filePath, "-vframes", "1", "-vf", "scale=320:-2", "-q:v", "6", destino],
-      { stdio: "ignore", timeout: 20000 },
+    return execFileSync(
+      bin,
+      ["-v", "error", "-i", rutaVideo, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "-"],
+      { maxBuffer: 2 * 1024 * 1024, timeout: 4000 },
     );
-    const mini = fs.readFileSync(destino);
-    if (mini.length > 200) return mini;
-  } catch { /* sin ffmpeg en el PATH */ }
-
-  // Plan B: la carátula incluida en el repositorio.
-  try {
-    if (delRepo !== destino && fs.existsSync(delRepo)) {
-      const mini = fs.readFileSync(delRepo);
-      if (mini.length > 200) return mini;
-    }
-  } catch { /* nada */ }
-
-  return null; // sin carátula la tarjeta funciona igual
-}
-
-/**
- * Igual que `videoCacheado`, pero para una imagen del encabezado.
- * Se sube una sola vez y se reutiliza; el objeto que devuelve
- * (`imageMessage`) se mete tal cual en el header.
- *
- * @param {object} sock
- * @param {string} filePath
- * @returns {Promise<object|null>}
- */
-async function imagenCacheada(sock, filePath) {
-  if (!filePath) return null;
-  let buf;
-  try {
-    buf = fs.readFileSync(filePath);
   } catch {
     return null;
   }
-  const clave = `imagen:${path.basename(filePath)}:${huella(buf)}:v1`;
-  if (MEMORIA.has(clave)) return MEMORIA.get(clave);
-
-  const enDisco = leerCache()[clave]?.imageMessage;
-  if (enDisco && typeof enDisco.url === "string" && claveValida(enDisco.mediaKey)) {
-    MEMORIA.set(clave, enDisco);
-    return enDisco;
-  }
-
-  const preparado = await prepareWAMessageMedia(
-    { image: buf },
-    { upload: sock.waUploadToServer },
-  );
-  const imageMessage = preparado?.imageMessage;
-  if (!imageMessage) return null;
-
-  MEMORIA.set(clave, imageMessage);
-  escribirCache({ ...leerCache(), [clave]: { imageMessage, creado: new Date().toISOString() } });
-  return imageMessage;
-}
-
-async function videoCacheado(sock, filePath) {
-  if (!filePath) return null;
-  let buf;
-  try {
-    buf = fs.readFileSync(filePath);
-  } catch {
-    return null;
-  }
-  const clave = `video:${path.basename(filePath)}:${huella(buf)}:v2`;
-  if (MEMORIA.has(clave)) return MEMORIA.get(clave);
-
-  const enDisco = leerCache()[clave]?.videoMessage;
-  // La caché sirve si trae lo mínimo para pintar el video. `mediaKey` y
-  // los hashes pueden ser Buffer O string base64: prepareWAMessageMedia
-  // los devuelve como string y el proto los acepta igual. Lo que NUNCA
-  // se acepta es un mediaKey vacío o un objeto {type:"Buffer",data:[]}
-  // sin convertir (eso es lo que rompía la tarjeta al revivirla).
-  if (enDisco && typeof enDisco.url === "string" && claveValida(enDisco.mediaKey)) {
-    MEMORIA.set(clave, enDisco);
-    return enDisco;
-  }
-
-  // Baileys NO calcula width/height sin librería de imagen, y nunca
-  // calcula `seconds` para vídeo. Sin esos tres campos el teléfono no
-  // pinta el reproductor: enseña la tarjeta como archivo descargable
-  // («649 KB» con una flecha). Se leen del propio MP4.
-  const datos = datosDelVideo(buf) || {};
-  const miniatura = miniaturaDeVideo(filePath);
-  const preparado = await prepareWAMessageMedia(
-    {
-      video: buf,
-      gifPlayback: true,
-      ...(datos.seconds ? { seconds: datos.seconds } : {}),
-      ...(datos.width && datos.height ? { width: datos.width, height: datos.height } : {}),
-      ...(miniatura ? { jpegThumbnail: miniatura } : {}),
-    },
-    { upload: sock.waUploadToServer },
-  );
-  const videoMessage = preparado?.videoMessage;
-  if (!videoMessage) return null;
-
-  MEMORIA.set(clave, videoMessage);
-  escribirCache({ ...leerCache(), [clave]: { videoMessage, creado: new Date().toISOString() } });
-  return videoMessage;
 }
 
 /**
- * Manda el menú como UNA tarjeta: video en bucle + lista desplegable.
- * Forma probada en producción: viewOnce + interactiveMessage con
- * single_select, más el cacheo del medio (data/media-cache.json).
+ * Manda el menú como UNA tarjeta: foto arriba, texto, y los botones
+ * nativos abajo.
  *
  * @param {object} sock
  * @param {string} jid
  * @param {object} op
  * @param {string} op.body
  * @param {string} [op.footer]
- * @param {string} [op.videoPath]  ruta local del video
+ * @param {string} [op.videoPath]  ruta local del video (opcional, en bucle)
+ * @param {string} [op.imagePath]  ruta local de la imagen (por defecto)
  * @param {{title:string, sections:object[]}} op.selector
+ * @param {string} [op.optionTitle] Título de la hoja inferior
+ * @param {string} [op.optionText]  Texto del botón que abre la hoja
+ * @param {string} [op.offerText]   Título de la tarjeta de oferta
+ * @param {string} [op.offerCode]   Código que se copia de la oferta
  * @param {object} [op.contextInfo] extras para el contextInfo
  * @param {object} [op.quoted]
  * @returns {Promise<object|null>}
@@ -263,17 +103,16 @@ export async function sendMenuCard(sock, jid, op = {}) {
   const {
     body = "", footer = "", videoPath = null, imagePath = null,
     selector = null, contextInfo = {},
+    optionTitle = null, optionText = null,
+    offerText = null, offerCode = null,
   } = op;
   if (!sock?.relayMessage || !selector) return null;
 
-  // El menú se manda con IMAGEN por defecto: un video en el encabezado
-  // depende de que el cliente pueda reproducirlo (y en cuanto el mismo
-  // chat ya tiene un reproductor abierto, se queda congelado en el
-  // primer fotograma). La imagen se pinta siempre y no engorda el
-  // mensaje. El video sigue disponible pasando `videoPath` sin `imagePath`.
-  const mediaMessage = imagePath
-    ? await imagenCacheada(sock, imagePath)
-    : await videoCacheado(sock, videoPath);
+  const rutaMedia = imagePath || videoPath;
+  const esVideo = !imagePath && !!videoPath;
+  if (rutaMedia && !fs.existsSync(rutaMedia)) {
+    log.warn("menu-card: no se encontró la media del menú (" + rutaMedia + ")");
+  }
 
   // contextInfo que el servidor acepta sin descartar la tarjeta:
   // forwardingScore 99 e isForwarded, más el canal si viene.
@@ -292,42 +131,112 @@ export async function sendMenuCard(sock, jid, op = {}) {
       : {}),
   };
 
-  try {
-    // Header SIN title/subtitle cuando están vacíos: un header con
-    // cadenas vacías hace que el teléfono descarte la tarjeta aunque
-    // el servidor la acuse. Sólo se incluye si hay algo que mostrar.
-    const header = proto.Message.InteractiveMessage.Header.create({
-      ...(op.title ? { title: String(op.title) } : {}),
-      ...(op.subtitle ? { subtitle: String(op.subtitle) } : {}),
-      hasMediaAttachment: !!mediaMessage,
-      ...(mediaMessage || {}),
-    });
+  // Todos los botones tienen que ser DEL MISMO TIPO: mezclar un
+  // `single_select` con `quick_reply`s hace que el cliente no sepa qué
+  // dibujar y pinte la tarjeta como no soportada (lo avisa la propia
+  // librería). Por eso aquí sólo va el selector.
+  const nativeFlow = [
+    { text: selector.title || "📂 Explorar Categorías", sections: selector.sections },
+  ];
 
-    // SIN viewOnceMessage: el envoltorio viewOnce es justo lo que
-    // impide que los clientes actuales pinten la tarjeta. Va suelto.
+  try {
+    // ── La media, preparada a mano SOLO para ponerle los datos que el
+    // teléfono necesita para pintarla como reproductor ──
+    let mediaMessage = null;
+    if (rutaMedia && fs.existsSync(rutaMedia)) {
+      try {
+        const buf = fs.readFileSync(rutaMedia);
+        if (esVideo) {
+          // Sin `seconds`, `width` y `height` el cliente pinta la tarjeta
+          // como archivo descargable en vez de vídeo. La librería no los
+          // calcula sola: se leen del propio MP4.
+          const datos = datosDelVideo(buf) || {};
+          mediaMessage = (
+            await prepareWAMessageMedia(
+              {
+                video: buf,
+                gifPlayback: true,
+                ...(datos.seconds ? { seconds: datos.seconds } : {}),
+                ...(datos.width && datos.height
+                  ? { width: datos.width, height: datos.height }
+                  : {}),
+                ...(miniaturaDeVideo(rutaMedia) ? { jpegThumbnail: miniaturaDeVideo(rutaMedia) } : {}),
+              },
+              { upload: sock.waUploadToServer, mediaCache: sock.mediaCache, logger: log },
+            )
+          )?.videoMessage;
+        } else {
+          mediaMessage = (
+            await prepareWAMessageMedia(
+              { image: buf },
+              { upload: sock.waUploadToServer, mediaCache: sock.mediaCache, logger: log },
+            )
+          )?.imageMessage;
+        }
+      } catch (err) {
+        log.warn("menu-card: no se pudo preparar la media (" + (err.message || err) + ")");
+        mediaMessage = null;
+      }
+    }
+
+    // El header lleva la media ANIDADA en su casilla. Pasarla suelta
+    // (url/mediaKey/... directamente en el header) hace que el proto la
+    // tire al serializar y la tarjeta salga sin foto ni vídeo.
+    const header = {
+      hasMediaAttachment: !!mediaMessage,
+      ...(mediaMessage
+        ? esVideo
+          ? { videoMessage: mediaMessage }
+          : { imageMessage: mediaMessage }
+        : {}),
+    };
+
+    // El `<biz>` lo pone la librería. Aquí sólo se arma el interactivo.
     const msg = generateWAMessageFromContent(
       jid,
       {
         messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
-        interactiveMessage: proto.Message.InteractiveMessage.create({
+        interactiveMessage: {
+          ...(op.title ? { header: { ...header, title: String(op.title) } } : { header }),
+          body: { text: body },
+          footer: { text: footer },
           contextInfo: ctx,
-          body: proto.Message.InteractiveMessage.Body.create({ text: body }),
-          footer: proto.Message.InteractiveMessage.Footer.create({ text: footer }),
-          header,
-          nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-            buttons: [
-              {
-                name: "single_select",
-                buttonParamsJson: JSON.stringify(selector),
-              },
-            ],
-          }),
-        }),
+          nativeFlowMessage: {
+            // Todos los botones DEL MISMO TIPO: mezclar clases hace que
+            // el cliente no sepa qué dibujar y no pinte la tarjeta.
+            buttons: nativeFlow.map((b) => ({
+              name: "single_select",
+              buttonParamsJson: JSON.stringify({ title: b.text, sections: b.sections }),
+            })),
+            ...(optionText
+              ? {
+                  messageParamsJson: JSON.stringify({
+                    bottom_sheet: {
+                      in_thread_buttons_limit: 1,
+                      divider_indices: nativeFlow.map((_, i) => i),
+                      list_title: optionTitle || "Menú",
+                      button_title: optionText,
+                    },
+                    ...(offerText
+                      ? {
+                          limited_time_offer: {
+                            text: offerText,
+                            copy_code: offerCode || undefined,
+                          },
+                        }
+                      : {}),
+                  }),
+                }
+              : {}),
+          },
+        },
       },
       { quoted: op.quoted && op.quoted.message ? op.quoted : undefined },
     );
 
-    // SIN additionalNodes: la librería arma el sobre. (Ese era el bug.)
+    // SIN additionalNodes: la librería arma el sobre `<biz>` sola, y si
+    // se le pasa uno no añade otro (no puede haber doble biz: el
+    // servidor lo rechazaría en silencio).
     await sock.relayMessage(jid, msg.message, { messageId: msg.key.id });
     return msg;
   } catch (err) {
@@ -337,22 +246,34 @@ export async function sendMenuCard(sock, jid, op = {}) {
 }
 
 /**
- * Deja el video del menú ya subido y cacheado, sin mandar nada.
+ * Deja la media del menú ya subida, sin mandar nada.
  * Se llama en segundo plano al conectar: así el primer `.menu` del día
- * no paga la subida. Si falla, el menú sigue funcionando (tardará una vez).
+ * no paga la subida. Si falla, el menú sigue funcionando (tardará una).
+ *
+ * @param {object} sock
+ * @returns {Promise<boolean>}
  */
-export async function calentarVideoMenu(sock) {
+export async function calentarMediaMenu(sock) {
   try {
-    const { getVideoPath } = await import("#lib/menu-shared");
-    const ruta = getVideoPath();
-    if (!ruta) return false;
-    const video = await videoCacheado(sock, ruta);
-    if (video) log.info("menu-card: video del menú listo en caché");
-    return !!video;
+    const { getVideoPath, getMenuImagePath } = await import("#lib/menu-shared");
+    const ruta = getMenuImagePath() || getVideoPath();
+    if (!ruta || !fs.existsSync(ruta)) return false;
+    if (!sock?.waUploadToServer) return false;
+    // Se pide el contenido sin enviarlo: la librería sube y cachea.
+    await generateWAMessageContent(
+      {
+        caption: " ",
+        nativeFlow: [{ text: "x", sections: [] }],
+        image: { url: ruta },
+      },
+      { upload: sock.waUploadToServer, mediaCache: sock.mediaCache, logger: log },
+    );
+    log.info("menu-card: media del menú lista en caché");
+    return true;
   } catch (err) {
-    log.warn("menu-card: no se pudo pre-subir el video (" + (err.message || err) + ")");
+    log.warn("menu-card: no se pudo pre-subir la media (" + (err.message || err) + ")");
     return false;
   }
 }
 
-export default { sendMenuCard, calentarVideoMenu };
+export default { sendMenuCard, calentarMediaMenu };

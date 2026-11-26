@@ -242,7 +242,13 @@ export default {
       // cliente lo reproduzca: en cuanto el mismo chat tiene otro
       // reproductor abierto se queda congelado en el primer fotograma y
       // además se descarga antes de verse. La imagen se pinta siempre.
-      const usarVideo = String(process.env.MENU_MEDIA || "").toLowerCase() === "video";
+      // VÍDEO en bucle por defecto (como los bots de referencia): es lo
+      // que se ve como "foto que se mueve". Con `MENU_MEDIA=image` se
+      // vuelve a la imagen fija. El vídeo necesita `seconds`, `width` y
+      // `height` (los pone menu-card leyéndolos del MP4): sin ellos el
+      // teléfono lo pinta como archivo descargable.
+      const medioPedido = String(process.env.MENU_MEDIA || "").toLowerCase();
+      const usarVideo = medioPedido !== "image";
       const videoPath = usarVideo ? getVideoPath() : null;
       const imagePath = usarVideo ? null : getMenuImagePath();
       const cardBody =
@@ -258,9 +264,36 @@ export default {
       const enviado = await sendMenuCard(sock, ctx.chatId, {
         body: cardBody,
         footer: "Shin-MD • Bot de WhatsApp Profesional",
-        title: `✨ SHIN-MD ${version}`,
         ...(usarVideo ? { videoPath } : { imagePath }),
-        selector: { title: "📂 Explorar Categorías", sections: menuSections },
+        selector: {
+          title: "📂 Explorar Categorías",
+          sections: [
+            ...menuSections,
+            // Acceso directo al listado completo, dentro del selector
+            // (mismo tipo de botón, sin romper las restricciones).
+            {
+              title: "⚡ Acceso rápido",
+              rows: [
+                { title: "▤ Todos los comandos", description: "Listado completo", id: prefix + "allmenu" },
+                { title: "♡ Creador", description: "Contacto del dueño", id: prefix + "owner" },
+              ],
+            },
+          ],
+        },
+        // La tarjeta de oferta/código y la hoja inferior: lo que hace
+        // que el cliente pinte los botones de abajo. Sin esto el
+        // teléfono enseña sólo el botón del selector, que es lo que se
+        // veía antes.
+        optionTitle: "Shin-MD",
+        optionText: "Abrir opciones",
+        offerText: "Panel",
+        offerCode: prefix + "menu",
+        // IMPORTANTE: junto a un `single_select` no se pueden mezclar
+        // `quick_reply`s. La librería avisa: los botones tienen que ser
+        // todos del mismo tipo ("keep every button the same kind as the
+        // first"), o el cliente no sabe qué flujo dibujar y pinta la
+        // tarjeta como "no soportada". Por eso el segundo acceso va
+        // como una sección más del MISMO selector, no como botón aparte.
         contextInfo: getChannelContext({ mentionedJid: [ctx.senderId] }),
         quoted: ctx.full,
       });

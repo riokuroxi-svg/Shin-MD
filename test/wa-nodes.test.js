@@ -173,8 +173,11 @@ test("el formato de la tarjeta se elige con BOTONES_FORMATO", async () => {
   };
   const src = await leer();
   assert.match(src, /BOTONES_FORMATO/, "el envío mira la variable");
-  assert.match(src, /interactiveMessageTemplate/, "existe el envoltorio de plantilla");
-  assert.match(src, /nodosInteractivosAsync/, "el nodo biz lo pregunta a la librería");
+  assert.match(src, /interactiveAsTemplate/, "existe el envoltorio de plantilla");
+  // El nodo biz ya NO se pide aquí: lo inyecta la librería al enviar.
+  // Si se le pasara uno, ella no añadiría otro pero tampoco lo corregiría.
+  assert.doesNotMatch(src, /nodosInteractivosAsync/, "no pide nodos propios");
+  assert.doesNotMatch(src, /additionalNodes:\s*\[/, "no manda additionalNodes");
   assert.doesNotMatch(src, /const buildBizNode/, "ya no se arma a mano en el envío");
 });
 

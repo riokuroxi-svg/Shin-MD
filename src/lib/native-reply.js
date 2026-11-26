@@ -4,201 +4,236 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { randomBytes } from 'node:crypto';
-import { nodosInteractivosAsync } from "#lib/wa-nodes";
+// ═══════════════════════════════════════════════════════════════════
+//  native-reply.js — Tarjetas con botones nativos (respuesta rápida,
+//  enlace, copiar, selector).
+//
+//  LA REGLA QUE HACE QUE SE VEAN
+//  ─────────────────────────────
+//  Todos los botones de una tarjeta tienen que ser DEL MISMO TIPO. La
+//  librería lo dice con todas las letras: si se mezcla un `quick_reply`
+//  con un `cta_url` y un `cta_copy`, el cliente no puede deducir qué
+//  flujo dibujar y pinta el mensaje entero como "no soportado" (o no
+//  pinta nada). Antes se mezclaban aquí, y por eso `.play` y otros
+//  comandos con botones no se veían.
+//
+//  Qué hace ahora: se agrupan por tipo y se manda el grupo que quepa
+//  (el primero, en el orden en que los pidió el comando), metiendo los
+//  demás como secciones del selector cuando se puede. Así siempre hay
+//  una sola clase de botón en el mensaje.
+//
+//  Se usa la API de alto nivel de la librería (`generateWAMessageContent`
+//  con `nativeFlow`), no el proto a mano: ella coloca la imagen en la
+//  cabecera y arma el nodo `<biz>` sola.
+// ═══════════════════════════════════════════════════════════════════
 
-/**
- * Envío de una tarjeta interactiva nativa con botones (quick_reply, cta_copy, cta_url).
- *
- * Construye un mensaje `interactiveMessage` moderno (native_flow), compatible con
- * WhatsApp Multi-Device tanto en chats privados como en grupos.
- */
-
-function buildMessageContextInfo() {
-  return {
-    deviceListMetadata: {
-      senderKeyIndexes: [],
-      recipientKeyIndexes: [],
-      recipientKeyHash: '',
-      recipientTimestamp: Math.floor(Date.now() / 1000),
-    },
-    deviceListMetadataVersion: 2,
-    messageSecret: randomBytes(32),
-  };
-}
-
-// El envoltorio vive en #lib/wa-nodes desde que la traducción se
-// quedó sin botones por tener su propia copia a medias.
+import log from "#logger";
 
 /**
  * Formato de la tarjeta.
  *
  *   moderno (por defecto) → `interactiveMessage` suelto, el más bonito.
  *   plantilla             → el mismo interactivo dentro de
- *                           `templateMessage.interactiveMessageTemplate`.
- *                           Es el envoltorio que sí entienden los WhatsApp
- *                           viejos: se ve más sobrio, pero no aparece el
- *                           cartel de «actualiza WhatsApp».
+ *                           `templateMessage.interactiveMessageTemplate`,
+ *                           que es el envoltorio que entienden los
+ *                           WhatsApp viejos.
  *
- * Se cambia con `BOTONES_FORMATO=plantilla` en el entorno, sin tocar código.
+ * Se cambia con `BOTONES_FORMATO=plantilla` en el entorno.
  */
 function formatoBotones() {
-  const valor = String(process.env.BOTONES_FORMATO ?? '').trim().toLowerCase();
-  return ['plantilla', 'template', 'compatible'].includes(valor) ? 'plantilla' : 'moderno';
+  const valor = String(process.env.BOTONES_FORMATO ?? "").trim().toLowerCase();
+  return ["plantilla", "template", "compatible"].includes(valor) ? "plantilla" : "moderno";
+}
+
+/**
+ * Convierte un botón del formato del proyecto al de la API de la
+ * librería: selector (`sections`), respuesta rápida (`id`), enlace
+ * (`url`) o copiar (`copy`).
+ *
+ * @param {object} button
+ * @returns {{tipo: string, payload: object}}
+ */
+function normalizarBoton(button) {
+  const texto = String(button.text || button.display_text || "");
+
+  // Enlace
+  if (button.url) {
+    return {
+      tipo: "cta_url",
+      payload: { text: texto || "🌐 Abrir enlace", url: String(button.url) },
+    };
+  }
+  // Copiar código
+  if (button.copy_code || button.code) {
+    return {
+      tipo: "cta_copy",
+      payload: { text: texto || "📋 Copiar", copy: String(button.copy_code || button.code) },
+    };
+  }
+  // Selector de la librería: ya viene con secciones
+  if (button.sections) {
+    return {
+      tipo: "single_select",
+      payload: { text: texto || "📋 Elegir", sections: button.sections },
+    };
+  }
+  // Respuesta rápida: lo de siempre
+  return {
+    tipo: button.name || "quick_reply",
+    payload: { text: texto || "👉 Tocar", id: String(button.id || "") },
+  };
 }
 
 /**
  * Envía una tarjeta con botones nativos.
  *
  * @param {object} opts
- * @param {object} opts.sock          Socket de Baileys.
+ * @param {object} opts.sock          Socket del conector.
  * @param {string} opts.jid           Chat destino.
- * @param {string} opts.body          Texto principal de la tarjeta.
+ * @param {string} opts.body          Texto principal.
  * @param {string} [opts.footer]      Pie de la tarjeta.
- * @param {string} [opts.title]       Título del header.
- * @param {object} [opts.quoted]      Mensaje citado.
- * @param {Array}  [opts.buttons]     [{ text, id, copy_code, url, name }]
- * @param {Buffer|string} [opts.imageBuffer] Portada (Buffer o URL).
- * @param {object|string} [opts.params] Adornos extra del mensaje
- *        (messageParamsJson): tarjeta con cuenta atrás, hoja inferior…
- *        Se arman con #lib/native-params. Ver ese archivo.
+ * @param {string} [opts.title]       Título de la cabecera (opcional).
+ * @param {object} [opts.quoted]      Mensaje que se cita.
+ * @param {Array}  [opts.buttons]     [{ text, id, copy_code, url }]
+ * @param {Buffer|string} [opts.imageBuffer] Portada (Buffer o ruta).
+ * @param {object|string} [opts.params] Adornos del mensaje (hoja inferior,
+ *        cuenta atrás). Se arman con #lib/native-params.
  * @returns {Promise<{sent: boolean, key?: object, error?: any}>}
  */
 export async function sendNativeQuickReply({
   sock,
   jid,
   body,
-  footer = '',
-  title = '❦ Shin-MD',
+  footer = "",
+  title = "",
   quoted,
   buttons = [],
   imageBuffer = null,
   params = null,
 } = {}) {
   try {
-    if (!sock?.relayMessage) throw new Error('El socket no expone relayMessage');
+    if (!sock?.relayMessage) throw new Error("El socket no expone relayMessage");
 
-    const {
-      generateWAMessageFromContent,
-      prepareWAMessageMedia,
-    } = await import('baileys');
+    const { generateWAMessageContent, generateWAMessageFromContent } = await import("baileys");
 
-    let mediaMessage = null;
-    if (imageBuffer) {
-      try {
-        if (typeof sock.waUploadToServer === 'function') {
-          const payload = Buffer.isBuffer(imageBuffer)
-            ? { image: imageBuffer }
-            : (typeof imageBuffer === 'string' && /^https?:\/\//i.test(imageBuffer) ? { image: { url: imageBuffer } } : null);
+    // ── Botones: un solo tipo por mensaje ───────────────────────
+    const normalizados = (buttons || []).map(normalizarBoton);
+    /** @type {Map<string, object[]>} */
+    const porTipo = new Map();
+    for (const b of normalizados) {
+      const lista = porTipo.get(b.tipo) || [];
+      lista.push(b.payload);
+      porTipo.set(b.tipo, lista);
+    }
 
-          if (payload) {
-            const prepared = await prepareWAMessageMedia(
-              payload,
-              { upload: sock.waUploadToServer },
-            );
-            mediaMessage = prepared?.imageMessage || null;
-          }
-        }
-      } catch {
-        mediaMessage = null;
+    // Los `quick_reply` sueltos se convierten en un selector para poder
+    // convivir con los demás en un único mensaje (dos `quick_reply` no
+    // caben cuando hay otra clase de botón: el cliente no sabría qué
+    // dibujar).
+    if (porTipo.size > 1 && porTipo.has("quick_reply")) {
+      const rapidos = porTipo.get("quick_reply");
+      porTipo.delete("quick_reply");
+      const previo = porTipo.get("single_select") || [];
+      porTipo.set("single_select", [
+        {
+          text: previo[0]?.text || "📋 Opciones",
+          sections: [
+            {
+              title: "Elige una opción",
+              rows: rapidos.map((b) => ({ title: b.text, id: b.id })),
+            },
+            ...previo.flatMap((b) => b.sections || []),
+          ],
+        },
+      ]);
+    }
+
+    // Se queda UN tipo. Prioridad de los que SIRVEN para actuar
+    // (respuesta rápida y selector) sobre los decorativos (enlace,
+    // copiar): si sólo cabe un tipo, lo que no puede faltar es el botón
+    // que hace algo.
+    const PRIORIDAD = ["quick_reply", "single_select", "cta_copy", "cta_url"];
+    const ordenados = [...porTipo.entries()].sort(
+      (a, b) => PRIORIDAD.indexOf(a[0]) - PRIORIDAD.indexOf(b[0]),
+    );
+    const [tipoElegido, listaElegida] = ordenados[0] || ["quick_reply", []];
+    porTipo.clear();
+    for (const [k, v] of ordenados) porTipo.set(k, v);
+    let botonesFinales;
+    if (tipoElegido === "single_select") {
+      // Todas las secciones de todos los selectores, en uno solo.
+      const secciones = listaElegida.flatMap((b) => b.sections || []);
+      const sobrantes = [...porTipo.entries()].slice(1).flatMap(([, l]) => l);
+      if (sobrantes.length) {
+        secciones.push({
+          title: "Más opciones",
+          rows: sobrantes.map((b) => {
+            if (b.url) return { title: b.text, description: b.url, id: b.url };
+            if (b.copy) return { title: b.text, description: "copiar", id: b.copy };
+            return { title: b.text, id: b.id || "" };
+          }),
+        });
+      }
+      botonesFinales = [
+        { text: listaElegida[0]?.text || "📋 Opciones", sections: secciones },
+      ];
+    } else {
+      botonesFinales = listaElegida;
+      if (porTipo.size > 1) {
+        log.warn(
+          "native-reply: se descartan botones de otro tipo (" +
+            [...porTipo.keys()].slice(1).join(", ") +
+            "): mezclar tipos hace que el cliente no pinte la tarjeta",
+        );
       }
     }
 
-    const header = {
-      title: String(title),
-      subtitle: '',
-      hasMediaAttachment: Boolean(mediaMessage),
-    };
-    if (mediaMessage) header.imageMessage = mediaMessage;
+    // Un `messageParamsJson` vacío (`"{}"`) hace que algunos clientes
+    // dibujen una franja gris de más y otros descarten la tarjeta: sólo
+    // se manda si trae algo dentro.
+    const paramsJson = (() => {
+      if (!params) return null;
+      const crudo = typeof params === "string" ? params : JSON.stringify(params);
+      if (!crudo || crudo === "{}" || crudo === "null") return null;
+      return crudo;
+    })();
 
-    const formattedButtons = (buttons || []).map((button) => {
-      // 1. Botón nativo de Copiar Código (cta_copy)
-      if (button.name === 'cta_copy' || button.copy_code || button.code) {
-        return {
-          name: 'cta_copy',
-          buttonParamsJson: JSON.stringify({
-            display_text: String(button.text || button.display_text || 'Copiar Código'),
-            id: String(button.id || 'copy_code'),
-            copy_code: String(button.copy_code || button.code || ''),
-          }),
-        };
-      }
-      // 2. Botón nativo de Enlace (cta_url)
-      if (button.name === 'cta_url' || button.url) {
-        return {
-          name: 'cta_url',
-          buttonParamsJson: JSON.stringify({
-            display_text: String(button.text || button.display_text || 'Enlace'),
-            url: String(button.url || ''),
-            merchant_url: String(button.url || ''),
-          }),
-        };
-      }
-      // 3. Botón de respuesta rápida (quick_reply)
-      return {
-        name: button.name || 'quick_reply',
-        buttonParamsJson: typeof button.buttonParamsJson === 'string'
-          ? button.buttonParamsJson
-          : JSON.stringify({
-              display_text: String(button.text || button.display_text || ''),
-              id: String(button.id || ''),
-              icon: (button.icon ? String(button.icon).toUpperCase() : undefined),
-            }),
-      };
-    });
-
-    const paramsJson = !params
-      ? ''
-      : (typeof params === 'string' ? params : JSON.stringify(params));
-
-    const interactiveMessage = {
-      header,
-      body: { text: String(body || '') },
-      footer: { text: String(footer || '') },
-      nativeFlowMessage: {
-        buttons: formattedButtons,
-        // Adornos extra (cuenta atrás, hoja inferior). Solo se manda si
-        // hay algo de verdad: un JSON vacío hace que algunos clientes
-        // dibujen una franja gris de más.
-        ...(paramsJson ? { messageParamsJson: paramsJson } : {}),
-        messageVersion: 1,
+    const contenido = await generateWAMessageContent(
+      {
+        // OJO con la librería: si se manda `caption` SIN media, intenta
+        // validar una cabecera multimedia que no existe y revienta con
+        // "Invalid media type". El texto del cuerpo va como `text` cuando
+        // no hay imagen; `caption` sólo acompaña a la media.
+        ...(imageBuffer
+          ? { image: Buffer.isBuffer(imageBuffer) ? imageBuffer : { url: String(imageBuffer) }, caption: String(body || "") }
+          : { text: String(body || "") }),
+        ...(footer ? { footer } : {}),
+        nativeFlow: botonesFinales.length ? botonesFinales : undefined,
+        interactiveAsTemplate: formatoBotones() === "plantilla",
+        ...(paramsJson ? { optionTitle: "Opciones", optionText: "Ver opciones" } : {}),
       },
-    };
+      { upload: sock.waUploadToServer, mediaCache: sock.mediaCache, logger: log },
+    );
 
-    const message = formatoBotones() === 'plantilla'
-      ? {
-          messageContextInfo: buildMessageContextInfo(),
-          templateMessage: {
-            interactiveMessageTemplate: interactiveMessage,
-            templateId: `shin-${Date.now()}`,
-          },
-        }
-      : {
-          messageContextInfo: buildMessageContextInfo(),
-          interactiveMessage,
-        };
+    // El título va en la cabecera si se pidió y hay media; si no, se
+    // omite (un título vacío hace que algunos clientes descarten la
+    // tarjeta).
+    if (title && contenido.interactiveMessage && !contenido.interactiveMessage.header) {
+      contenido.interactiveMessage.header = { title: String(title), hasMediaAttachment: false };
+    }
 
-    const generated = generateWAMessageFromContent(jid, message, {
+    const generated = generateWAMessageFromContent(jid, contenido, {
       userJid: sock.user?.id,
       quoted,
       timestamp: new Date(),
     });
 
     if (!generated?.key?.id || !generated.message) {
-      throw new Error('No se pudo generar la tarjeta nativa');
+      throw new Error("No se pudo generar la tarjeta nativa");
     }
 
-    // El nodo `biz` lo arma la librería a partir del mensaje cuando sabe.
-    // El nuestro escrito a mano sustituye al suyo (ella no pone dos), así que
-    // si el nuestro se queda corto el mensaje sale peor que sin él.
-    const additionalNodes = await nodosInteractivosAsync(jid, {
-      contenido: generated.message,
-    });
-
-    await sock.relayMessage(jid, generated.message, {
-      messageId: generated.key.id,
-      additionalNodes,
-    });
+    // Sin additionalNodes: el `<biz>` lo pone la librería (y no pone dos).
+    await sock.relayMessage(jid, generated.message, { messageId: generated.key.id });
 
     return { sent: true, key: generated.key };
   } catch (error) {

@@ -26,6 +26,7 @@ import db from "../services/ginko-db.js";
 import pino from "pino";
 import { clasificarDesconexion } from "./politica-sesion.js";
 import NodeCache from "node-cache";
+import { LRUCache } from "lru-cache";
 import log from "#logger";
 import { estilizar } from "#lib/theme";
 
@@ -147,6 +148,12 @@ export function connectSocket(engine, opts) {
   const SK = "__sent__:";
 
   const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
+  // Caché de subidas de medios. La librería la consulta ANTES de subir:
+  // la misma imagen (mismo hash) se sube una sola vez y luego se
+  // reaprovecha el `imageMessage` ya subido en cada `.menu`. Sin esto,
+  // cada menú pagaba la subida entera (10-18 s por redes móviles).
+  // 50 entradas es el tamaño que recomienda la propia librería.
+  const mediaCache = new LRUCache({ max: 50, ttl: 1000 * 60 * 60 * 3 });
 
   function scheduleReconnect(delayMs) {
     if (sesionRequiereRevision) return;
@@ -242,6 +249,7 @@ export function connectSocket(engine, opts) {
       transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
       emitOwnEvents: true,
       msgRetryCounterCache,
+      mediaCache,
       cachedGroupMetadata: async (jid) => getCachedMeta(jid) ?? undefined,
       getMessage: async (key) => {
         if (!key?.id) return undefined;
@@ -539,8 +547,8 @@ export function connectSocket(engine, opts) {
         // usuario lee el panel, no cuando pide el menú.
         setTimeout(async () => {
           try {
-            const { calentarVideoMenu } = await import("#lib/menu-card");
-            await calentarVideoMenu(s);
+            const { calentarMediaMenu } = await import("#lib/menu-card");
+            await calentarMediaMenu(s);
           } catch { /* el menú funciona igual, solo tarda la primera vez */ }
         }, 20000);
 
