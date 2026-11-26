@@ -115,10 +115,11 @@ test("el menú ya no se viste con los banners por hora de media/banners", async 
   assert.match(src, /useHourly = false/, "el menú no pide banner por hora por defecto");
 });
 
-test("theme: hay banner de día y de noche, y son imágenes válidas", () => {
+test("theme: los banners por hora son opcionales y válidos si existen", () => {
+  // El menú ya no se viste con media/banners. Si alguien deja imágenes ahí,
+  // se validan; si no hay ninguna, pickBanner devuelve null y nadie rompe.
   for (const modo of ["day", "night"]) {
     const lista = listBanners(modo);
-    assert.ok(lista.length > 0, `falta el banner de ${modo}`);
     for (const p of lista) {
       const st = fs.statSync(p);
       assert.ok(st.size > 0 && st.size <= 600 * 1024, `${p} pesa demasiado para un banner`);
@@ -127,7 +128,8 @@ test("theme: hay banner de día y de noche, y son imágenes válidas", () => {
       const png = cab[0] === 0x89 && cab[1] === 0x50;
       assert.ok(jpeg || png, `${p} no es JPEG/PNG`);
     }
-    assert.ok(lista.includes(pickBanner(modo)));
+    const elegido = pickBanner(modo);
+    assert.ok(lista.length === 0 ? elegido === null : lista.includes(elegido));
   }
 });
 
