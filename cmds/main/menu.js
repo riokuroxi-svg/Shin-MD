@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
-import { pickRandom } from "#lib/random";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,67 +24,31 @@ import {
   getVerifiedQuoted,
 } from "../../src/lib/contextBuilder.js";
 import { resolveChannel } from "../../src/lib/channel.js";
-import { sendInteractive, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
+import { enviarMenu } from "#menu-kit";
 import db from "../../src/services/ginko-db.js";
 import { pickBanner } from "#lib/theme";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Obtiene un banner aleatorio de la colección shuffle o assets por defecto
+ * Banner del menú, según la hora (día/noche).
+ *
+ * Ya no hay colección de fotos: los banners los dibuja tools/arte_marca.py
+ * con formas y curvas, y son los mismos para todos. Si el dueño quiere los
+ * suyos, los deja en media/banners/banner-day.* o banner-night.* y mandan
+ * esos (theme.js ya busca primero ahí).
  */
-function getRandomBanner() {
-  // Tanda 1 del sistema de diseño: banner según la hora (día/noche).
-  // media/banners/ manda sobre todo lo demás; si está vacía, se conserva
-  // exactamente el comportamiento anterior (shuffle → assets → MENU_IMAGE).
+function getMenuBanner() {
   try {
     const porHora = pickBanner();
     if (porHora) return fs.readFileSync(porHora);
   } catch {}
 
-  const shuffleDir = path.resolve(__dirname, "../../assets/image/shuffle");
-  try {
-    if (fs.existsSync(shuffleDir)) {
-      const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
-      if (files.length > 0) {
-        const chosen = pickRandom(files);
-        return fs.readFileSync(path.join(shuffleDir, chosen));
-      }
-    }
-  } catch {}
-
-  const fallbackPaths = [
-    process.env.MENU_IMAGE,
-    path.resolve(__dirname, "../../assets/image/anita-landscape.jpg"),
-    path.resolve(__dirname, "../../assets/image/anita.png"),
-    path.resolve(__dirname, "../../assets/banner-default.png"),
-    path.resolve(__dirname, "../../assets/bocchi-banner.png"),
-  ].filter(Boolean);
-
-  for (const p of fallbackPaths) {
+  const marca = path.resolve(__dirname, "../../assets/brand");
+  const modo = new Date().getHours() >= 6 && new Date().getHours() < 19 ? "day" : "night";
+  for (const p of [path.join(marca, `banner-${modo}.png`), path.join(marca, "banner-day.png")]) {
     try {
-      if (typeof p === "string" && fs.existsSync(p)) {
-        return fs.readFileSync(p);
-      }
-    } catch {}
-  }
-  return null;
-}
-
-/**
- * Obtiene el buffer del video animado para menús gifPlayback
- */
-function getVideoAsset() {
-  const videoPaths = [
-    process.env.MENU_VIDEO_PATH,
-    path.resolve(__dirname, "../../assets/video/anita-mp4.mp4"),
-  ].filter(Boolean);
-
-  for (const p of videoPaths) {
-    try {
-      if (typeof p === "string" && fs.existsSync(p)) {
-        return fs.readFileSync(p);
-      }
+      if (fs.existsSync(p)) return fs.readFileSync(p);
     } catch {}
   }
   return null;
@@ -174,22 +137,12 @@ export default {
       const lines = list.map(c => `\`${prefix}${c.name}\`${getCommandBadges(c)} — ${c.description || "Sin descripción"}`);
       const text = `${greeting}\n\n` + createBracketBox(catTitle, lines, emoji) + `\n_Shin-MD v${version} · AGPL-3.0_`;
 
-      const banner = getRandomBanner();
+      const banner = getMenuBanner();
       if (banner) {
         await sock.sendMessage(ctx.chatId, { image: banner, caption: text }, { quoted: ctx.full });
         return null;
       }
       return text;
-    }
-
-    // ── Recuperar Variante de Menú Configurada ──
-    let menuVariant = 1;
-    try {
-      const botJid = sock?.user?.id || "default";
-      const settings = db.getSettings(botJid) || {};
-      menuVariant = Number(settings.menu_variant || settings.menuVariant || 1);
-    } catch {
-      menuVariant = 1;
     }
 
     // ── Ficha de Usuario y Estado del Bot ──
@@ -261,102 +214,52 @@ export default {
     }
     menuSections.push({ title: "反魂 · Categorías", rows: categoryRows });
 
-    const menuButtons = [
-      singleSelect("📂 Explorar Categorías", menuSections),
-      quickReply("🗂️ Categorías (.menucat)", "menucat"),
-      quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
-      quickReply("🏓 Ping", "ping"),
-      ctaUrl("📢 Canal Oficial", channelUrl),
-      ctaCopy("📋 Copiar prefijo", prefix),
-      ctaUrl("⭐ Código fuente", "https://github.com/riokuroxi-svg/Shin-MD"),
-    ];
-    const menuHoja = {
-      titulo: "Shin-MD · más opciones",
-      boton: "Ver todo",
-      divisiones: [2],
-    };
-
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
-    const banner = getRandomBanner();
-    const videoAsset = getVideoAsset();
+    const banner = getMenuBanner();
 
-    // ── VARIANTES DE RENDERIZADO ──
-
-    // Variante 3: Video Animado GifPlayback
-    if (menuVariant === 3 && videoAsset) {
-      const interactiveBody = headerText +
-        `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
-        `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
-        `│ 🅖 Grupos • 🅛 Límite\n` +
-        `╰─────────────────────────⬣\n\n` +
-        `_Selecciona una categoría en el botón desplegable de abajo._\n\n` +
-        `📢 *Canal:* ${channelUrl}`;
-
-      await sendInteractive(sock, ctx.chatId, {
-        title: "✨ SHIN-MD " + version,
-        body: interactiveBody,
-        footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
-        video: videoAsset,
-        gifPlayback: true,
-        buttons: menuButtons,
-        hoja: menuHoja,
-        quoted: ctx.full,
-        fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
+    // ── MENÚ ÚNICO (menu-kit) ─────────────────────────────────────
+    // Una sola burbuja: vídeo en bucle + texto + botones + oferta.
+    // Reemplaza las variantes 1/2/3/4: el «estilo» ya no son ramas de
+    // código distintas, es el mismo envío con distinto contenido.
+    // Se puede apagar con MENU_MODO=clasico o MENU_BOTONES=off.
+    {
+      const enviado = await enviarMenu(sock, ctx.chatId, {
+        cuerpo: headerText +
+          `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
+          `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
+          `│ 🅖 Grupos • 🅛 Límite\n` +
+          `╰─────────────────────────⬣\n\n` +
+          `_Elige una categoría en el botón de abajo._\n\n` +
+          `📢 *Canal:* ${channelUrl}`,
+        pie: `Shin-MD v${version} • 反魂`,
+        selector: { title: "📂 Explorar Categorías", sections: menuSections },
+        botones: [
+          { text: "📜 Ver todos los comandos", id: `${prefix}allmenu` },
+          { text: "🏓 Ping", id: `${prefix}ping` },
+          { text: "📢 Canal Oficial", url: channelUrl },
+        ],
+        cita: ctx.full,
+        prefijo: prefix,
+        notaDeVoz: true,
       });
-      return null;
+      if (enviado) return null;
+      // si el kit devolvió null (sin botones), sigue el texto de abajo
     }
 
-    // Variante 2: menú en texto, sin botones.
-    //
-    // Antes esta rama se comía TAMBIÉN todos los grupos (`ctx.isGroup ||`),
-    // así que en un grupo el menú nunca llegaba a la tarjeta interactiva:
-    // daba igual cuántos botones se le pusieran, salía como imagen con
-    // texto. Ya no: el grupo recibe la tarjeta igual que un privado, y si
-    // el envío nativo fallara, sendInteractive cae solo a este mismo texto
-    // (va como fallbackText más abajo).
-    if (menuVariant === 2) {
-      const finalContent = headerText +
-        `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
-        readMore +
-        fullCategoriesList +
-        `\n📢 *Canal Oficial:* ${channelUrl}\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`;
-
-      if (banner) {
-        await sock.sendMessage(
-          ctx.chatId,
-          { image: banner, caption: finalContent, contextInfo: channelCtx },
-          { quoted: ctx.full }
-        );
-        return null;
-      }
-
-      await sock.sendMessage(
-        ctx.chatId,
-        { text: finalContent, contextInfo: channelCtx },
-        { quoted: ctx.full }
-      );
-      return null;
-    }
-
-    // Variante 1 (Por defecto en DM): Tarjeta Interactiva con Banner Rotativo
-    const interactiveBody = headerText +
-      `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
-      `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
-      `│ 🅖 Grupos • 🅛 Límite\n` +
-      `╰─────────────────────────⬣\n\n` +
-      `_Selecciona una categoría en el botón desplegable de abajo para ver sus comandos._\n\n` +
-      `📢 *Canal:* ${channelUrl}`;
-
-    await sendInteractive(sock, ctx.chatId, {
-      title: "✨ SHIN-MD " + version,
-      body: interactiveBody,
-      footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
-      image: banner,
-      buttons: menuButtons,
-      hoja: menuHoja,
-      quoted: ctx.full,
-      fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
-    });
+    // La rama de variantes 1/2/3 ya no existe: si el kit no pudo mandar
+    // la tarjeta (MENU_BOTONES=off, sin assets…), sale el texto completo.
+    await sock.sendMessage(
+      ctx.chatId,
+      {
+        text:
+          headerText +
+          readMore +
+          fullCategoriesList +
+          `\n📢 *Canal Oficial:* ${channelUrl}\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`,
+        contextInfo: channelCtx,
+      },
+      { quoted: ctx.full },
+    );
 
     return null;
   },

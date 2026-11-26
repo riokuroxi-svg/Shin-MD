@@ -15,8 +15,9 @@ python3 tools/build_preview.py    # vista-previa.html         (para revisar)
    (`<path>`), no a `<text>`. Así el 反魂 y el nombre se dibujan idénticos en
    cualquier equipo, aunque no tenga la fuente instalada. Es el mismo criterio
    que ya usaba el hero anterior del repositorio.
-2. **Sin peticiones a internet.** La mascota va embebida como
-   `data:image/png;base64` dentro del SVG. El README no pide nada a terceros.
+2. **Sin peticiones a internet y sin arte de IA.** Ninguna pieza lleva una
+   imagen generada: la bandera del hero es vectorial y la marca del bot
+   (`assets/brand/*.png`) la dibuja `tools/arte_marca.py` con formas.
 3. **Claro y oscuro de verdad.** Cada pieza tiene su versión para
    `prefers-color-scheme`, con paletas propias (no un simple filtro invertido).
 
@@ -27,6 +28,7 @@ python3 tools/build_preview.py    # vista-previa.html         (para revisar)
 | `svgkit.py` | El motor: mide textos, los convierte a trazado, dibuja rectángulos, píldoras, iconos y chispitas. Sin dependencias raras (solo `fontTools`). |
 | `build_pastel.py` | Compone las piezas: portada, tarjetas de sección, insignias, divisores. Aquí están los textos y los números. |
 | `build_preview.py` | Convierte el README.md en `vista-previa.html`, con todos los SVG dentro del propio archivo. |
+| `arte_marca.py` | Dibuja la marca, los banners día/noche del bot y la portada de los MP3. **Cero imágenes de IA en el repositorio.** |
 | `fuentes/` | Baloo 2, Nunito y Quicksand (todas OFL). Solo hacen falta para regenerar. |
 
 ## Cambiar un dato

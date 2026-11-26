@@ -78,28 +78,6 @@ const CAT_ICONS = {
 // ── Helpers ────────────────────────────────────────────────────────
 
 /**
- * Busca imágenes en el pool local. Devuelve un Buffer aleatorio o null.
- */
-function getRandomMenuImage() {
-  const pools = [
-    path.resolve(__dirname, "../../assets/menus"),
-    path.resolve(__dirname, "../../assets/image/shuffle"),
-    path.resolve(__dirname, "../../assets"),
-  ];
-  const candidates = [];
-  for (const dir of pools) {
-    try {
-      if (!fs.existsSync(dir)) continue;
-      const files = fs.readdirSync(dir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
-      for (const f of files) candidates.push(path.join(dir, f));
-    } catch {}
-  }
-  if (candidates.length === 0) return null;
-  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-  try { return fs.readFileSync(chosen); } catch { return null; }
-}
-
-/**
  * Construye la lista de comandos decorada.
  */
 function buildCommandList(commands, prefix) {
@@ -211,7 +189,7 @@ export default {
       });
 
       // ── 2. Enviar tarjeta interactiva con imagen + categorías ──
-      const image = getRandomMenuImage();
+      const image = null;
       const categoryRows = [];
       const sortedCats = Array.from(cats.entries()).sort((a, b) => b[1].length - a[1].length);
       for (const [cat, cmds] of sortedCats) {
@@ -282,7 +260,7 @@ export default {
     });
 
     // ── 2. Enviar tarjeta interactiva con imagen + comandos ──
-    const image = getRandomMenuImage();
+    const image = null;
     const cmdLines = buildCommandList(list, prefix);
 
     const body =

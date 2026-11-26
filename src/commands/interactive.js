@@ -14,12 +14,40 @@
 //  ⚠️ Anti-ban: usamos estos mensajes con moderación, todo por la cola.
 // ═══════════════════════════════════════════════════════════════════
 
+import { randomBytes } from "node:crypto";
 import {
   generateWAMessageFromContent,
   prepareWAMessageMedia,
   proto,
 } from "baileys";
 import log from "#logger";
+
+/**
+ * Contexto de mensaje que el cliente necesita para resolver el toque de un
+ * botón.
+ *
+ * POR QUÉ messageSecret
+ * ---------------------
+ * El cliente oficial (y los forks que funcionan, p. ej. @itsliaaa/baileys)
+ * ponen 32 bytes aleatorios en CADA mensaje interactivo:
+ *
+ *     if (!m.messageContextInfo.messageSecret)
+ *         m.messageContextInfo.messageSecret = randomBytes(32);
+ *
+ * El paquete stock no lo hace nunca. Sin ese secreto el teléfono no tiene
+ * con qué resolver la respuesta: la tarjeta se ve, pero pulsar no hace
+ * nada. Es el «el menú a veces no respondía».
+ *
+ * Se genera uno NUEVO por mensaje. Reutilizarlo deja cien mensajes
+ * distintos con el mismo relleno.
+ */
+export function messageContextInfo() {
+  return {
+    deviceListMetadata: {},
+    deviceListMetadataVersion: 2,
+    messageSecret: randomBytes(32),
+  };
+}
 
 /**
  * Prepara un buffer o URL como header media (imagen/video) del mensaje.
@@ -255,10 +283,7 @@ export async function sendInteractive(sock, jid, opts = {}) {
     const envolver = process.env.SHIN_INTERACTIVO_VIEWONCE === "1";
 
     const mensajeInteractivo = {
-          messageContextInfo: {
-            deviceListMetadata: {},
-            deviceListMetadataVersion: 2,
-          },
+          ...messageContextInfo(),
           interactiveMessage: proto.Message.InteractiveMessage.fromObject({
             body: proto.Message.InteractiveMessage.Body.fromObject({
               text: body,
@@ -365,7 +390,7 @@ export async function sendCarousel(sock, jid, opts = {}) {
     const content = {
       viewOnceMessage: {
         message: {
-          messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
+          ...messageContextInfo(),
           interactiveMessage: proto.Message.InteractiveMessage.fromObject({
             body: proto.Message.InteractiveMessage.Body.fromObject({ text: opts.text || "" }),
             carouselMessage: proto.Message.InteractiveMessage.CarouselMessage.fromObject({

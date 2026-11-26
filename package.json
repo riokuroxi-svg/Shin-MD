@@ -54,7 +54,9 @@
     "#economy": "./src/services/economy.js",
     "#events": "./cmds/events.js",
     "#core/exif": "./src/lib/exif.js",
-    "#lib/*": "./src/lib/*.js"
+    "#lib/*": "./src/lib/*.js",
+    "#menu-kit": "./src/lib/menu-kit/enviar-menu.js",
+    "#menu-media": "./src/lib/menu-kit/menu-media.js"
   },
   "engines": {
     "node": ">=22.5.0",

@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
-import { pickRandom } from "#lib/random";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,31 +17,25 @@ import {
   CATEGORY_EMOJIS,
 } from "../../src/lib/formatter.js";
 import { getVerifiedQuoted, getChannelContext } from "../../src/lib/contextBuilder.js";
+import { pickBanner } from "#lib/theme";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Banner del listado completo: el de marca dibujado por tools/arte_marca.py
+ * (día o noche) o, si el dueño dejó los suyos, los de media/banners/.
+ */
 function getRandomBanner() {
-  const shuffleDir = path.resolve(__dirname, "../../assets/image/shuffle");
   try {
-    if (fs.existsSync(shuffleDir)) {
-      const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
-      if (files.length > 0) {
-        const chosen = pickRandom(files);
-        return fs.readFileSync(path.join(shuffleDir, chosen));
-      }
-    }
+    const porHora = pickBanner();
+    if (porHora) return fs.readFileSync(porHora);
   } catch {}
-
-  const fallbackPaths = [
-    process.env.MENU_IMAGE,
-    path.resolve(__dirname, "../../assets/image/anita-landscape.jpg"),
-    path.resolve(__dirname, "../../assets/image/anita.png"),
-    path.resolve(__dirname, "../../assets/banner-default.png"),
-  ].filter(Boolean);
-
-  for (const p of fallbackPaths) {
+  const marca = path.resolve(__dirname, "../../assets/brand");
+  const hora = new Date().getHours();
+  const modo = hora >= 6 && hora < 19 ? "day" : "night";
+  for (const p of [path.join(marca, `banner-${modo}.png`), path.join(marca, "banner-day.png")]) {
     try {
-      if (typeof p === "string" && fs.existsSync(p)) return fs.readFileSync(p);
+      if (fs.existsSync(p)) return fs.readFileSync(p);
     } catch {}
   }
   return null;

@@ -13,17 +13,59 @@
 //  y el teléfono lo tira sin pintar nada. Ni error, ni aviso.
 //
 //    biz → interactive(type=native_flow, v=1) → native_flow(v=9, mixed)
-//    + quality_control
+//    + quality_control(decision_id, source_type, <decision_source value="df"/>)
 //    + bot(biz_bot=1)  SOLO en chats privados (enciende la ✨ de IA)
 //
-//  Estaba copiado en tres sitios distintos y en otros tres faltaba
-//  (la tarjeta de traducción, por ejemplo, salía sin botones). Ahora
-//  vive aquí y lo usan todos.
+//  ── EL NODO `quality_control` VACÍO ERA EL PROBLEMA ──────────────
+//  Hasta v3.7.9 este nodo salía así:
+//
+//    <quality_control source_type="third_party"/>
+//
+//  y el cliente oficial (y la propia librería, en getBizBinaryNode)
+//  lo emite con dos campos más:
+//
+//    <quality_control decision_id="<40 hex>" source_type="third_party">
+//      <decision_source value="df"/>
+//    </quality_control>
+//
+//  Ese nodo es la pista que le dice al teléfono con qué camino dibujar
+//  el mensaje. Un `biz` incompleto se acepta igual y luego el cliente
+//  puede contestar «actualiza WhatsApp» o no pintar los botones. Y como
+//  la librería no añade el suyo si ve uno nuestro, nuestro nodo
+//  incompleto SUSTITUÍA al completo. Por eso el fallo era intermitente:
+//  dependía del estado interno del teléfono, no del mensaje.
 // ═══════════════════════════════════════════════════════════════════
+
+import { randomBytes } from "node:crypto";
 
 /** ¿Es un chat de una sola persona? WhatsApp ya usa @lid además del viejo. */
 export function esPrivado(jid = "") {
   return typeof jid === "string" && (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid"));
+}
+
+/** 20 bytes en hex (40 caracteres), como el decision_id del cliente oficial. */
+function semillaDecision() {
+  try {
+    return randomBytes(20).toString("hex");
+  } catch {
+    return Math.random().toString(16).slice(2).padEnd(40, "0").slice(0, 40);
+  }
+}
+
+/**
+ * El nodo `quality_control` completo.
+ * `decision_id` y `decision_source` NO son decoración: son los que
+ * emite el cliente oficial y los que faltaban aquí desde el diseño.
+ */
+function nodoQualityControl() {
+  return {
+    tag: "quality_control",
+    attrs: {
+      decision_id: semillaDecision(),
+      source_type: "third_party",
+    },
+    content: [{ tag: "decision_source", attrs: { value: "df" } }],
+  };
 }
 
 /**
@@ -34,6 +76,7 @@ export function esPrivado(jid = "") {
  * @returns {object[]} para pasar como additionalNodes a relayMessage
  */
 export function nodosInteractivos(jid, { ai = true } = {}) {
+  /** @type {any[]} los dos nodos tienen attrs distintos a propósito */
   const nodos = [{
     tag: "biz",
     attrs: {
@@ -47,14 +90,9 @@ export function nodosInteractivos(jid, { ai = true } = {}) {
         attrs: { type: "native_flow", v: "1" },
         content: [{ tag: "native_flow", attrs: { v: "9", name: "mixed" } }],
       },
-      { tag: "quality_control", attrs: { source_type: "third_party" } },
+      nodoQualityControl(),
     ],
   }];
-  // ⚠️ HALLAZGO del chequeo de tipos (correr `npm run typecheck`):
-  // Baileys exige además actual_actors, host_storage y privacy_mode_ts
-  // en este nodo y aquí faltan desde el diseño original. NO se toca a
-  // ciegas: hay que verificar contra WhatsApp real qué valores espera.
-  // @ts-expect-error -- pendiente de validar en teléfono
   if (esPrivado(jid) && ai) nodos.push({ tag: "bot", attrs: { biz_bot: "1" } });
   return nodos;
 }

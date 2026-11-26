@@ -21,7 +21,7 @@ sys.path.insert(0, AQUI)
 
 from pastel_lienzo import (  # noqa: E402
     banner, quicksand_suave, subbanner,
-    A, ANCHO, AR, C, CAT, D, MASCOTA, N, P, PAD, PR, RADIO, SALIDA, V, adorno, baloo, baloo_med, bloque,
+    A, ANCHO, AR, C, CAT, D, N, P, PAD, PR, RADIO, SALIDA, V, adorno, baloo, baloo_med, bloque,
     chip, cjk, corazon, esc, estrella, formato, guardar, icono, lienzo, mono, nunito, nunito_med,
     nunito_suave, quicksand, quicksand_suave, subbanner, tabla, tarjeta_lista, texto,
     texto_centrado, Lienzo,
@@ -81,8 +81,11 @@ def hero():
     texto(c, baloo, "-MD", 92, 64 + ancho_shin, 226, P["lila_fuerte"], -1.5)
     ancho_nombre = ancho_shin + baloo.ancho("-MD", 92, -1.5)
     c.rect(66, 240, ancho_nombre * 0.72, 10, 5, P["lila"], opacidad=0.95)
-    texto(c, nunito_med, "反魂 · el renacer de un bot superior", 22, 68, 282, P["lila_fuerte"], 0.6)
-    texto(c, nunito_suave, "No se cae, no se banea y no borra tu sesión.", 23, 66, 320, P["tinta_suave"], 0.2)
+    # El 反魂 va con la fuente CJK: Nunito no trae esos glifos y salía un «·» suelto.
+    texto(c, cjk, "反魂", 26, 68, 282, P["lila_fuerte"], 0.0)
+    texto(c, nunito_med, "· el renacer de un bot superior", 22,
+          68 + cjk.ancho("反魂", 26) + 10, 282, P["lila_fuerte"], 0.6)
+    texto(c, nunito_suave, "No se cae y no borra tu sesión.", 22, 66, 320, P["tinta_suave"], 0.2)
 
     # píldora de arranque
     c.rect(66, 356, 372, 54, 27, P["terminal"], filtro="sombra")
@@ -152,18 +155,30 @@ def hero():
         texto(c, nunito_suave, nota, 15, x + 34 + ancho_v, cy0 + 74, P["tinta_suave"], 0.2)
         c.agrega(icono(ic, x + cw - 32, cy0 + 32, 13, color, grosor=2.2))
 
-    # La figura: una captura de anime de los 2000, con su grano y su fondo
-    # de fotograma. Va enmarcada en vez de recortada, porque recortarla le
-    # quitaría justo la textura que hace que no parezca un render.
-    alto_m = 440
-    ancho_m = alto_m * 526 / 1264
-    x_m = 616 - ancho_m / 2
-    y_m = 26
-    # Borde doble: uno ancho lila debajo y otro fino blanco encima. Dibujar un
-    # rect del mismo tamaño que la imagen deja asomar las esquinas.
-    c.rect(x_m - 4, y_m - 4, ancho_m + 8, alto_m + 8, RADIO - 8, P["lila_claro"], opacidad=0.55)
-    c.rect(x_m - 1.5, y_m - 1.5, ancho_m + 3, alto_m + 3, RADIO - 10, P["blanco"])
-    c.imagen(MASCOTA, x_m, y_m, ancho_m, alto_m)
+    # La figura: una bandera nobori con el 反魂 en vertical, dibujada línea a
+    # línea. Antes esta columna era una captura de anime generada por IA; ese
+    # arte ya no entra al repositorio. Todo lo que se ve aquí son formas.
+    bx, by, bw, bh = 522, 26, 188, 440
+    c.rect(bx - 4, by - 4, bw + 8, bh + 8, RADIO - 8, P["lila_claro"], opacidad=0.55)
+    c.rect(bx - 1.5, by - 1.5, bw + 3, bh + 3, RADIO - 10, P["blanco"])
+    c.gradiente_lineal("bandera", [("0", P["lila_fuerte"]), ("0.52", P["lila"]), ("1", P["lila_claro"])],
+                       x1=0, y1=0, x2=0, y2=1)
+    c.rect(bx, by, bw, bh, RADIO - 10, "url(#bandera)")
+    c.rect(bx + 13, by + 13, bw - 26, bh - 26, RADIO - 18, "none",
+           trazo=P["blanco"], grosor=1.4, opacidad=0.65)
+    # ondas del pie (el mismo gesto de agua de los banners)
+    c.camino("M %d %d q 26 -14 52 0 t 52 0 t 52 0 t 52 0 V %d H %d Z"
+             % (bx + 13, by + bh - 60, by + bh - 13, bx + 13), P["lila_fuerte"], opacidad=0.45)
+    # círculo superior con chispa
+    c.circulo(bx + bw / 2, by + 74, 26, P["blanco"], opacidad=0.22)
+    c.circulo(bx + bw / 2, by + 74, 26, "none", trazo=P["blanco"], grosor=1.4, opacidad=0.8)
+    c.agrega(estrella(bx + bw / 2, by + 74, 11, P["ambar_claro"], puntos=4))
+    # 反 魂 en vertical, con su separador
+    for i, kanji in enumerate(["反", "魂"]):
+        tam_k = 74
+        texto_centrado(c, cjk, kanji, tam_k, bx + bw / 2, by + 168 + i * 96, P["blanco"])
+    c.linea(bx + bw / 2 - 26, by + 296, bx + bw / 2 + 26, by + 296, P["ambar_claro"], 2, opacidad=0.9)
+    texto_centrado(c, quicksand_suave, "SHIN-MD", 17, bx + bw / 2, by + 334, P["blanco"], 1.4)
     adorno(c, 486, 148, 12, P["ambar"], giro=12)
     adorno(c, 742, 128, 9, P["lila"], giro=30, opacidad=0.9)
     c.agrega(corazon(748, 230, 7, P["lila"], opacidad=0.9))

@@ -17,7 +17,7 @@ import sys as _sys
 
 AQUI = os.path.dirname(os.path.abspath(__file__))
 _sys.path.insert(0, AQUI)
-from svgkit import Fuente, Lienzo, corazon, esc, estrella, formato, icono, uri_imagen  # noqa: E402
+from svgkit import Fuente, Lienzo, corazon, esc, estrella, formato, icono  # noqa: E402
 
 FUENTES = os.path.join(AQUI, "fuentes")
 RAIZ = os.path.dirname(AQUI)
@@ -58,7 +58,6 @@ quicksand_suave = Fuente(os.path.join(FUENTES, "Quicksand.ttf"), peso=500, respa
 mono = Fuente("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf")
 cjk = Fuente("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", familia_cjk="Noto Sans CJK JP")
 
-MASCOTA = uri_imagen(os.path.join(SALIDA, "mascota.png"))
 
 
 # --------------------------------------------------------------------------
