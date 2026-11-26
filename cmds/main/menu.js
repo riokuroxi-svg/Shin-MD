@@ -223,7 +223,7 @@ export default {
     // en memoria: usa la ruta con caché). Eso era parte del "no responde".
     // Cada variante pide lo suyo justo antes de enviarlo (carga perezosa).
 
-    // Variante 5 (por defecto): tarjeta única estilo FURINA.
+    // Variante 5 (por defecto): tarjeta única con botones nativos.
     // Un solo mensaje: header de video en bucle + body + single_select.
     // El video se sube una vez y queda cacheado: si ya está en caché,
     // el mensaje sale al instante (antes tardaba 10-18 s por la subida).

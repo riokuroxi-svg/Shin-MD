@@ -36,7 +36,7 @@ const VARIANTS = {
   },
   v5: {
     id: 5,
-    name: "TARJETA ÚNICA (estilo FURINA)",
+    name: "TARJETA ÚNICA (botones nativos)",
     desc: "Un solo mensaje: video en bucle + lista desplegable, con el video subido una sola vez — la que viene por defecto",
     emoji: "🃏",
   },

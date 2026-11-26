@@ -73,6 +73,9 @@ export const EXENTOS_POR_PAQUETE = {
     /^node_modules\/entities\//,
     /^node_modules\/(?:htmlparser2|parse5)\/.*entities\//,
     /^node_modules\/prettier\//,
+    // undici empaqueta el parser HTTP (llhttp) como WASM en base64:
+    // es una dependencia de Node, no un blob sospechoso.
+    /^node_modules\/undici\//,
   ],
   "anti-depuracion": [
     // @types/node y eslint hablan de --inspect en su documentación/CLI;

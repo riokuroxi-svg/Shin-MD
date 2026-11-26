@@ -20,6 +20,7 @@ import * as lid from "../lib/lid.js";
 import { panelCodigo } from "../services/consola.js";
 import { esLid as esJidLid } from "../lib/jid.js";
 import { resolveChannel } from "../lib/channel.js";
+import { nodoBiz, tipoDeBoton } from "../lib/biz-node.js";
 import { analizarCortes, podarCortes } from "../lib/cortes.js";
 import db from "../services/ginko-db.js";
 import pino from "pino";
@@ -368,9 +369,26 @@ export function connectSocket(engine, opts) {
         if (pn) j = pn;
       }
       const text = m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || "";
+
+      // ── Nodo <biz>: sin él WhatsApp acepta el stanza y no pinta la
+      // tarjeta (síntoma exacto: el .menu "se envía" y no llega nada).
+      // Baileys 7.0.0-rc14 lo perdió de su relayMessage; aquí se
+      // repone con la forma que el servidor acepta y los clientes pintan.
+      let opciones = o;
+      try {
+        const tipo = tipoDeBoton(m);
+        if (tipo) {
+          const yaTrae = Array.isArray(o?.additionalNodes)
+            && o.additionalNodes.some((n) => n?.tag === "biz" || n?.tag === "bot");
+          if (!yaTrae) {
+            opciones = { ...(o || {}), additionalNodes: [...(o?.additionalNodes || []), ...nodoBiz(tipo)] };
+          }
+        }
+      } catch { /* si falla, sale como antes: mejor eso que perder el envío */ }
+
       const ritmo = engine.getRitmo && engine.getRitmo();
       const esCaliente = !!(ritmo && j && ritmo.caliente(j));
-      return sendQueue.enqueue(() => origRelay(j, m, o), {
+      return sendQueue.enqueue(() => origRelay(j, m, opciones), {
         messageLength: String(text).length,
         destino: j,
         esRespuesta: esCaliente,
@@ -508,6 +526,16 @@ export function connectSocket(engine, opts) {
 
         // Resolver metadata del canal oficial en background
         resolveChannel(s, db).catch(() => {});
+
+        // Pre-subir el video del menú (una sola vez, en segundo plano) para
+        // que el primer `.menu` tampoco tarde: la subida ocurre mientras el
+        // usuario lee el panel, no cuando pide el menú.
+        setTimeout(async () => {
+          try {
+            const { calentarVideoMenu } = await import("#lib/menu-card");
+            await calentarVideoMenu(s);
+          } catch { /* el menú funciona igual, solo tarda la primera vez */ }
+        }, 20000);
 
         // B2.2: contador de grupos al conectar para /health.
         const groupsTimer = setTimeout(async () => {

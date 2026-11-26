@@ -221,7 +221,7 @@ export async function sendInteractive(sock, jid, opts = {}) {
   // con los nodos binarios puestos. Si algo falla, más abajo está el
   // respaldo de texto de siempre, así que nadie se queda sin respuesta.
   const esCanal = typeof jid === "string" && jid.endsWith("@newsletter");
-  // Mismos ajustes que la librería de FURINA: en grupos un interactivo con
+  // Ajustes de compatibilidad: en grupos un interactivo con
   // cabecera de video pasa por `viewOnceMessage`, que es la forma con la
   // que WhatsApp Web y los clientes Android lo pintan con botones. En
   // privados sigue el formato moderno (sin envolver).
