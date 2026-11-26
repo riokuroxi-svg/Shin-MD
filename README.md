@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 378 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 451 pruebas" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="433/433 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="451/451 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -58,6 +58,8 @@ puedes invitarme un café:
 > chip barato cuesta menos que tu cuenta personal.
 
 <h2 id="lo-que-lo-hace-distinto">Lo que lo hace distinto</h2>
+
+<img src="docs/assets/secciones/escritorio-neon.jpg" alt="Escritorio neón de Shin-MD" width="100%">
 
 <img src="docs/assets/pastel/banner-01.svg" alt="01 · Lo que lo hace distinto" width="100%">
 
@@ -114,6 +116,8 @@ debe cumplir la atribución de la Sección 7 del `NOTICE`.
 
 <h2 id="los-comandos">Los 213 comandos</h2>
 
+<img src="docs/assets/secciones/programando.jpg" alt="Programando con Shin-MD" width="100%">
+
 <img src="docs/assets/pastel/banner-03.svg" alt="03 · Los 213 comandos" width="100%">
 
 Escribe `.menu` dentro de WhatsApp y verás la tarjeta con botones y la lista
@@ -146,6 +150,61 @@ npm run docs:web
 ```
 
 </details>
+
+<h2 id="lo-que-puede-mandar">Lo que el bot puede mandar</h2>
+
+<img src="docs/assets/secciones/angel-mono.jpg" alt="Lo que el bot puede mandar" width="100%">
+
+Todo esto sale del mismo Baileys que ya está en `package.json`: no hay forks,
+ni paquetes de botones, ni nada que instalar aparte. Cada pieza tiene su
+archivo y su prueba:
+
+| Formato | Cómo se ve en el chat | Dónde está | Prueba |
+|---|---|---|---|
+| **Tarjeta con vídeo en bucle** | la cabecera se mueve sola, como un GIF, y debajo van el texto y los botones | `src/lib/menu-kit/enviar-menu.js` | `test/menu-kit.test.js` |
+| **Botones nativos** | hasta 3 a la vista; el resto, en la hoja «ver todo». Enlaces, copiar, llamar, respuestas rápidas | `src/lib/menu-kit/enviar-menu.js` | `test/menu-kit.test.js` |
+| **Lista desplegable** | el selector de categorías con filas, descripciones y una etiqueta «TOP» | `menuSections` en `cmds/main/menu.js` | `test/menu-kit.test.js` |
+| **Oferta con código** | la tarjeta de oferta por tiempo limitado con su botón de copiar | `tarjetaOferta()` | `test/menu-kit.test.js` |
+| **Nota de voz** | el menú puede acompañarse de un audio grabado, citado sobre la tarjeta | `mandarNotaDeVoz()` | `test/warmup-quota.test.js` |
+| **Tarjeta enriquecida** | texto + tablas + bloques de código con colores + fórmulas, todo en una burbuja | `src/lib/menu-kit/rich.js` | `test/rich.test.js` |
+| **«Pensando…»** | el aviso aparece, la presencia queda en «escribiendo…», y al llegar la respuesta el aviso desaparece | `src/lib/menu-kit/presencia.js` | `test/presencia.test.js` |
+
+### La tarjeta enriquecida (texto, tablas y código)
+
+WhatsApp ya trae el formato en el propio protocolo (`richResponseMessage`),
+y aquí se usa sin librerías externas:
+
+```js
+import { enviarRich, texto, tabla, codigo } from "#menu-kit/rich";
+
+await enviarRich(sock, jid, [
+  texto("Reporte de .menu"),
+  tabla("Categorías", [["info", "12"], ["downloads", "31"]]),
+  codigo("sock.sendMessage(jid, { text: 'hola' })", "js"),
+]);
+```
+
+Si el teléfono del usuario no pinta ese formato, sale el mismo contenido como
+texto con monoespaciado. Nunca se queda en blanco.
+
+### El aviso de «pensando…»
+
+No hay ninguna API secreta: son tres cosas de WhatsApp que casi nadie combina.
+Se muestra «escribiendo…», se manda un aviso corto y se borra cuando el
+resultado está listo:
+
+```js
+import { conAviso } from "#menu-kit/presencia";
+
+await conAviso(sock, jid, () => pensarLaRespuesta(), {
+  aviso: "_pensando…_",
+  responder: (r) => sock.sendMessage(jid, { text: r }),
+});
+```
+
+Lo que **no** se hace: fabricar certificados de Meta. El formato nativo de
+progreso los exige, y sin ellos el teléfono muestra «actualiza WhatsApp».
+Con estas tres piezas el efecto funciona en cualquier cliente.
 
 <h2 id="panel-local">Panel local</h2>
 
@@ -379,6 +438,8 @@ actualiza a medias se vuelve mentira; ahí se asume que es pasado.
 
 
 <h2 id="cómo-está-hecho">Cómo está hecho</h2>
+
+<img src="docs/assets/secciones/ciudad-glitch.jpg" alt="Ciudad glitch: cómo está hecho Shin-MD" width="100%">
 
 <img src="docs/assets/pastel/banner-06.svg" alt="06 · Cómo está hecho" width="100%">
 

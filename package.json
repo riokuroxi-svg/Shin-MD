@@ -56,7 +56,9 @@
     "#core/exif": "./src/lib/exif.js",
     "#lib/*": "./src/lib/*.js",
     "#menu-kit": "./src/lib/menu-kit/enviar-menu.js",
-    "#menu-media": "./src/lib/menu-kit/menu-media.js"
+    "#menu-media": "./src/lib/menu-kit/menu-media.js",
+    "#menu-kit/rich": "./src/lib/menu-kit/rich.js",
+    "#menu-kit/presencia": "./src/lib/menu-kit/presencia.js"
   },
   "engines": {
     "node": ">=22.5.0",
