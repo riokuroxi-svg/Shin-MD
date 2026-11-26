@@ -34,7 +34,11 @@
 
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { prepareWAMessageMedia, generateWAMessageFromContent } from "baileys";
+import {
+  prepareWAMessageMedia,
+  generateWAMessageContent,
+  generateWAMessageFromContent,
+} from "baileys";
 import { datosDelVideo } from "#lib/mp4-info";
 import log from "#logger";
 

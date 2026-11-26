@@ -164,7 +164,7 @@ export function getRandomMenuImage() {
 /** Ruta del video del menú (para el enviador con caché), o null. */
 /**
  * Ruta de la imagen que encabeza el menú (la que se pinta siempre).
- * `MENU_IMAGE` manda; si no, se rota entre las de assets/menus.
+ * `MENU_IMAGE` manda; si no, se usa la portada fija de Shin-MD.
  * @returns {string|null}
  */
 export function getMenuImagePath() {
@@ -173,20 +173,19 @@ export function getMenuImagePath() {
       if (fs.existsSync(process.env.MENU_IMAGE)) return process.env.MENU_IMAGE;
     } catch {}
   }
-  // OJO: getRandomMenuImage() devuelve el CONTENIDO (Buffer), no la ruta.
-  // Aquí hace falta la ruta para poder cachear la subida por archivo.
-  const pools = [path.join(ROOT_DIR, "assets/menus")];
-  const candidatos = [];
-  for (const dir of pools) {
-    try {
-      if (!fs.existsSync(dir)) continue;
-      for (const f of fs.readdirSync(dir)) {
-        if (/\.(jpe?g|png|webp)$/i.test(f)) candidatos.push(path.join(dir, f));
-      }
-    } catch {}
-  }
-  if (!candidatos.length) return null;
-  return candidatos[Math.floor(Math.random() * candidatos.length)];
+
+  // La portada principal debe ser consistente: el diseño oscuro violeta es
+  // la identidad visual de la tarjeta, no una imagen aleatoria por envío.
+  const portada = path.join(MENU_ASSETS, "shin-neon.jpg");
+  try {
+    if (fs.existsSync(portada)) return portada;
+  } catch {}
+
+  // Compatibilidad con instalaciones que aún no traen la portada nueva.
+  // Se conserva una imagen existente como respaldo, sin impedir que el menú
+  // funcione si el directorio de arte no está disponible.
+  const posters = listMenuPosters();
+  return posters[0] || null;
 }
 
 export function getVideoPath() {

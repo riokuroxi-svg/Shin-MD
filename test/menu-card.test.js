@@ -21,7 +21,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { generateWAMessageContent } from "baileys";
 import { LRUCache } from "lru-cache";
@@ -84,6 +83,22 @@ test("la foto llega al mensaje serializado (el bug de la tarjeta sin foto)", asy
   // Y NO van sueltos en el header (esos se tiran al serializar).
   assert.equal(header.mimetype, undefined, "mimetype suelto en el header = se pierde");
   assert.equal(header.url, undefined, "url suelta en el header = se pierde");
+
+  const cover = path.join(RAIZ, "assets", "menus", "shin-neon.jpg");
+  const stat = fs.statSync(cover);
+  assert.ok(stat.size > 10_000 && stat.size < 600_000, "portada JPEG ligera para WhatsApp");
+  assert.deepEqual([...fs.readFileSync(cover).subarray(0, 3)], [0xff, 0xd8, 0xff]);
+
+  const menu = fs.readFileSync(path.join(RAIZ, "cmds", "main", "menu.js"), "utf8");
+  const shared = fs.readFileSync(path.join(RAIZ, "src", "lib", "menu-shared.js"), "utf8");
+  const style = fs.readFileSync(path.join(RAIZ, "cmds", "owner", "setmenu.js"), "utf8");
+  assert.match(menu, /MENU_MEDIA \|\| "image"/);
+  assert.match(menu, /medioPedido === "video"/);
+  assert.match(menu, /title: "反魂 · Shin-MD"/);
+  assert.match(menu, /Explorar categorías/);
+  assert.match(shared, /shin-neon\.jpg/);
+  assert.match(style, /PORTADA NEÓN \+ CATEGORÍAS/);
+  assert.match(style, /v1 \| v2 \| v3 \| v4 \| v5/);
 });
 
 test("la misma imagen se sube una sola vez (caché de medios)", async () => {

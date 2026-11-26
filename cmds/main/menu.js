@@ -26,7 +26,6 @@ import {
   collectCategories,
   getRandomBanner,
   getVideoAsset,
-  listMenuPosters,
   getMenuImagePath,
 } from "#lib/menu-shared";
 import { sendInteractive, sendVoiceNote, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
@@ -200,8 +199,8 @@ export default {
     }
     menuSections.push({ title: "反魂 · Categorías", rows: categoryRows });
 
-    // El póster que acompaña al selector: el primer archivo de assets/menus.
-    const [posterPath] = listMenuPosters();
+    // Usa la misma portada en la tarjeta y en la vista previa del selector.
+    const posterPath = getMenuImagePath();
 
     const menuButtons = [
       singleSelect("📂 Explorar Categorías", menuSections, { thumbnailPath: posterPath || undefined }),
@@ -219,51 +218,34 @@ export default {
     };
 
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
-    // OJO: ni el banner ni el video se cargan aquí. Antes getVideoAsset()
-    // leía 3 MB de disco en CADA .menu para nada (la variante 5 ni lo usa
-    // en memoria: usa la ruta con caché). Eso era parte del "no responde".
-    // Cada variante pide lo suyo justo antes de enviarlo (carga perezosa).
 
-    // Variante 5 (por defecto): tarjeta única con botones nativos.
-    // Un solo mensaje: header de video en bucle + body + single_select.
-    // El video se sube una vez y queda cacheado: si ya está en caché,
-    // el mensaje sale al instante (antes tardaba 10-18 s por la subida).
+    // Variante 5 (por defecto): portada ilustrada, resumen corto y un
+    // selector nativo para navegar por las categorías y los accesos rápidos.
     if (menuVariant === 5) {
-      // La variante 5 responde con el selector completo, pero cacheado por
-      // usuario: no se rearma ni se vuelve a subir el video en cada .menu.
-      // OJO: la tarjeta NO se cachea. Durante un tiempo se guardó un
-      // `null` 60 s para no rearmar el mensaje, y el efecto era que el
-      // segundo .menu seguido no enviaba NADA (parecía que el bot se
-      // había muerto). Lo único caro —subir el video— ya está cacheado
-      // aparte en data/media-cache.json, así que rearmar la tarjeta
-      // cuesta menos de un milisegundo.
-      // Imagen por defecto. Con `MENU_MEDIA=video` se puede volver al
-      // video en bucle, pero un video en el encabezado depende de que el
-      // cliente lo reproduzca: en cuanto el mismo chat tiene otro
-      // reproductor abierto se queda congelado en el primer fotograma y
-      // además se descarga antes de verse. La imagen se pinta siempre.
-      // VÍDEO en bucle por defecto (como los bots de referencia): es lo
-      // que se ve como "foto que se mueve". Con `MENU_MEDIA=image` se
-      // vuelve a la imagen fija. El vídeo necesita `seconds`, `width` y
-      // `height` (los pone menu-card leyéndolos del MP4): sin ellos el
-      // teléfono lo pinta como archivo descargable.
-      const medioPedido = String(process.env.MENU_MEDIA || "").toLowerCase();
-      const usarVideo = medioPedido !== "image";
+      // La imagen fija es la opción más consistente en WhatsApp. Quien
+      // prefiera movimiento puede pedirlo explícitamente con MENU_MEDIA=video.
+      const medioPedido = String(process.env.MENU_MEDIA || "image").toLowerCase();
+      const usarVideo = medioPedido === "video";
       const videoPath = usarVideo ? getVideoPath() : null;
       const imagePath = usarVideo ? null : getMenuImagePath();
-      const cardBody =
-        `${greeting}\n\n*${pushName}*\n` +
-        `╭┈┈ *SHIN-MD v${version}* ┈┈╮\n` +
-        `│ ◈ Uptime: *${uptimeFormatted}*\n` +
-        `│ ◈ Comandos: *${seenNames.size}* en *${cats.size}* categorías\n` +
-        `│ ◈ Rango: *${userRole}*\n` +
-        `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n` +
-        `_Elige una categoría en el botón de abajo._\n` +
-        `📢 *Canal:* ${channelUrl}`;
+      const cardBody = [
+        `✨ *SHIN-MD* · *v${version}*`,
+        `${greeting}, *${pushName}*`,
+        "",
+        `📚 *${seenNames.size} comandos* · *${cats.size} categorías*`,
+        `🛡️ ${userRole}  ·  ⏱️ ${uptimeFormatted}`,
+        `⌨️ Prefijo: \`${prefix}\``,
+        "",
+        `Elige *Explorar categorías* para abrir el menú.`,
+        `⚡ Atajos: \`${prefix}play\` · \`${prefix}sticker\` · \`${prefix}ia\``,
+        "",
+        `📢 Canal oficial: ${channelUrl}`,
+      ].join("\n");
 
       const enviado = await sendMenuCard(sock, ctx.chatId, {
+        title: "反魂 · Shin-MD",
         body: cardBody,
-        footer: "Shin-MD • Bot de WhatsApp Profesional",
+        footer: "Shin-MD · Menú principal",
         ...(usarVideo ? { videoPath } : { imagePath }),
         selector: {
           title: "📂 Explorar Categorías",

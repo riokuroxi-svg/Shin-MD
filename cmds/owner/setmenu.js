@@ -36,9 +36,9 @@ const VARIANTS = {
   },
   v5: {
     id: 5,
-    name: "TARJETA ÚNICA (botones nativos)",
-    desc: "Un solo mensaje: video en bucle + lista desplegable, con el video subido una sola vez — la que viene por defecto",
-    emoji: "🃏",
+    name: "PORTADA NEÓN + CATEGORÍAS",
+    desc: "Tarjeta limpia con arte violeta, datos breves y selector nativo de categorías",
+    emoji: "🪻",
   },
 };
 
@@ -47,7 +47,7 @@ export default {
   aliases: ["menuvariant", "menustyle", "cambiarmenu"],
   category: "owner",
   description: "Configura el estilo visual y la variante activa del menú principal",
-  usage: ".setmenu <v1 | v2 | v3 | v4>",
+  usage: ".setmenu <v1 | v2 | v3 | v4 | v5>",
   cooldown: 2,
   ownerOnly: true,
 
@@ -58,7 +58,7 @@ export default {
     const botId = botJid(sock) || "default";
 
     if (!target) {
-      let actual = 1;
+      let actual = 5;
       try {
         actual = Number(db.getSettings(botId)?.menu_variant || 5);
       } catch {}
@@ -94,7 +94,7 @@ export default {
 
     const selected = VARIANTS[target];
     if (!selected) {
-      return `❌ Variante inválida. Opciones válidas: *v1*, *v2*, *v3*, *v4*.\nEjemplo: \`${ctx.usedPrefix}setmenu v1\``;
+      return `❌ Variante inválida. Opciones válidas: *v1*, *v2*, *v3*, *v4* y *v5*.\nEjemplo: \`${ctx.usedPrefix}setmenu v5\``;
     }
 
     try {

@@ -31,7 +31,7 @@ para y dice la orden exacta que hay que escribir.
 
 | Carpeta | Archivos | Para qué |
 | --- | --- | --- |
-| `assets/` | 12 | Imágenes y sonidos que el bot envía (menús, avatares, portadas). |
+| `assets/` | 13 | Imágenes y sonidos que el bot envía (menús, avatares, portadas). |
 | `bin/` | — | Temporales de herramientas externas (`yt-dlp` y compañía). Vacía en el repositorio. |
 | `boot/` | 1 | El arranque: licencia, banner, vinculación y carga de servicios. Un solo archivo, en orden. |
 | `cmds/` | 222 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
