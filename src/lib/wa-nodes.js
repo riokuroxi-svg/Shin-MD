@@ -96,20 +96,6 @@ export function flujoInteractivo(contenido) {
  * @param {"menu_options"|"mixed"} [op.flujo="mixed"]
  * @returns {object}
  */
-/**
- * El nombre del flujo que lleva un nodo `biz` ya construido (venga de la
- * librería o de aquí). Sirve para no quedarse con un nodo que etiqueta
- * `mixed` cuando el contenido pide `menu_options`.
- *
- * @param {object} nodo
- * @returns {string|null}
- */
-export function flujoDelNodo(nodo) {
-  const hijo = nodo?.content?.find?.((n) => n?.tag === "interactive");
-  const neto = hijo?.content?.find?.((n) => n?.tag === "native_flow");
-  return typeof neto?.attrs?.name === "string" ? neto.attrs.name : null;
-}
-
 export function nodoBizPropio({ flujo = "mixed" } = {}) {
   const nombreFlujo = flujo === "menu_options" ? "menu_options" : "mixed";
   return {
@@ -186,16 +172,12 @@ export async function nodosInteractivosAsync(jid, { ai = true, contenido = null,
       const getBizBinaryNode = lib?.getBizBinaryNode;
       if (typeof getBizBinaryNode === "function") {
         const suyo = getBizBinaryNode(contenido);
-        if (suyo && suyo.tag === "biz") {
-          // La librería sólo reconoce seis nombres de botón (catálogo, pagos,
-          // ubicación…). Para una lista de selección única devuelve `mixed`,
-          // que hace que los clientes pinten la tarjeta genérica en vez de la
-          // lista. Nuestro nodo propio sí la nombra bien, así que se descarta
-          // el suyo cuando se queda en `mixed` y el contenido pide la lista.
-          const suyoFlujo = flujoDelNodo(suyo);
-          const pedido = flujo || flujoInteractivo(contenido);
-          if (!(pedido === "menu_options" && suyoFlujo !== "menu_options")) biz = suyo;
-        }
+        // Si la librería sabe armar el nodo, manda el suyo: es el que usa
+        // el propio envío de la librería cuando nadie le pasa nada, y el
+        // que trae el paquete de referencia tal cual. Reescribir su
+        // etiqueta desde aquí sería adivinar; el respaldo de abajo sólo
+        // existe para cuando no hay librería que preguntar.
+        if (suyo && suyo.tag === "biz") biz = suyo;
       }
     } catch {
       biz = null;

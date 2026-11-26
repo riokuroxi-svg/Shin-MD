@@ -124,9 +124,22 @@ test("el flujo se ve aunque el interactivo vaya envuelto en viewOnceMessage", ()
   assert.equal(flujoInteractivo(envuelto), "menu_options");
 });
 
-test("nodosInteractivosAsync también respeta el flujo cuando la librería no ayuda", async () => {
+test("nodosInteractivosAsync usa el nodo de la librería cuando lo hay", async () => {
   const nodos = await nodosInteractivosAsync(GRUPO, { contenido: MENSAJE_LISTA });
-  assert.equal(flujoDe(nodos[0]), "menu_options");
+  // Con librería instalada manda el nodo suyo, con el flujo que ELLA decide
+  // (para una lista suelta: `mixed`). Es el mismo nodo que manda el envío
+  // propio de la librería, así que aquí no se corrige nada a mano.
+  const suyo = (await import("baileys")).getBizBinaryNode?.(MENSAJE_LISTA);
+  if (suyo) {
+    // `decision_id` se sortea en cada llamada (así lo hace la librería),
+    // así que se compara la forma: mismo tag, mismos hijos y mismo flujo.
+    assert.equal(nodos[0].tag, suyo.tag);
+    assert.deepEqual(Object.keys(nodos[0].attrs).sort(), Object.keys(suyo.attrs).sort());
+    const flu = (n) => n.content.find((c) => c.tag === "interactive")
+      ?.content?.find((k) => k.tag === "native_flow")?.attrs;
+    assert.deepEqual(flu(nodos[0]), flu(suyo), "mismo flujo que el de la librería");
+    assert.ok(qualityControl(nodos[0]));
+  }
   assert.ok(qualityControl(nodos[0]), "y el biz que salga sigue completo");
 });
 
@@ -192,11 +205,16 @@ test("el envío produce un solo <biz>: el nuestro, nunca dos", async () => {
   const laLibreriaAñadiria = !yaHayBiz && lib.shouldIncludeBizBinaryNode(contenido);
   assert.equal(laLibreriaAñadiria, false, "no puede añadirse un segundo biz");
 
-  // 2) Y el nuestro lleva el flujo correcto aunque la librería se
-  //    equivoque: para `single_select` su constructor devuelve `mixed`.
+  // 2) El nodo que se manda es el de la librería, sin retocarlo: el mismo
+  //    que ella inyectaría sola. Así el envío se comporta igual que el de
+  //    la librería y no hay dos reglas distintas para lo mismo.
   const suyo = lib.getBizBinaryNode(contenido);
-  const suFlujo = suyo?.content?.find?.((n) => n.tag === "interactive")
-    ?.content?.find?.((n) => n.tag === "native_flow")?.attrs?.name;
-  assert.equal(suFlujo, "mixed", "la librería no sabe nombrar una lista");
-  assert.equal(flujoDe(nuestros[0]), "menu_options", "el nuestro sí la nombra");
+  const forma = (n) => ({
+    tag: n.tag,
+    attrs: Object.keys(n.attrs).sort(),
+    hijos: n.content.map((c) => c.tag),
+    flujo: n.content.find((c) => c.tag === "interactive")
+      ?.content?.find((k) => k.tag === "native_flow")?.attrs,
+  });
+  assert.deepEqual(forma(nuestros[0]), forma(suyo), "el biz del envío es el de la librería");
 });
