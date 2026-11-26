@@ -159,6 +159,44 @@ function miniaturaDeVideo(filePath) {
   return null; // sin carátula la tarjeta funciona igual
 }
 
+/**
+ * Igual que `videoCacheado`, pero para una imagen del encabezado.
+ * Se sube una sola vez y se reutiliza; el objeto que devuelve
+ * (`imageMessage`) se mete tal cual en el header.
+ *
+ * @param {object} sock
+ * @param {string} filePath
+ * @returns {Promise<object|null>}
+ */
+async function imagenCacheada(sock, filePath) {
+  if (!filePath) return null;
+  let buf;
+  try {
+    buf = fs.readFileSync(filePath);
+  } catch {
+    return null;
+  }
+  const clave = `imagen:${path.basename(filePath)}:${huella(buf)}:v1`;
+  if (MEMORIA.has(clave)) return MEMORIA.get(clave);
+
+  const enDisco = leerCache()[clave]?.imageMessage;
+  if (enDisco && typeof enDisco.url === "string" && claveValida(enDisco.mediaKey)) {
+    MEMORIA.set(clave, enDisco);
+    return enDisco;
+  }
+
+  const preparado = await prepareWAMessageMedia(
+    { image: buf },
+    { upload: sock.waUploadToServer },
+  );
+  const imageMessage = preparado?.imageMessage;
+  if (!imageMessage) return null;
+
+  MEMORIA.set(clave, imageMessage);
+  escribirCache({ ...leerCache(), [clave]: { imageMessage, creado: new Date().toISOString() } });
+  return imageMessage;
+}
+
 async function videoCacheado(sock, filePath) {
   if (!filePath) return null;
   let buf;
@@ -222,10 +260,20 @@ async function videoCacheado(sock, filePath) {
  * @returns {Promise<object|null>}
  */
 export async function sendMenuCard(sock, jid, op = {}) {
-  const { body = "", footer = "", videoPath = null, selector = null, contextInfo = {} } = op;
+  const {
+    body = "", footer = "", videoPath = null, imagePath = null,
+    selector = null, contextInfo = {},
+  } = op;
   if (!sock?.relayMessage || !selector) return null;
 
-  const videoMessage = await videoCacheado(sock, videoPath);
+  // El menú se manda con IMAGEN por defecto: un video en el encabezado
+  // depende de que el cliente pueda reproducirlo (y en cuanto el mismo
+  // chat ya tiene un reproductor abierto, se queda congelado en el
+  // primer fotograma). La imagen se pinta siempre y no engorda el
+  // mensaje. El video sigue disponible pasando `videoPath` sin `imagePath`.
+  const mediaMessage = imagePath
+    ? await imagenCacheada(sock, imagePath)
+    : await videoCacheado(sock, videoPath);
 
   // contextInfo que el servidor acepta sin descartar la tarjeta:
   // forwardingScore 99 e isForwarded, más el canal si viene.
@@ -251,8 +299,8 @@ export async function sendMenuCard(sock, jid, op = {}) {
     const header = proto.Message.InteractiveMessage.Header.create({
       ...(op.title ? { title: String(op.title) } : {}),
       ...(op.subtitle ? { subtitle: String(op.subtitle) } : {}),
-      hasMediaAttachment: !!videoMessage,
-      ...(videoMessage ? { videoMessage } : {}),
+      hasMediaAttachment: !!mediaMessage,
+      ...(mediaMessage || {}),
     });
 
     // SIN viewOnceMessage: el envoltorio viewOnce es justo lo que

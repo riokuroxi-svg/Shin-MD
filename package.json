@@ -1,6 +1,6 @@
 {
   "name": "shin-md",
-  "version": "3.7.15",
+  "version": "3.7.16",
   "license": "AGPL-3.0-only",
   "author": "riokuroxi-svg (github.com/riokuroxi-svg/Shin-MD)",
   "description": "反魂 Shin-MD — Bot WhatsApp Multi-Device Superior. Anti-ban nativo, auto-healing, eficiente en recursos.",
@@ -66,7 +66,7 @@
     "aptoide-scraper": "^1.0.1",
     "awesome-phonenumber": "^7.8.0",
     "axios": "^1.20.0",
-    "baileys": "npm:@whiskeysockets/baileys@7.0.0-rc14",
+    "baileys": "npm:@rexxhayanasi/elaina-baileys@^1.4.7",
     "chalk": "4.1.2",
     "cheerio": "^1.2.0",
     "dotenv": "16.4.7",
@@ -84,7 +84,6 @@
     "ws": "^8.21.3"
   },
   "overrides": {
-    "libsignal": "npm:libsignal@6.0.0",
     "qs": "^6.16.0",
     "zod": "4.6.6"
   },

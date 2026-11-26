@@ -72,9 +72,20 @@ export default {
       }
     }
 
-    const avisoReinicio = r.necesitaReinicio
-      ? `⚠️ Cambió el núcleo (${r.cambiosNucleo.slice(0, 4).join(", ")}) — ejecuta *${prefijo}restart*.`
-      : `♻️ Si algo se ve raro, reinicia con *${prefijo}restart*.`;
+    // Si cambió el núcleo, el proceso sigue con el código VIEJO en
+    // memoria aunque el disco ya esté al día: el menú, los nodos y el
+    // formato del video quedan como estaban y parece que la
+    // actualización «no hizo nada». Antes sólo se avisaba; ahora se
+    // reinicia solo (el aviso queda por si el reinicio no es posible).
+    let avisoReinicio;
+    if (r.necesitaReinicio) {
+      const puede = typeof process.send === "function";
+      avisoReinicio = puede
+        ? `♻️ Cambió el núcleo (${r.cambiosNucleo.slice(0, 4).join(", ")}). *Reiniciando...*`
+        : `⚠️ Cambió el núcleo (${r.cambiosNucleo.slice(0, 4).join(", ")}) — ejecuta *${prefijo}restart*.`;
+    } else {
+      avisoReinicio = `♻️ Si algo se ve raro, reinicia con *${prefijo}restart*.`;
+    }
 
     const resumen = [
       "✅ *Actualizado*",
@@ -86,5 +97,13 @@ export default {
     ].join("\n");
 
     await sock.sendMessage(jid, { text: resumen }, { quoted: msg });
+
+    // El mensaje sale primero para que llegue el aviso; el reinicio va
+    // detrás con margen de sobra.
+    if (r.necesitaReinicio && typeof process.send === "function") {
+      setTimeout(() => {
+        try { process.send("restart"); } catch { /* sin supervisor */ }
+      }, 2500);
+    }
   },
 };

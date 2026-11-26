@@ -162,6 +162,33 @@ export function getRandomMenuImage() {
 }
 
 /** Ruta del video del menú (para el enviador con caché), o null. */
+/**
+ * Ruta de la imagen que encabeza el menú (la que se pinta siempre).
+ * `MENU_IMAGE` manda; si no, se rota entre las de assets/menus.
+ * @returns {string|null}
+ */
+export function getMenuImagePath() {
+  if (process.env.MENU_IMAGE) {
+    try {
+      if (fs.existsSync(process.env.MENU_IMAGE)) return process.env.MENU_IMAGE;
+    } catch {}
+  }
+  // OJO: getRandomMenuImage() devuelve el CONTENIDO (Buffer), no la ruta.
+  // Aquí hace falta la ruta para poder cachear la subida por archivo.
+  const pools = [path.join(ROOT_DIR, "assets/menus")];
+  const candidatos = [];
+  for (const dir of pools) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      for (const f of fs.readdirSync(dir)) {
+        if (/\.(jpe?g|png|webp)$/i.test(f)) candidatos.push(path.join(dir, f));
+      }
+    } catch {}
+  }
+  if (!candidatos.length) return null;
+  return candidatos[Math.floor(Math.random() * candidatos.length)];
+}
+
 export function getVideoPath() {
   const candidatos = [
     process.env.MENU_VIDEO_PATH,

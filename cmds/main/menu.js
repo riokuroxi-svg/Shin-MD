@@ -27,6 +27,7 @@ import {
   getRandomBanner,
   getVideoAsset,
   listMenuPosters,
+  getMenuImagePath,
 } from "#lib/menu-shared";
 import { sendInteractive, sendVoiceNote, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
 import { sendMenuCard } from "#lib/menu-card";
@@ -230,10 +231,20 @@ export default {
     if (menuVariant === 5) {
       // La variante 5 responde con el selector completo, pero cacheado por
       // usuario: no se rearma ni se vuelve a subir el video en cada .menu.
-      const claveV5 = __claveMenu + ":v5";
-      const enCache = __cache.get(claveV5);
-      if (enCache && Date.now() - enCache.ts < 60000) return enCache.valor;
-      const videoPath = getVideoPath();
+      // OJO: la tarjeta NO se cachea. Durante un tiempo se guardó un
+      // `null` 60 s para no rearmar el mensaje, y el efecto era que el
+      // segundo .menu seguido no enviaba NADA (parecía que el bot se
+      // había muerto). Lo único caro —subir el video— ya está cacheado
+      // aparte en data/media-cache.json, así que rearmar la tarjeta
+      // cuesta menos de un milisegundo.
+      // Imagen por defecto. Con `MENU_MEDIA=video` se puede volver al
+      // video en bucle, pero un video en el encabezado depende de que el
+      // cliente lo reproduzca: en cuanto el mismo chat tiene otro
+      // reproductor abierto se queda congelado en el primer fotograma y
+      // además se descarga antes de verse. La imagen se pinta siempre.
+      const usarVideo = String(process.env.MENU_MEDIA || "").toLowerCase() === "video";
+      const videoPath = usarVideo ? getVideoPath() : null;
+      const imagePath = usarVideo ? null : getMenuImagePath();
       const cardBody =
         `${greeting}\n\n*${pushName}*\n` +
         `╭┈┈ *SHIN-MD v${version}* ┈┈╮\n` +
@@ -248,16 +259,12 @@ export default {
         body: cardBody,
         footer: "Shin-MD • Bot de WhatsApp Profesional",
         title: `✨ SHIN-MD ${version}`,
-        videoPath,
+        ...(usarVideo ? { videoPath } : { imagePath }),
         selector: { title: "📂 Explorar Categorías", sections: menuSections },
         contextInfo: getChannelContext({ mentionedJid: [ctx.senderId] }),
         quoted: ctx.full,
       });
       if (enviado) {
-        try {
-          if (__cache.size > 400) __cache.clear();
-          __cache.set(claveV5, { valor: null, ts: Date.now(), esTarjeta: true });
-        } catch { /* la caché nunca debe tumbar el menú */ }
         void mandarNotaDeVoz(sock, ctx);
         return null;
       }

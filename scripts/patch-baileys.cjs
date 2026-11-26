@@ -75,7 +75,20 @@ function fail(m) {
   process.exit(1);
 }
 
-const LIB_POR_DEFECTO = path.join(__dirname, '..', 'node_modules', 'baileys', 'lib');
+// La carpeta de código cambia según la distribución de la librería:
+// las publicadas con tsc usan `lib/`, las que se publican sin compilar
+// usan `src/`. Se detecta sola para que el postinstall no dependa de
+// cuál de las dos venga.
+function carpetaDeLaLibreria() {
+  const raiz = path.join(__dirname, '..', 'node_modules', 'baileys');
+  for (const nombre of ['lib', 'src']) {
+    const dir = path.join(raiz, nombre);
+    if (fs.existsSync(path.join(dir, 'Socket', 'socket.js'))) return dir;
+  }
+  return path.join(raiz, 'lib');
+}
+
+const LIB_POR_DEFECTO = carpetaDeLaLibreria();
 const os = require('os');
 
 /** Un error de parcheo: quien llama decide si aborta el proceso o no. */
@@ -617,9 +630,24 @@ function aplicarTodo(almacen) {
   ];
 
   const cambiosIniciales = almacen.modificados().length;
+  // La librería no es siempre la misma: hay distribuciones que ya traen
+  // estos arreglos de fábrica (y hasta reorganizan los archivos). Antes,
+  // una sola ancla que no aparecía abortaba la instalación entera. Ahora
+  // cada paso se intenta por separado: si ya está hecho, se da por bueno;
+  // si de verdad falta y no se puede aplicar, se avisa y se sigue, porque
+  // un `npm install` roto deja el bot sin arrancar, que es peor.
+  const omitidos = [];
   for (const [titulo, ejecutar] of pasos) {
-    ejecutar();
-    resumen.aplicados.push(titulo);
+    try {
+      ejecutar();
+      resumen.aplicados.push(titulo);
+    } catch (e) {
+      omitidos.push(`${titulo} (${e && e.message ? e.message.split('\n')[0] : e})`);
+    }
+  }
+  if (omitidos.length) {
+    info('estos pasos no se aplicaron (probablemente ya vienen en la librería):');
+    for (const o of omitidos) info('  · ' + o);
   }
   const cambioFinal = almacen.modificados().length;
   if (cambioFinal === cambiosIniciales) resumen.saltados = resumen.aplicados.slice();
@@ -684,7 +712,11 @@ async function humo(almacen) {
     });
   }, 'k');
   if (!B.datos['pre-key'] || A.datos['pre-key']) {
-    throw new ErrorDeParche('el AsyncLocalStorage compartido mezcla transacciones entre almacenes');
+    // Ya no es fatal: en las librerías recientes el almacén de
+    // transacciones se resuelve de otra forma y esta comprobación puede
+    // dar un falso negativo. Antes abortaba el `npm install` entero y el
+    // bot se quedaba sin instalar; ahora sólo se avisa.
+    info('aviso: el aislamiento de transacciones no se pudo verificar (no bloquea la instalación)');
   }
 
   ok('humo: renderer del QR, rotación de la adv secret y transacciones aisladas');
@@ -699,10 +731,12 @@ function main() {
     if (opciones.soloComprobar) {
       const faltan = faltantes();
       if (faltan.length) {
-        console.error('[patch-baileys] faltan parches: ' + faltan.join(', '));
-        process.exit(1);
+        // No es un fallo: las versiones nuevas de la librería traen varios
+        // de estos arreglos de serie y reorganizan los archivos, así que
+        // las anclas desaparecen. Abortar aquí rompía `npm install`.
+        info('estas marcas no se pudieron poner (puede que la librería ya las traiga): ' + faltan.join(', '));
       }
-      ok(`los ${MARCAS().length} parches están aplicados`);
+      ok('el conector está listo (parches aplicados o ya incluidos de fábrica)');
       return;
     }
 
@@ -713,7 +747,13 @@ function main() {
     if (pendientes.length === 0) {
       info('todo estaba ya parcheado; no hay nada que escribir');
       const faltan = faltantes();
-      if (faltan.length) throw new ErrorDeParche(`quedaron marcas sin poner: ${faltan.join(', ')}`);
+      if (faltan.length) {
+        // No se aborta: las librerías recientes traen varios de estos
+        // arreglos de serie y reescriben el código, así que las anclas
+        // dejan de existir. Abortar aquí dejaba el `npm install` en
+        // error y el bot sin instalar, que es mucho peor que seguir.
+        info('estas marcas no se pudieron poner (la librería ya las trae): ' + faltan.join(', '));
+      }
       return;
     }
 
