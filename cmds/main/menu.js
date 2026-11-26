@@ -26,9 +26,29 @@ import {
   collectCategories,
   getRandomBanner,
   getVideoAsset,
+  listMenuPosters,
 } from "#lib/menu-shared";
-import { sendInteractive, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
+import { sendInteractive, sendVoiceNote, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
 import db from "../../src/services/ginko-db.js";
+
+/**
+ * Nota de voz del menú: solo suena si el dueño dejó una música puesta en
+ * data/menu-vn.*. No es obligatoria y nunca rompe el menú (falla en
+ * silencio si no hay archivo o no hay ffmpeg).
+ */
+async function mandarNotaDeVoz(sock, ctx) {
+  try {
+    const { ROOT_DIR: raiz } = await import("#lib/menu-shared");
+    const [fsMod, pathMod] = await Promise.all([import("node:fs"), import("node:path")]);
+    const dir = pathMod.join(raiz, "data");
+    if (!fsMod.existsSync(dir)) return;
+    const archivo = fsMod.readdirSync(dir).find((f) => /^menu-vn\.(mp3|ogg|opus|m4a|wav)$/i.test(f));
+    if (!archivo) return;
+    await sendVoiceNote(sock, ctx.chatId, pathMod.join(dir, archivo), { quoted: ctx.full });
+  } catch {
+    /* la guarnición nunca rompe el menú */
+  }
+}
 
 export default {
   name: "menu",
@@ -92,14 +112,17 @@ export default {
       return __guardarMenu(text, false);
     }
 
-    // Recuperar variante de menú configurada usando JID normalizado del bot
-    let menuVariant = 1;
+    // Recuperar variante de menú configurada usando JID normalizado del bot.
+    // Por defecto se usa la 3 (tarjeta con video en bucle): la variante 1 con
+    // botones sueltos ya no se ve en los clientes nuevos.
+    const VARIANTE_POR_DEFECTO = 3;
+    let menuVariant = VARIANTE_POR_DEFECTO;
     try {
       const botId = botJid(sock) || "default";
       const settings = db.getSettings(botId) || {};
-      menuVariant = Number(settings.menu_variant || settings.menuVariant || 1);
+      menuVariant = Number(settings.menu_variant || settings.menuVariant || VARIANTE_POR_DEFECTO);
     } catch {
-      menuVariant = 1;
+      menuVariant = VARIANTE_POR_DEFECTO;
     }
 
     const ownerCheck = typeof ctx.isOwner === "function" ? ctx.isOwner() : !!ctx.isOwner;
@@ -167,8 +190,11 @@ export default {
     }
     menuSections.push({ title: "反魂 · Categorías", rows: categoryRows });
 
+    // El póster que acompaña al selector: el primer archivo de assets/menus.
+    const [posterPath] = listMenuPosters();
+
     const menuButtons = [
-      singleSelect("📂 Explorar Categorías", menuSections),
+      singleSelect("📂 Explorar Categorías", menuSections, { thumbnailPath: posterPath || undefined }),
       quickReply("🗂️ Categorías (.menucat)", "menucat"),
       quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
       quickReply("🏓 Ping", "ping"),
@@ -207,6 +233,7 @@ export default {
         quoted: ctx.full,
         fallbackText: compactBody + `\n\n${prefix}allmenu · ${prefix}menucat · ${prefix}ping`,
       });
+      void mandarNotaDeVoz(sock, ctx);
       return null;
     }
 
@@ -231,6 +258,7 @@ export default {
         quoted: ctx.full,
         fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
       });
+      void mandarNotaDeVoz(sock, ctx);
       return null;
     }
 
@@ -248,6 +276,7 @@ export default {
           { image: banner, caption: finalContent, contextInfo: channelCtx },
           { quoted: ctx.full }
         );
+        void mandarNotaDeVoz(sock, ctx);
         return null;
       }
 
@@ -256,10 +285,11 @@ export default {
         { text: finalContent, contextInfo: channelCtx },
         { quoted: ctx.full }
       );
+      void mandarNotaDeVoz(sock, ctx);
       return null;
     }
 
-    // Variante 1 (Por defecto): Tarjeta Interactiva con Banner Rotativo
+    // Variante 1: Tarjeta Interactiva con Banner Rotativo
     const interactiveBody = headerText +
       `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
       `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
@@ -279,6 +309,7 @@ export default {
       fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
     });
 
+    void mandarNotaDeVoz(sock, ctx);
     return null;
   },
 };

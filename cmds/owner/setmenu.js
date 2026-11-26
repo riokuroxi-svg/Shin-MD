@@ -25,7 +25,7 @@ const VARIANTS = {
   v3: {
     id: 3,
     name: "ANIMATED VIDEO GIFPLAYBACK",
-    desc: "Cabecera de video animado en bucle continuo (gifPlayback) con selector interactivo",
+    desc: "Cabecera de video animado en bucle continuo (gifPlayback) con selector interactivo — la que viene por defecto",
     emoji: "🎬",
   },
   v4: {
@@ -54,7 +54,7 @@ export default {
     if (!target) {
       let actual = 1;
       try {
-        actual = Number(db.getSettings(botId)?.menu_variant || 1);
+        actual = Number(db.getSettings(botId)?.menu_variant || 3);
       } catch {}
       let list = `🎨 *CONFIGURACIÓN DE ESTILO DE MENÚ*\n\n`;
       list += `Actual: *V${actual}* · Uso: \`${ctx.usedPrefix}setmenu <variante>\`\n\n`;

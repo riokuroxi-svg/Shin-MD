@@ -13,7 +13,22 @@ import { pickRandom } from "#lib/random";
 import { pickBanner } from "#lib/theme";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(__dirname, "../..");
+export const ROOT_DIR = path.resolve(__dirname, "../..");
+
+/** La carpeta del arte del menú: pósters y el video de la cabecera. */
+export const MENU_ASSETS = path.join(ROOT_DIR, "assets/menus");
+
+/** Rutas de los pósters del menú (ordenadas), sin lanzar nunca. */
+export function listMenuPosters() {
+  try {
+    return fs.readdirSync(MENU_ASSETS)
+      .filter(f => /\.(jpe?g|png|webp)$/i.test(f))
+      .sort()
+      .map(f => path.join(MENU_ASSETS, f));
+  } catch {
+    return [];
+  }
+}
 
 export const CAT_LABELS = {
   info: "INFORMACIÓN",
@@ -93,6 +108,12 @@ export function collectCategories(commands, { exclude = ["menu"] } = {}) {
   return { cats, seenNames, pluginCount, caseCount, totalCommands: pluginCount + caseCount };
 }
 
+/**
+ * Póster del menú: la imagen que va como cabecera de las variantes que no
+ * son video. Sale de assets/menus (arte propio del proyecto) y, si no hay
+ * nada, de MENU_IMAGE. Devuelve null sin quejarse: el menú siempre puede
+ * caer a texto.
+ */
 export function getRandomBanner({ useHourly = true } = {}) {
   if (useHourly) {
     try {
@@ -101,35 +122,24 @@ export function getRandomBanner({ useHourly = true } = {}) {
     } catch {}
   }
 
-  const shuffleDir = path.join(ROOT_DIR, "assets/image/shuffle");
-  try {
-    if (fs.existsSync(shuffleDir)) {
-      const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
-      if (files.length > 0) return fs.readFileSync(path.join(shuffleDir, pickRandom(files)));
-    }
-  } catch {}
-
-  const fallbackPaths = [
-    process.env.MENU_IMAGE,
-    path.join(ROOT_DIR, "assets/image/anita-landscape.jpg"),
-    path.join(ROOT_DIR, "assets/image/anita.png"),
-    path.join(ROOT_DIR, "assets/banner-default.png"),
-    path.join(ROOT_DIR, "assets/bocchi-banner.png"),
-  ].filter(Boolean);
-
-  for (const p of fallbackPaths) {
+  const posters = listMenuPosters();
+  if (posters.length) {
     try {
-      if (typeof p === "string" && fs.existsSync(p)) return fs.readFileSync(p);
+      return fs.readFileSync(pickRandom(posters));
     } catch {}
   }
+
+  try {
+    if (process.env.MENU_IMAGE && fs.existsSync(process.env.MENU_IMAGE)) {
+      return fs.readFileSync(process.env.MENU_IMAGE);
+    }
+  } catch {}
   return null;
 }
 
 export function getRandomMenuImage() {
   const pools = [
     path.join(ROOT_DIR, "assets/menus"),
-    path.join(ROOT_DIR, "assets/image/shuffle"),
-    path.join(ROOT_DIR, "assets"),
   ];
   const candidates = [];
   for (const dir of pools) {
@@ -151,7 +161,7 @@ export function getRandomMenuImage() {
 export function getVideoAsset() {
   const videoPaths = [
     process.env.MENU_VIDEO_PATH,
-    path.join(ROOT_DIR, "assets/video/anita-mp4.mp4"),
+    path.join(ROOT_DIR, "assets/video/menu.mp4"),
   ].filter(Boolean);
 
   for (const p of videoPaths) {

@@ -125,7 +125,7 @@ export function buildSheetParams(buttons = [], opts = {}) {
 /**
  * Botón de lista desplegable nativa (single_select).
  */
-export function singleSelect(title, sections) {
+export function singleSelect(title, sections, opts = {}) {
   const clean = (sections || []).map(s => ({
     title: s.title || "",
     highlight_label: s.highlight_label || "",
@@ -135,9 +135,15 @@ export function singleSelect(title, sections) {
       description: r.description || "",
     })),
   }));
+  const params = { title, sections: clean };
+  // Vista previa del menú nativo: un archivo local se manda como
+  // thumbnailPath (la librería lo sube con waUploadToServer). Sin esto el
+  // selector sale sin cabecera de imagen y la tarjeta pierde todo el brillo.
+  if (opts.thumbnailPath) params.thumbnailPath = opts.thumbnailPath;
+  if (opts.tft) params.tft = opts.tft;
   return {
     name: "single_select",
-    buttonParamsJson: JSON.stringify({ title, sections: clean }),
+    buttonParamsJson: JSON.stringify(params),
   };
 }
 
@@ -215,6 +221,12 @@ export async function sendInteractive(sock, jid, opts = {}) {
   // con los nodos binarios puestos. Si algo falla, más abajo está el
   // respaldo de texto de siempre, así que nadie se queda sin respuesta.
   const esCanal = typeof jid === "string" && jid.endsWith("@newsletter");
+  // Mismos ajustes que la librería de FURINA: en grupos un interactivo con
+  // cabecera de video pasa por `viewOnceMessage`, que es la forma con la
+  // que WhatsApp Web y los clientes Android lo pintan con botones. En
+  // privados sigue el formato moderno (sin envolver).
+  const esGrupo = typeof jid === "string" && jid.endsWith("@g.us");
+  const grupoViewOnce = esGrupo && !!opts.video && process.env.SHIN_VIEWONCE_GRUPO !== "0";
   const soloTexto = esCanal || process.env.SHIN_BOTONES_GRUPO === "0";
 
   if (soloTexto) {
@@ -252,7 +264,10 @@ export async function sendInteractive(sock, jid, opts = {}) {
     // clientes nuevos. En este mismo bot, `native-reply` (el del .play,
     // el único cuyos botones SÍ se ven) nunca envolvió nada.
     // Con SHIN_INTERACTIVO_VIEWONCE=1 se vuelve al envoltorio de antes.
-    const envolver = process.env.SHIN_INTERACTIVO_VIEWONCE === "1";
+    // En grupos con cabecera de video se envuelve (ver `grupoViewOnce`):
+    // así los botones sí se dibujan y la tarjeta se ve como la de los bots
+    // que todo el mundo conoce. SHIN_VIEWONCE_GRUPO=0 lo apaga de golpe.
+    const envolver = process.env.SHIN_INTERACTIVO_VIEWONCE === "1" || grupoViewOnce;
 
     const mensajeInteractivo = {
           messageContextInfo: {
@@ -293,9 +308,11 @@ export async function sendInteractive(sock, jid, opts = {}) {
       quoted: opts.quoted && opts.quoted.message ? opts.quoted : undefined,
     });
 
+    // El sobre binario tiene que decir lo mismo que la tarjeta: una lista
+    // de selección única viaja como `menu_options`, no como `mixed`.
     await sock.relayMessage(jid, msg.message, {
       messageId: msg.key.id,
-      additionalNodes: nodosInteractivos(jid, { ai: opts.ai !== false }),
+      additionalNodes: nodosInteractivos(jid, { ai: opts.ai !== false, contenido: msg.message }),
     });
     return msg;
   } catch (err) {
@@ -384,7 +401,7 @@ export async function sendCarousel(sock, jid, opts = {}) {
 
     await sock.relayMessage(jid, msg.message, {
       messageId: msg.key.id,
-      additionalNodes: nodosInteractivos(jid, { ai: opts.ai !== false }),
+      additionalNodes: nodosInteractivos(jid, { ai: opts.ai !== false, contenido: msg.message }),
     });
     return msg;
   } catch (err) {
@@ -438,10 +455,70 @@ export function isButtonResponse(rawMsg) {
   return parseButtonResponse(rawMsg) !== null;
 }
 
+/**
+ * Convierte un archivo de audio a la nota de voz de WhatsApp (OGG/Opus,
+ * mono, 48 kHz) y la manda con `ptt: true`: burbuja con onda, sin
+ * reproductor de música. Es lo que separa «te mandé un audio» de «el
+ * bot me habló».
+ *
+ * Falla en silencio hacia `null` si no hay ffmpeg o el audio no sirve:
+ * el menú nunca debe romperse por la guarnición.
+ *
+ * @param {object} sock
+ * @param {string} jid
+ * @param {Buffer|string} audio Buffer del archivo o ruta en disco.
+ * @param {object} [op]
+ * @param {object} [op.quoted]
+ * @returns {Promise<object|null>}
+ */
+export async function sendVoiceNote(sock, jid, audio, opts = {}) {
+  if (!audio || !sock?.sendMessage) return null;
+  try {
+    const [{ resolveFfmpeg }, { execFile }, os, fs, path] = await Promise.all([
+      import("#lib/mp3Utils"),
+      import("node:child_process"),
+      import("node:os"),
+      import("node:fs/promises"),
+      import("node:path"),
+    ]);
+    const ffmpeg = await resolveFfmpeg();
+    if (!ffmpeg) return null;
+
+    const esBuffer = Buffer.isBuffer(audio);
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "shin-vn-"));
+    const src = path.join(tmp, "in");
+    const dst = path.join(tmp, esBuffer ? "out.ogg" : "out.oga");
+    try {
+      if (esBuffer) await fs.writeFile(src, audio);
+      else await fs.copyFile(String(audio), src);
+      await new Promise((resolve, reject) => {
+        execFile(
+          ffmpeg,
+          ["-y", "-i", src, "-vn", "-c:a", "libopus", "-b:a", "48k", "-ar", "48000", "-ac", "1", dst],
+          { timeout: 30000 },
+          (err) => (err ? reject(err) : resolve()),
+        );
+      });
+      const ogg = await fs.readFile(dst);
+      return await sock.sendMessage(
+        jid,
+        { audio: ogg, mimetype: "audio/ogg; codecs=opus", ptt: true },
+        opts.quoted && opts.quoted.message ? { quoted: opts.quoted } : {},
+      );
+    } finally {
+      await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
+    }
+  } catch (err) {
+    log.warn("voice-note: sin nota de voz (" + (err.message || err) + ")");
+    return null;
+  }
+}
+
 export default {
   sendInteractive,
   sendCarousel,
   sendAdReply,
+  sendVoiceNote,
   quickReply,
   ctaUrl,
   ctaCopy,
