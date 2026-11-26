@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 454 pruebas en 55 archivos" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 461 pruebas en 55 archivos" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="460/460 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="461/461 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -462,7 +462,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 454 pruebas (55 archivos)
+npm test               # las 461 pruebas (55 archivos)
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot
