@@ -62,7 +62,7 @@ Si en algún momento pregunta algo, deja la opción por defecto (pulsa Enter).
 Copia esta línea, pégala en Termux y pulsa Enter:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.19/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 **Qué hace, en orden:**
@@ -86,7 +86,7 @@ Verás algo así, y al final un resumen:
 ```
   ✓ Node 26.4.0   npm 11.20.0
   ✓ git listo
-  ▸ descargando Shin-MD v3.7.19
+  ▸ descargando Shin-MD v3.7.9
   ✓ dependencias instaladas
   ✓ 8 parches del conector verificados
   ✓ wakelock activo
@@ -113,7 +113,7 @@ Si dice menos de 22.5 (o dice "command not found"), instálalo desde
 <https://nodejs.org> — versión LTS. Después, el mismo bloque de arriba:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.19/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 En un servidor donde quieras que siga corriendo sin tu sesión, mira
@@ -134,7 +134,7 @@ No hay que hacer nada: el instalador mira qué falta y lo resuelve.
 Si prefieres que nunca instale paquetes del sistema:
 
 ```sh
-SHIN_NO_INSTALAR=1 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.19/shin.sh | sh
+SHIN_NO_INSTALAR=1 curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 Y si quieres autorizarlo sin que pregunte (para un script de aprovisionamiento):
@@ -179,8 +179,8 @@ Vincular con número de teléfono**, y tecleas el código.
 
 ╭ en línea ──────────────────────────────────────────────╮
 │ cuenta   Shin-MD                                       │
-│ versión  v3.7.19                                        │
-│ comandos 216                                           │
+│ versión  v3.7.9                                        │
+│ comandos 213                                           │
 │ prefijo  .                                             │
 │ panel    http://127.0.0.1:3000                         │
 ╰────────────────────────────────────────────────────────╯
@@ -270,7 +270,7 @@ sobreviven a todo menos a `--purge`, que pregunta dos veces.
 | Quiero… | Comando |
 |---|---|
 | actualizar conservando mi sesión | `cd ~/Shin-MD && bash install.sh --update` |
-| pasar a una versión concreta | `bash install.sh --update --version v3.7.19` |
+| pasar a una versión concreta | `bash install.sh --update --version v3.7.9` |
 | seguir la rama `main` y dejar de estar fijado a una versión | `bash install.sh --update --branch main` |
 | arreglar una instalación rota | `bash install.sh --repair` |
 | saber si todo está bien | `bash install.sh --verify` |
@@ -299,7 +299,7 @@ cd ~/Shin-MD && npm start
 La instalación es más vieja que el comando. Actualiza:
 
 ```bash
-cd ~/Shin-MD && bash install.sh --update --version v3.7.19
+cd ~/Shin-MD && bash install.sh --update --version v3.7.9
 ```
 
 ### "Node 20 es demasiado antiguo"
@@ -350,7 +350,7 @@ cortando la transferencia.
 Si estás en una versión anterior y ves ese mensaje, actualiza primero:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.19/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
 ```
 
 Y si el error real resulta ser `would clobber existing tag`, es que el proyecto

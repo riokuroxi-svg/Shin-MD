@@ -31,21 +31,12 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 import { downloadMediaMessage, buildAckStanza } from "baileys";
-// La carpeta de código de la librería puede ser `lib/` (compilada) o
-// `src/` (publicada sin compilar). Se resuelve en tiempo de ejecución
-// para no atarse a una distribución concreta.
-const { addTransactionCapability } = await import(
-  "baileys/" + (fs.existsSync(new URL("../node_modules/baileys/lib/Utils/auth-utils.js", import.meta.url))
-    ? "lib" : "src") + "/Utils/auth-utils.js"
-);
+import { addTransactionCapability } from "baileys/lib/Utils/auth-utils.js";
 
 const require = createRequire(import.meta.url);
 const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(raiz, "scripts", "patch-baileys.cjs");
-const raizLib = path.join(raiz, "node_modules", "baileys");
-const lib = fs.existsSync(path.join(raizLib, "lib", "Socket", "socket.js"))
-  ? path.join(raizLib, "lib")
-  : path.join(raizLib, "src");
+const lib = path.join(raiz, "node_modules", "baileys", "lib");
 
 const ARCHIVOS = {
   utils: path.join(lib, "Utils", "companion-reg-client-utils.js"),
@@ -67,33 +58,27 @@ function temporal(contenido = "") {
 
 // ─── Estado de la copia instalada ──────────────────────────────────
 
-test("los parches que hacen falta están aplicados en la copia instalada", () => {
+test("los ocho parches están aplicados en la copia instalada", () => {
   const r = spawnSync(process.execPath, [script, "--check"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr || r.stdout);
-  // La librería que se instala trae varios de estos arreglos de serie. El
-  // script informa cuántos quedaron puestos y avisa de los que no hacían
-  // falta. Lo que importa es que el conector parcheado cargue y que el
-  // script no falle: exigir un número exacto ataba la suite a una
-  // distribución concreta y rompía la instalación al cambiar de versión.
-  assert.match(r.stdout, /parches? est[áa]n aplicados|no hay nada que escribir|marcas no se pudieron poner/);
+  assert.match(r.stdout, /los 8 parches están aplicados/);
 });
 
 test("cada parche deja su marca y la sintaxis sigue siendo válida", () => {
-  // Se comprueba la sintaxis de todos los archivos del conector (eso sí es
-  // obligatorio) y que al menos las marcas aplicables estén presentes.
-  // Las que la librería ya resuelve por su cuenta no se exigen: si no, la
-  // suite falla en cuanto se actualiza la dependencia.
-  for (const archivo of Object.values(ARCHIVOS)) {
-    if (!fs.existsSync(archivo)) continue;
+  const marcas = [
+    [ARCHIVOS.utils, "handleCompanionRegRefresh"],
+    [ARCHIVOS.socket, "CB:notification,type:companion_reg_refresh"],
+    [ARCHIVOS.socket, "content: Buffer.alloc(1)"],
+    [ARCHIVOS.socket, "if (!creds.me || !creds.registered)"],
+    [ARCHIVOS.recv, "attrs?.stage !== 'primary_hello'"],
+    [ARCHIVOS.recv, "ws.on('CB:status'"],
+    [ARCHIVOS.messages, "const estadoHttp"],
+    [ARCHIVOS.auth, "txStorageCompartido"],
+  ];
+  for (const [archivo, marca] of marcas) {
+    assert.ok(leer(archivo).includes(marca), `falta "${marca}" en ${path.basename(archivo)}`);
     const check = spawnSync(process.execPath, ["--check", archivo], { encoding: "utf8" });
     assert.equal(check.status, 0, `${path.basename(archivo)}: ${check.stderr}`);
-  }
-  const obligatorias = [
-    [ARCHIVOS.utils, "handleCompanionRegRefresh"],
-    [ARCHIVOS.recv, "ws.on('CB:status'"],
-  ];
-  for (const [archivo, marca] of obligatorias) {
-    assert.ok(leer(archivo).includes(marca), `falta "${marca}" en ${path.basename(archivo)}`);
   }
 });
 
@@ -166,7 +151,7 @@ function correrInstalador(args, env = {}) {
   });
 }
 
-test("si un parche falla, no se escribe a medias (atomicidad del archivo)", (t) => {
+test("si un parche falla, NINGUNO queda escrito (todo o nada)", (t) => {
   const arbol = arbolPristino();
   if (!arbol) return t.skip("no hay tarball de Baileys disponible");
 
@@ -185,17 +170,9 @@ test("si un parche falla, no se escribe a medias (atomicidad del archivo)", (t) 
     const antes = huellas(arbol.lib);
     const r = correrInstalador(["--lib", arbol.lib]);
 
-    // El instalador ya no aborta cuando una ancla no aparece (las
-    // librerías nuevas reorganizan el código y varios arreglos vienen de
-    // serie): lo que se exige es que NUNCA deje un archivo a medias. O no
-    // escribe, o escribe código con sintaxis válida.
-    assert.equal(r.status, 0, "el instalador no debe romper la instalación");
-    for (const archivo of Object.values(ARCHIVOS)) {
-      if (!fs.existsSync(archivo)) continue;
-      const check = spawnSync(process.execPath, ["--check", archivo], { encoding: "utf8" });
-      assert.equal(check.status, 0, `${path.basename(archivo)} quedó con sintaxis rota`);
-    }
-    void antes;
+    assert.equal(r.status, 1, "el install debía fallar");
+    assert.match(r.stderr, /no se escribió ningún archivo/);
+    assert.deepEqual(huellas(arbol.lib), antes, "ninguno de los cinco archivos puede cambiar");
   } finally {
     fs.rmSync(arbol.dir, { recursive: true, force: true });
   }
@@ -240,7 +217,7 @@ test("si la prueba de humo falla después de escribir, se revierte todo", (t) =>
   }
 });
 
-test("en un árbol prístino aplica lo que puede y la segunda pasada no toca nada", (t) => {
+test("en un árbol prístino aplica los ocho y la segunda pasada no toca nada", (t) => {
   const arbol = arbolPristino();
   if (!arbol) return t.skip("no hay tarball de Baileys disponible");
 
@@ -249,19 +226,17 @@ test("en un árbol prístino aplica lo que puede y la segunda pasada no toca nad
 
     const r1 = correrInstalador(["--lib", arbol.lib]);
     assert.equal(r1.status, 0, r1.stderr || r1.stdout);
-    // Puede escribir menos de cinco archivos: las librerías nuevas ya
-    // traen parte de los arreglos. Lo que sí debe cumplirse es que haya
-    // escrito algo y que no duplique trabajo en la segunda pasada.
-    assert.match(r1.stdout, /escritos \d+ de 5 archivos|no hay nada que escribir/);
+    assert.match(r1.stdout, /escritos 5 de 5 archivos/);
 
     const despues = huellas(arbol.lib);
-    const cambiados = Object.keys(antes).filter((k) => despues[k] !== antes[k]).length;
-    assert.ok(cambiados >= 0, "la primera pasada no debe romper nada");
+    for (const k of Object.keys(antes)) {
+      assert.notEqual(despues[k], antes[k], `${k} debía cambiar`);
+    }
 
     // --check reconoce el estado…
     const check = correrInstalador(["--check", "--lib", arbol.lib]);
     assert.equal(check.status, 0, check.stderr);
-    assert.match(check.stdout, /el conector está listo/);
+    assert.match(check.stdout, /los 8 parches están aplicados/);
 
     // …y una segunda aplicación no escribe ni un byte.
     const r2 = correrInstalador(["--lib", arbol.lib]);
@@ -371,12 +346,11 @@ for (const estado of [404, 410, 403]) {
         },
       };
 
-      // Dos comportamientos válidos: el parche pide el reenvío (librerías
-      // viejas) o la propia librería detecta el fallo y lanza su error.
-      // En ambos casos NO se queda con datos corruptos y se ha visitado el
-      // servidor una sola vez.
-      await assert.rejects(() => downloadMediaMessage(mensajeConImagen(srv.url), "buffer", {}, ctx));
-      assert.ok(pedidos <= 1, "no debe pedir el reenvío varias veces");
+      await assert.rejects(
+        () => downloadMediaMessage(mensajeConImagen(srv.url), "buffer", {}, ctx),
+        /reenvío pedido/
+      );
+      assert.equal(pedidos, 1, "debía pedir el reenvío de la multimedia");
       assert.equal(srv.visitas.length, 1);
     } finally {
       await srv.cerrar();
@@ -420,34 +394,22 @@ function almacenDePrueba() {
 
 const loggerMudo = { trace() {}, debug() {}, info() {}, warn() {}, error() {} };
 
-test("las transacciones no revientan al anidarse (aislamiento del AsyncLocalStorage)", async (t) => {
+test("dos almacenes no comparten la transacción (aislamiento del AsyncLocalStorage)", async () => {
   const A = almacenDePrueba();
   const B = almacenDePrueba();
   const storeA = addTransactionCapability(A, loggerMudo, { maxCommitRetries: 1, delayBetweenTriesMs: 1 });
   const storeB = addTransactionCapability(B, loggerMudo, { maxCommitRetries: 1, delayBetweenTriesMs: 1 });
 
-  // Con las librerías nuevas el almacén de transacciones se resuelve de
-  // otra forma y `addTransactionCapability` puede no exponer el mismo
-  // contrato. Lo que sí tiene que cumplirse siempre: dos almacenes
-  // abiertos a la vez no se pisan ni lanzan.
-  try {
-    await storeA.transaction(async () => {
-      await storeB.transaction(async () => {
-        await storeB.set({ session: { "1.1": { de: "B" } } });
-      }, "kb");
-      await storeA.set({ session: { "2.2": { de: "A" } } });
-    }, "ka");
-  } catch (e) {
-    // Si la librería no soporta esta forma, se da por bueno mientras no
-    // corrompa datos: el objetivo del test es detectar corrupción.
-    return t.skip("esta versión del conector no expone transaction() anidable: " + e.message);
-  }
+  await storeA.transaction(async () => {
+    // B abre su propia transacción DENTRO de la de A.
+    await storeB.transaction(async () => {
+      await storeB.set({ session: { "1.1": { de: "B" } } });
+    }, "kb");
+    await storeA.set({ session: { "2.2": { de: "A" } } });
+  }, "ka");
 
-  // No se exige un formato concreto del almacén (las versiones nuevas
-  // cambian la forma interna): basta con que las dos transacciones
-  // terminen sin lanzar y que cada almacén conserve algo de lo suyo.
-  assert.ok(B.datos && typeof B.datos === "object", "B conserva su almacén");
-  assert.ok(A.datos && typeof A.datos === "object", "A conserva su almacén");
+  assert.deepEqual(Object.keys(B.datos.session), ["1.1"], "B guarda lo suyo en su almacén");
+  assert.deepEqual(Object.keys(A.datos.session), ["2.2"], "A no se queda con lo de B");
 });
 
 test("la transacción anidada del MISMO almacén sigue reutilizando el contexto", async () => {

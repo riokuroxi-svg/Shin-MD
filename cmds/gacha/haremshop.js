@@ -7,17 +7,16 @@
 import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
-
 export default {
   command: ['wshop', 'haremshop', 'tiendawaifus'],
   category: 'gacha',
   description: 'Ver los personajes en venta.',
-  run: async ({ msg, sock, args, usedPrefix }) => {
+  run: async ({ msg, sock, args, usedPrefix, command }) => {
     const chatId = msg.chat;
     db.setCreate('chats', chatId, 'sales', {});
-    const chat = db.getChat(chatId);
-    if (chat?.adminonly || !chat?.gacha) {
-      return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}gacha on*`);
+    let chat = db.getChat(chatId);
+    if (chat.adminonly || !chat.gacha) {
+      return msg.reply(`ꕥ Los comandos de *Gacha* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con:\n» *${usedPrefix}gacha on*`);
     }
     if (chat.sales && typeof chat.sales === 'string') {
       try { chat.sales = JSON.parse(chat.sales); } catch { chat.sales = {}; }
@@ -25,7 +24,7 @@ export default {
     try {
       const ahora = Date.now();
       let cambios = false;
-      for (const [id, venta] of Object.entries(chat.sales || {})) {
+      for (const [id, venta] of Object.entries(chat.sales)) {
         if (ahora - venta.time >= 3 * 864e5) {
           delete chat.sales[id];
           cambios = true;
@@ -36,10 +35,10 @@ export default {
       }
       const ventas = Object.entries(chat.sales || {});
       if (!ventas.length) {
-        const grupo = msg.isGroup ? await sock.groupMetadata(msg.chat).catch(() => null) : null;
-        return msg.reply(`ꕥ No hay personajes en venta en *${grupo?.subject || 'este chat'}*`);
+        const grupo = await sock.groupMetadata(msg.chat);
+        return msg.reply(`ꕥ No hay personajes en venta en *${grupo.subject || 'este grupo'}*`);
       }
-      const page = parseInt(args[0], 10) || 1;
+      const page = parseInt(args[0]) || 1;
       const porPagina = 10;
       const totalPaginas = Math.ceil(ventas.length / porPagina);
       if (page < 1 || page > totalPaginas) {
@@ -47,7 +46,7 @@ export default {
       }
       const botId = botJid(sock);
       const settings = db.getSettings(botId);
-      const currency = settings?.currency || 'Coins';
+      const currency = settings?.currency;
       const listado = [];
       for (const [id, venta] of ventas.slice((page - 1) * porPagina, page * porPagina)) {
         const precios = typeof venta.price === 'number' ? `¥${venta.price.toLocaleString()} ${currency}` : 'Precio no disponible';
@@ -57,12 +56,12 @@ export default {
         const m_ = Math.floor(tiempoRestante % 3600000 / 60000);
         const s = Math.floor(tiempoRestante % 60000 / 1000);
         const vendedorGlobal = db.getUser(venta.user);
-        const vendedor = vendedorGlobal?.name?.trim() || venta.user.split('@')[0];
+        let vendedor = vendedorGlobal?.name?.trim() || venta.user.split('@')[0];
         const character = db.getCharacter(id);
         const valorFinal = character?.value || 0;
         listado.push(`❀ *${venta.name}* (✰ ${valorFinal.toLocaleString()}):\n⛁ Precio » *${precios}*\n❖ Vendedor » *${vendedor}*\nⴵ Expira en » *${d}d ${h}h ${m_}m ${s}s*`);
       }
-      await msg.reply(`*☆ HaremShop \`≧◠ᴥ◠≦\`*\n❏ Personajes en venta <${ventas.length}>:\n\n` + listado.join('\n\n') + `\n\n> • Página *${page}* de *${totalPaginas}*`);
+      await msg.reply(`*☆ HaremShop \`≧◠ᴥ◠≦\`*\n❏ Personajes en venta <${ventas.length}>:\n\n` + listado.join('\n\n') + `\n\n> • Paginá *${page}* de *${totalPaginas}*`);
     } catch (e) {
       await msg.reply(state('error', { detail: e.message }));
     }

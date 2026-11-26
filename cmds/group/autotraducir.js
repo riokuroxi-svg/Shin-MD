@@ -27,8 +27,6 @@
 //    · y si hay varios bots en el grupo, solo responde el principal.
 // ═══════════════════════════════════════════════════════════════════
 
-import { botJid } from "#serialize";
-import { mismaPersona } from "#lib/lid";
 import db from "../../src/services/ginko-db.js";
 import {
   resolverIdioma, nombreIdioma, banderaIdioma, debeTraducir,
@@ -66,8 +64,8 @@ export async function before({ msg, sock }) {
     const idioma = idiomaDelChat(chat);
     if (!idioma) return;
 
-    const botId = botJid(sock);
-    const principal = !chat?.primaryBot || mismaPersona(chat.primaryBot, botId);
+    const botId = (sock?.user?.id || "").split(":")[0] + "@s.whatsapp.net";
+    const principal = !chat?.primaryBot || chat.primaryBot === botId;
 
     const texto = msg.text || msg.body || "";
     const veredicto = decidir({ texto, idioma, esBot: msg.isBot, esGrupo: true, esPrincipal: principal });
@@ -98,11 +96,10 @@ export default {
   command: ["autotraducir", "autotrad", "autotr"],
   category: "group",
   description: "Traduce automáticamente al idioma que elijas lo que llegue en otro.",
-  groupOnly: true,
-  adminOnly: true,
+  group: true,
+  admin: true,
 
   run: async ({ msg, args }) => {
-    if (!msg.isGroup) return msg.reply("《✧》 Este comando solo funciona en grupos.");
     const chat = db.getChat(msg.chat) || {};
     const actual = idiomaDelChat(chat);
     const pedido = String(args?.[0] ?? "").trim().toLowerCase();

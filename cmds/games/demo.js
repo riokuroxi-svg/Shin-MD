@@ -16,9 +16,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const BANNER_PATHS = [
   process.env.MENU_IMAGE,
-  path.resolve(__dirname, "../../assets/menus/default-1.jpg"),
-  path.resolve(__dirname, "../../assets/menus/default-2.jpg"),
-  path.resolve(__dirname, "../../assets/menus/default-3.jpg"),
+  path.resolve(__dirname, "../../assets/banner-default.png"),
+  path.resolve(__dirname, "../../assets/bocchi-banner.png"),
+  path.resolve(__dirname, "../../media/menu.jpg"),
 ].filter(Boolean);
 
 let _bannerCache = null;
@@ -98,7 +98,7 @@ export default {
         showcaseText += `╰─────────────────────────⬣\n\n`;
       }
 
-      showcaseText += `_Usa \`.menu\` para explorar los 215+ comandos disponibles._`;
+      showcaseText += `_Usa \`.menu\` para explorar los 201+ comandos disponibles._`;
 
       if (banner) {
         await sock.sendMessage(

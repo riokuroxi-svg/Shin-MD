@@ -12,6 +12,8 @@
  * - NUNCA tira excepción: si falla devuelve null para que el llamador use texto fallback.
  */
 
+const GEMINI_ROLE_MAX_TOKENS = 220;
+
 function getKeys() {
   const key =
     global.geminiRolKey ||

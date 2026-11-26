@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
+import { searchYouTube, getYouTubeVideoId, getVideoInfoById } from "#lib/youtubeSearch";
 import { argsClienteYtdlp } from "#lib/ytdlp-cliente";
 
 const exec = promisify(execFile);
@@ -27,8 +27,7 @@ const SC_CLIENT_ID = "KKzJxmw11tYpCs6T24P4uUYhqmjalG6M";
 
 // ── Caché Turbo en Memoria ──────────────────────────────────
 const _memoryCache = new Map();
-// URLs de descarga firmadas suelen caducar: no conservarlas como metadatos por un día.
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function hashKey(str = "") {
   return Buffer.from(String(str).toLowerCase().trim()).toString("base64url").slice(0, 32);
@@ -52,10 +51,6 @@ function setToCache(key, data) {
   }
 }
 
-export function invalidateAudioUrl(query) {
-  return _memoryCache.delete(hashKey(query));
-}
-
 function parseDurationSeconds(durationStr, ms) {
   if (typeof ms === "number" && ms > 0) return Math.round(ms / 1000);
   if (typeof durationStr === "number" && durationStr > 0) return Math.round(durationStr);
@@ -67,15 +62,29 @@ function parseDurationSeconds(durationStr, ms) {
   return 0;
 }
 
-// ── B3: Archivo de cookies Netscape para yt-dlp ─────────────
-function resolveCookiesArgs() {
+// ── B3: Cookies de YouTube ──────────────────────────────────
+let cookiesWarned = false;
+export function loadYtCookies() {
   try {
     const file = process.env.COOKIES_FILE || path.resolve("cookies.txt");
-    if (fs.existsSync(file) && fs.statSync(file).isFile()) {
-      return ["--cookies", file];
+    if (!fs.existsSync(file)) return "";
+    const raw = fs.readFileSync(file, "utf8");
+    const pairs = [];
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const f = t.split("\t");
+      if (f.length < 7) continue;
+      const domain = f[0], name = f[5], value = f[6];
+      if (!/youtube\.com|google\.com|googlevideo\.com/i.test(domain)) continue;
+      if (name) pairs.push(name + "=" + value);
     }
-  } catch {}
-  return [];
+    if (pairs.length && !cookiesWarned) {
+      cookiesWarned = true;
+      log.info("Cookies de YouTube cargadas (" + pairs.length + " entradas)");
+    }
+    return pairs.join("; ");
+  } catch { return ""; }
 }
 
 /**
@@ -233,7 +242,6 @@ async function resolveYtdlpLocal(videoUrl) {
     "-f", "bestaudio[ext=m4a]/bestaudio",
     "-g",
     "--no-playlist",
-    ...resolveCookiesArgs(),
     ...argsClienteYtdlp(),
     videoUrl,
   ];
@@ -251,16 +259,13 @@ async function resolveYtdlpLocal(videoUrl) {
 /**
  * Función Principal Turbo: Resuelve audio a máxima velocidad sin panics
  */
-export async function getAudioUrl(query, options = {}) {
+export async function getAudioUrl(query) {
   query = (query || "").trim();
   if (!query) throw new Error("Indica un nombre o enlace de audio.");
 
-  const excluidos = new Set(Array.isArray(options.excludeProviders) ? options.excludeProviders : []);
-  const renovar = options.refresh === true || excluidos.size > 0;
-
-  // Un enlace de CDN firmado puede caducar antes que los metadatos de búsqueda.
+  // 1. Revisar Caché Turbo (0ms)
   const cKey = hashKey(query);
-  const cached = renovar ? null : getFromCache(cKey);
+  const cached = getFromCache(cKey);
   if (cached) {
     log.success("Downloader: Turbo Cache Hit [0ms] ⚡");
     return cached;
@@ -290,7 +295,7 @@ export async function getAudioUrl(query, options = {}) {
   const cleanQuery = ytMetadata?.title || query.replace(/https?:\/\/[^\s]+/gi, "").trim() || query;
 
   // 2. Si yt-dlp local está disponible en el servidor, probarlo primero
-  if (videoUrl && !excluidos.has("yt-dlp Turbo 8x")) {
+  if (videoUrl) {
     try {
       const localRes = await resolveYtdlpLocal(videoUrl);
       if (localRes?.url) {
@@ -311,36 +316,32 @@ export async function getAudioUrl(query, options = {}) {
     } catch {}
   }
 
-  // 3. Carrera Concurrente Turbo (Promise.any) entre CDNs disponibles
-  const fuentes = [
-    { provider: "Spotify Turbo CDN", resolver: () => resolveSpotifyIzuka(cleanQuery) },
-    { provider: "Nexray Turbo CDN", resolver: () => resolveSpotifyNexray(cleanQuery) },
-    { provider: "SoundCloud Progressive CDN", resolver: () => resolveSoundCloud(cleanQuery) },
-  ].filter(fuente => !excluidos.has(fuente.provider));
-
+  // 3. Carrera Concurrente Turbo (Promise.any) entre los CDNs más rápidos
   try {
-    if (fuentes.length) {
-      const winner = await Promise.any(fuentes.map(fuente => fuente.resolver()));
+    const winner = await Promise.any([
+      resolveSpotifyIzuka(cleanQuery),
+      resolveSpotifyNexray(cleanQuery),
+      resolveSoundCloud(cleanQuery),
+    ]);
 
-      if (winner?.url) {
-        const fullData = {
-          url: winner.url,
-          provider: winner.provider,
-          title: ytMetadata?.title || winner.title,
-          author: winner.author || ytMetadata?.author || "Artista",
-          duration: winner.duration || ytMetadata?.duration || `${Math.floor((winner.seconds || 0) / 60)}:${String((winner.seconds || 0) % 60).padStart(2, "0")}`,
-          seconds: winner.seconds || ytMetadata?.seconds || 0,
-          thumbnail: winner.thumbnail || ytMetadata?.thumbnail || null,
-          views: ytMetadata?.views || null,
-        };
-        setToCache(cKey, fullData);
-        log.success(`Downloader: ${winner.provider} → ok ⚡`);
-        return fullData;
-      }
+    if (winner?.url) {
+      const fullData = {
+        url: winner.url,
+        provider: winner.provider,
+        title: ytMetadata?.title || winner.title,
+        author: winner.author || ytMetadata?.author || "Artista",
+        duration: winner.duration || ytMetadata?.duration || `${Math.floor((winner.seconds || 0) / 60)}:${String((winner.seconds || 0) % 60).padStart(2, "0")}`,
+        seconds: winner.seconds || ytMetadata?.seconds || 0,
+        thumbnail: winner.thumbnail || ytMetadata?.thumbnail || null,
+        views: ytMetadata?.views || null,
+      };
+      setToCache(cKey, fullData);
+      log.success(`Downloader: ${winner.provider} → ok ⚡`);
+      return fullData;
     }
   } catch {}
 
   throw new Error("❌ No se pudo descargar el audio en este momento. Intenta con `.spotify <nombre>` o `.playsc <nombre>`.");
 }
 
-export default { getAudioUrl };
+export default { getAudioUrl, loadYtCookies };

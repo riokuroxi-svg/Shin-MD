@@ -99,27 +99,10 @@ test("theme: el modo del banner depende de la hora", () => {
   assert.equal(a(0), "night");
 });
 
-test("el menú ya no se viste con los banners por hora de media/banners", async () => {
-  const { getRandomBanner } = await import("#lib/menu-shared");
-  // Sin argumentos, el menú no debe devolver el banner por hora: usa los
-  // pósters propios de assets/menus (o MENU_IMAGE). Aquí basta comprobar
-  // que la ruta por defecto no toca `media/banners`.
-  const buf = getRandomBanner();
-  if (buf) {
-    const esPoster = true; // sin ruta no podemos saber cuál; el menú no rompe
-    assert.ok(esPoster);
-  }
-  const src = await import("node:fs/promises").then((fs) =>
-    fs.readFile(new URL("../src/lib/menu-shared.js", import.meta.url), "utf8"),
-  );
-  assert.match(src, /useHourly = false/, "el menú no pide banner por hora por defecto");
-});
-
-test("theme: los banners por hora son opcionales y válidos si existen", () => {
-  // El menú ya no se viste con media/banners. Si alguien deja imágenes ahí,
-  // se validan; si no hay ninguna, pickBanner devuelve null y nadie rompe.
+test("theme: hay banner de día y de noche, y son imágenes válidas", () => {
   for (const modo of ["day", "night"]) {
     const lista = listBanners(modo);
+    assert.ok(lista.length > 0, `falta el banner de ${modo}`);
     for (const p of lista) {
       const st = fs.statSync(p);
       assert.ok(st.size > 0 && st.size <= 600 * 1024, `${p} pesa demasiado para un banner`);
@@ -128,8 +111,7 @@ test("theme: los banners por hora son opcionales y válidos si existen", () => {
       const png = cab[0] === 0x89 && cab[1] === 0x50;
       assert.ok(jpeg || png, `${p} no es JPEG/PNG`);
     }
-    const elegido = pickBanner(modo);
-    assert.ok(lista.length === 0 ? elegido === null : lista.includes(elegido));
+    assert.ok(lista.includes(pickBanner(modo)));
   }
 });
 

@@ -4,21 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { botJid } from "#serialize";
-
 // Resuelve el JID real del canal oficial al conectar por primera vez.
 // Usa sock.newsletterMetadata("invite", code) que devuelve el @newsletter JID correcto.
 const DEFAULT_CHANNEL_CODE = "0029VbDVFpSGJP89hfZUe522";
 const DEFAULT_CHANNEL_LINK = "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522";
-const DEFAULT_CHANNEL_NAME = "Roxi-svg";
+const DEFAULT_CHANNEL_NAME = "Shin-MD Official Channel";
 
 let triedOnce = false;
 
 export async function resolveChannel(sock, db, force = false) {
   let channelCode = globalThis.links?.channelCode || DEFAULT_CHANNEL_CODE;
   const channelName = globalThis.links?.channelName || DEFAULT_CHANNEL_NAME;
-  // Nombre visible de la etiqueta de reenvío (configurable por entorno).
-  const showName = (process.env.CHANNEL_SHOW_NAME || "").trim();
 
   if (typeof channelCode === "string" && /whatsapp\.com\/channel\/([0-9A-Za-z]{22,24})/i.test(channelCode)) {
     const match = channelCode.match(/whatsapp\.com\/channel\/([0-9A-Za-z]{22,24})/i);
@@ -28,7 +24,7 @@ export async function resolveChannel(sock, db, force = false) {
   if (!sock) return globalThis.channelJid || null;
   if (globalThis.channelJid?.resolved && !force) return globalThis.channelJid;
 
-  const botId = botJid(sock);
+  const botId = sock?.user?.id?.split(':')[0] + '@s.whatsapp.net';
   // Si ya está guardado en la DB del bot, lo usamos
   if (botId && !force && db) {
     try {
@@ -36,11 +32,7 @@ export async function resolveChannel(sock, db, force = false) {
       if (st?.newsletter_id && String(st.newsletter_id).endsWith('@newsletter')) {
         globalThis.channelJid = {
           id: st.newsletter_id,
-          // El nombre que se enseña en la etiqueta «Reenviado» es el del
-          // canal. Si el dueño fijó uno propio (CHANNEL_NAME / .setname),
-          // manda ese: si no, la etiqueta saldría con el nombre real del
-          // canal y no con el del bot.
-          name: showName || st.nameid || channelName,
+          name: st.nameid || channelName,
           resolved: true
         };
         return globalThis.channelJid;
@@ -55,7 +47,7 @@ export async function resolveChannel(sock, db, force = false) {
     if (typeof sock.newsletterMetadata === "function") {
       const info = await sock.newsletterMetadata('invite', channelCode);
       if (info?.id) {
-        const name = showName || info.thread_metadata?.name?.text || channelName;
+        const name = info.thread_metadata?.name?.text || channelName;
         globalThis.channelJid = { id: info.id, name, resolved: true };
         // Guardar en DB para futuros arranques
         if (botId && db) {

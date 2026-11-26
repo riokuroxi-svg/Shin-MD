@@ -5,10 +5,10 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import { mismaPersona } from "#lib/lid";
 import os from 'os';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { sizeFormatter } from 'human-readable';
 import db from '../../src/services/ginko-db.js';
 import { isYtdlpAvailable } from '#lib/fastFetch';
 import {
@@ -26,24 +26,18 @@ import { getBreakerStatus, resetBreaker } from '#lib/apiBreaker';
 installPassiveErrorRecorder();
 
 const exec = promisify(execFile);
+const format = sizeFormatter({ std: 'JEDEC', decimalPlaces: 2, keepTrailingZeroes: false, render: (literal, symbol) => `${literal} ${symbol}B` });
 
-function format(bytes) {
-  const n = Number(bytes) || 0;
-  if (n < 1024) return `${n} B`;
-  const units = ['KB', 'MB', 'GB', 'TB', 'PB'];
-  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)) - 1, units.length - 1);
-  const val = parseFloat((n / (1024 ** (i + 1))).toFixed(2));
-  return `${val} ${units[i]}`;
-}
-
-let _ffmpegPromise = null;
-function hasFfmpeg() {
-  if (!_ffmpegPromise) {
-    _ffmpegPromise = exec('ffmpeg', ['-version'], { timeout: 5000 })
-      .then(() => true)
-      .catch(() => false);
+let _ffmpegCache = null;
+async function hasFfmpeg() {
+  if (_ffmpegCache !== null) return _ffmpegCache;
+  try {
+    await exec('ffmpeg', ['-version'], { timeout: 5000 });
+    _ffmpegCache = true;
+  } catch {
+    _ffmpegCache = false;
   }
-  return _ffmpegPromise;
+  return _ffmpegCache;
 }
 
 const yesNo = (ok) => (ok ? '✅ Sí' : '❌ No');
@@ -72,10 +66,10 @@ export default {
         return msg.reply('> ✅ Circuit-breakers restablecidos. Los servicios volverán a intentarse.');
       }
 
-      const botId = sock?.user?.id ? botJid(sock) : '';
+      const botId = sock?.user?.id ? `botJid(sock)` : '';
       const settings = botId ? (db.getSettings(botId) || {}) : {};
-      const botname = settings.botname || global.botname || 'Shin-MD';
-      const isOficial = !!(botId && global.sock?.user?.id && mismaPersona(botId, botJid(global.sock)));
+      const botname = settings.botname || global.botname || 'Ginko-MD';
+      const isOficial = global.sock?.user?.id && botId === (botJid(global.sock));
       const botType = isOficial ? 'Principal/Owner' : 'Sub Bot';
       const connected = !!sock?.user;
 

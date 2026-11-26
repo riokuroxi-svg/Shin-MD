@@ -5,8 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
-import { botJid } from "#serialize";
-import { sendInteractive, singleSelect } from "../../src/commands/interactive.js";
 import db from "../../src/services/ginko-db.js";
 
 const VARIANTS = {
@@ -25,7 +23,7 @@ const VARIANTS = {
   v3: {
     id: 3,
     name: "ANIMATED VIDEO GIFPLAYBACK",
-    desc: "Cabecera de video animado en bucle continuo (gifPlayback) con selector interactivo — la que viene por defecto",
+    desc: "Cabecera de video animado en bucle continuo (gifPlayback) con selector interactivo",
     emoji: "🎬",
   },
   v4: {
@@ -34,12 +32,6 @@ const VARIANTS = {
     desc: "Ficha técnica compacta con acceso directo a categorías y monitor de latencia",
     emoji: "📊",
   },
-  v5: {
-    id: 5,
-    name: "PORTADA NEÓN + CATEGORÍAS",
-    desc: "Tarjeta limpia con arte violeta, datos breves y selector nativo de categorías",
-    emoji: "🪻",
-  },
 };
 
 export default {
@@ -47,7 +39,7 @@ export default {
   aliases: ["menuvariant", "menustyle", "cambiarmenu"],
   category: "owner",
   description: "Configura el estilo visual y la variante activa del menú principal",
-  usage: ".setmenu <v1 | v2 | v3 | v4 | v5>",
+  usage: ".setmenu <v1 | v2 | v3 | v4>",
   cooldown: 2,
   ownerOnly: true,
 
@@ -55,50 +47,25 @@ export default {
     const args = (ctx.arg || "").toLowerCase().trim().split(/\s+/);
     const target = args[0];
 
-    const botId = botJid(sock) || "default";
+    const botJid = sock?.user?.id || "default";
 
     if (!target) {
-      let actual = 5;
-      try {
-        actual = Number(db.getSettings(botId)?.menu_variant || 5);
-      } catch {}
       let list = `🎨 *CONFIGURACIÓN DE ESTILO DE MENÚ*\n\n`;
-      list += `Actual: *V${actual}* · Uso: \`${ctx.usedPrefix}setmenu <variante>\`\n\n`;
+      list += `Uso: \`${ctx.usedPrefix}setmenu <variante>\`\n\n`;
       for (const [key, val] of Object.entries(VARIANTS)) {
-        const mark = val.id === actual ? " ✓" : "";
-        list += `${val.emoji} *${key.toUpperCase()}*${mark} — *${val.name}*\n`;
+        list += `${val.emoji} *${key.toUpperCase()}* — *${val.name}*\n`;
         list += `> _${val.desc}_\n\n`;
       }
-      list = list.trim();
-
-      // Selector interactivo (single_select); si falla, queda el texto.
-      const rows = Object.entries(VARIANTS).map(([key, val]) => ({
-        id: `setmenu ${key}`,
-        title: `${val.emoji} ${key.toUpperCase()}${val.id === actual ? " ✓" : ""} — ${val.name}`,
-        description: val.desc,
-      }));
-      if (typeof sock?.sendMessage !== "function") return list;
-      try {
-        await sendInteractive(sock, ctx.chatId, {
-          title: "🎨 Estilo de menú",
-          body: list,
-          footer: "反魂 Shin-MD · Estilo de menú",
-          buttons: [singleSelect("Elige una variante", [{ title: "Variantes", rows }])],
-          fallbackText: list,
-        });
-        return null;
-      } catch {
-        return list;
-      }
+      return list.trim();
     }
 
     const selected = VARIANTS[target];
     if (!selected) {
-      return `❌ Variante inválida. Opciones válidas: *v1*, *v2*, *v3*, *v4* y *v5*.\nEjemplo: \`${ctx.usedPrefix}setmenu v5\``;
+      return `❌ Variante inválida. Opciones válidas: *v1*, *v2*, *v3*, *v4*.\nEjemplo: \`${ctx.usedPrefix}setmenu v1\``;
     }
 
     try {
-      db.setSettings(botId, "menu_variant", selected.id);
+      db.setSettings(botJid, "menu_variant", selected.id);
       return `✅ *ESTILO DE MENÚ ACTUALIZADO*\n\n${selected.emoji} *Variante V${selected.id}: ${selected.name}*\n> ${selected.desc}`;
     } catch (err) {
       return `⚠️ Error al guardar la configuración: ${err.message}`;

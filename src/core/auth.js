@@ -36,9 +36,6 @@ export async function useSQLiteAuthState(sessionDir) {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA synchronous = NORMAL");
   db.exec("PRAGMA busy_timeout = 5000");
-  for (const sufijo of ["-wal", "-shm"]) {
-    try { if (fs.existsSync(dbPath + sufijo)) fs.chmodSync(dbPath + sufijo, 0o600); } catch {}
-  }
 
   // B1.3: checkpoint WAL al abrir. Tras un corte brusco (batería, kill)
   // puede quedar un -wal huérfano; el checkpoint lo pliega a la DB
@@ -65,9 +62,7 @@ export async function useSQLiteAuthState(sessionDir) {
     const n = importJsonFallback(db, dbPath + ".json");
     if (n > 0) log.info("Sesión recuperada del respaldo JSON: " + n + " filas");
   } catch (err) {
-    log.error("Migración de sesión falló; se conservó el respaldo: " + (err.message || err));
-    try { db.close(); } catch {}
-    throw err;
+    log.warn("No se pudo leer el respaldo JSON de la sesión: " + (err.message || err));
   }
 
   const credsRow = db.prepare("SELECT data FROM creds WHERE id = 1").get();
@@ -80,8 +75,8 @@ export async function useSQLiteAuthState(sessionDir) {
         value = { keyData: Buffer.from(value.keyData, "base64") };
       }
       return value;
-    } catch (err) {
-      throw new Error("Credencial Signal ilegible; se requiere revisión", { cause: err });
+    } catch {
+      return null;
     }
   }
 
@@ -103,24 +98,15 @@ export async function useSQLiteAuthState(sessionDir) {
       return out;
     },
     async set(data) {
-      db.exec("BEGIN IMMEDIATE");
-      try {
-        for (const category in data) {
-          for (const id in data[category]) {
-            const value = data[category][id];
-            if (value === null || value === undefined) {
-              stmtRemove.run(category, id);
-            } else {
-              stmtSet.run(category, id, JSON.stringify(value, BufferJSON.replacer));
-            }
+      for (const category in data) {
+        for (const id in data[category]) {
+          const value = data[category][id];
+          try {
+            stmtSet.run(category, id, JSON.stringify(value, BufferJSON.replacer));
+          } catch (err) {
+            log.error("keys.set(" + category + "," + id + "): " + (err.message || err));
           }
         }
-        db.exec("COMMIT");
-      } catch (err) {
-        try { db.exec("ROLLBACK"); } catch {}
-        log.error("keys.set: " + (err.message || err));
-        // Se propaga: Baileys reintenta el commit si ve el fallo (transactionOpts).
-        throw err;
       }
     },
     async remove(ids) {
@@ -128,19 +114,13 @@ export async function useSQLiteAuthState(sessionDir) {
       // (varios ":" dentro). split(":") truncaba la keyId → DELETE que
       // nunca coincidía → las keys muertas se acumulaban en la tabla.
       // Partir SOLO en el primer ":".
-      db.exec("BEGIN IMMEDIATE");
-      try {
-        for (const id of ids) {
-          const idx = String(id).indexOf(":");
-          const cat = idx === -1 ? id : id.slice(0, idx);
-          const keyId = idx === -1 ? "" : id.slice(idx + 1);
-          stmtRemove.run(cat, keyId);
+      for (const id of ids) {
+        const idx = String(id).indexOf(":");
+        const cat = idx === -1 ? id : id.slice(0, idx);
+        const keyId = idx === -1 ? "" : id.slice(idx + 1);
+        try { stmtRemove.run(cat, keyId); } catch (err) {
+          log.error("keys.remove(" + id + "): " + (err.message || err));
         }
-        db.exec("COMMIT");
-      } catch (err) {
-        try { db.exec("ROLLBACK"); } catch {}
-        log.error("keys.remove: " + (err.message || err));
-        throw err;
       }
     },
   };
@@ -152,15 +132,10 @@ export async function useSQLiteAuthState(sessionDir) {
         .run(JSON.stringify(creds, BufferJSON.replacer));
     } catch (err) {
       log.error("saveCreds: " + (err.message || err));
-      throw err;
     }
   }
 
-  function close() {
-    try { db.close(); } catch {}
-  }
-
-  return { state: { creds, keys }, saveCreds, close };
+  return { state: { creds, keys }, saveCreds };
 }
 
 export default { useSQLiteAuthState };

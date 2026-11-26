@@ -164,8 +164,8 @@ readonly NOMBRE="${SHIN_NOMBRE:-TuBot}"
 Con eso, el instalador ya descarga **tu** repositorio y lo instala en `~/TuBot`.
 
 **No hay nada más que tocar.** El nombre del paquete (`name` de
-`package.json`) sale solo del nombre visible: `TuBot` → `tu-bot`, `Mi-Bot` →
-`mi-bot`. Es lo que el instalador usa para saber que una carpeta es *suya*
+`package.json`) sale solo del nombre visible: `TuBot` → `tu-bot`, `Levi-MD` →
+`levi-md`. Es lo que el instalador usa para saber que una carpeta es *suya*
 cuando le pides `--update`, `--repair` o `--uninstall`, así que no hace falta
 que lo escribas en ningún otro sitio. Si tu paquete se llama distinto de lo
 que sale de esa cuenta, se lo dices:
@@ -350,7 +350,7 @@ gh release create v1.0.0 install.sh shin.sh SHA256SUMS \
 
 ## 7. Si tu copia ya existía y la gente la instalaba a mano
 
-Este es el caso de un fork hecho antes de que existiera el instalador (un bot de 2025,
+Este es el caso de un fork hecho antes de que existiera el instalador (Levi-MD,
 por ejemplo): el README dice `git clone` + `npm install`, no hay `install.sh`,
 no hay `SHA256SUMS`, y **el bloque de instalación que enseña sigue apuntando al
 repositorio original**. El que lo copia se instala Shin-MD, no tu bot.
@@ -367,14 +367,14 @@ Y edita esas dos líneas de arriba:
 
 ```bash
 readonly REPO_URL="${SHIN_REPO_URL:-https://github.com/TU-USUARIO/TU-REPO.git}"
-readonly NOMBRE="${SHIN_NOMBRE:-Mi-Bot}"
+readonly NOMBRE="${SHIN_NOMBRE:-Levi-MD}"
 ```
 
 Comprueba que el nombre deducido coincide con el `name` de tu `package.json`:
 
 ```bash
-grep '"name"' package.json          # "name": "mi-bot"
-# y lo que deduce el instalador: mi-bot
+grep '"name"' package.json          # "name": "levi-md"
+# y lo que deduce el instalador: levi-md
 ```
 
 Si no coincide, no lo dejes a medias: usa `SHIN_PKG` en el bloque del README o
@@ -388,7 +388,7 @@ carpeta ajena).
 node scripts/firma-instalador.mjs        # crea SHA256SUMS
 git add install.sh SHA256SUMS
 git commit -m "feat: instalador propio y huella"
-git tag -a v3.0.4 -m "Mi-Bot 3.0.4"
+git tag -a v3.0.4 -m "Levi-MD 3.0.4"
 git push origin main --tags
 ```
 
@@ -411,7 +411,7 @@ sha256sum -c SHA256SUMS && bash install.sh --version v3.0.4
 Y después:
 
 ```bash
-cd ~/Mi-Bot && npm start -- --code
+cd ~/Levi-MD && npm start -- --code
 ```
 
 Nada de eso puede quedar dentro de una imagen: si el usuario lo tiene que
@@ -424,7 +424,7 @@ instalación. El instalador nuevo la reconoce **por el nombre del paquete** y la
 adopta sin tocar sus datos:
 
 ```bash
-cd ~/Mi-Bot && git pull          # trae el install.sh nuevo
+cd ~/Levi-MD && git pull          # trae el install.sh nuevo
 bash install.sh --update
 ```
 
@@ -475,8 +475,3 @@ d=$(mktemp -d) && cd "$d" && curl -fsSL https://raw.githubusercontent.com/TU-USU
 - [ ] Y arrancaste esa instalación con `npm start` y respondía a `.menu`.
 
 Si todo eso está, no estás publicando un fork: estás publicando **un proyecto**.
-
-
----
-
-<sub>Escrito y mantenido por **[riokuroxi-svg](https://github.com/riokuroxi-svg)** · Shin-MD · AGPL-3.0-only · si te sirve, [invítame un café](https://ko-fi.com/kuroxisvg).</sub>

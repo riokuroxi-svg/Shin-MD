@@ -122,8 +122,5 @@ test("Menu Commands: setmenu valida variantes y actualiza setting", async () => 
   assert.ok(res1.includes("CONFIGURACIÓN DE ESTILO"));
 
   const res2 = await setmenuCmd.handler(dummySock, { arg: "v2", usedPrefix: "." });
-  // El mensaje de fallo lleva la respuesta entera: cuando el comando devuelve
-  // «Error al guardar la configuración» el motivo (base bloqueada, sin
-  // permisos…) tiene que verse aquí y no quedarse en un «falsy value» opaco.
-  assert.ok(res2.includes("ESTILO DE MENÚ ACTUALIZADO"), "respuesta de .setmenu: " + res2);
+  assert.ok(res2.includes("ESTILO DE MENÚ ACTUALIZADO"));
 });

@@ -5,8 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  socket.js — Conexión Baileys de Shin-MD
-//  Protección de sesión + saveCreds + cola anti-ban
+//  socket.js — Conexión Baileys estilo Ginko-MD
+//  Auto-clearing de sesión corrupta + saveCreds forzado
 // ═══════════════════════════════════════════════════════════════════
 
 import makeWASocket, {
@@ -20,14 +20,12 @@ import * as lid from "../lib/lid.js";
 import { panelCodigo } from "../services/consola.js";
 import { esLid as esJidLid } from "../lib/jid.js";
 import { resolveChannel } from "../lib/channel.js";
-import { nodoBiz, nodoBot, tipoDeBoton } from "../lib/biz-node.js";
 import { analizarCortes, podarCortes } from "../lib/cortes.js";
 import db from "../services/ginko-db.js";
 import pino from "pino";
-import { clasificarDesconexion } from "./politica-sesion.js";
-import { marcarSesionMuerta, limpiarMarcaSesionMuerta } from "#lib/vinculacion";
+import fs from "fs";
+import path from "path";
 import NodeCache from "node-cache";
-import { LRUCache } from "lru-cache";
 import log from "#logger";
 import { estilizar } from "#lib/theme";
 
@@ -70,45 +68,6 @@ export function formatearCodigoDeVinculacion(pair) {
   return (pair.match(/.{1,4}/g) || [pair]).join("-");
 }
 
-/**
- * Enciende el «escribiendo…» el tiempo que tardaría una persona en escribir
- * ese texto, y lo apaga al mandar.
- *
- * Es lo único de todo el blindaje que WhatsApp dice mirar con nombre propio:
- * «si una cuenta manda mensajes continuamente sin activar el indicador de
- * escritura, puede ser una señal de abuso». Cuesta 0 recursos (no gasta cuota)
- * y es lo que más separa a un bot de una persona.
- *
- * Si el servidor no lo admite, el mensaje sale igual: esto es ritmo, no un
- * requisito para mandar.
- *
- * @param {object} sock
- * @param {string} jid
- * @param {number} largo del texto que se va a mandar
- * @param {object} ritmo de `crearRitmo`
- */
-async function teclear(sock, jid, largo, ritmo) {
-  if (typeof sock.sendPresenceUpdate !== "function" || !largo) return;
-  // Los canales y las listas de difusión no tienen «escribiendo».
-  if (typeof jid === "string" && (jid.endsWith("@newsletter") || jid.endsWith("@broadcast"))) return;
-  try {
-    await sock.sendPresenceUpdate("composing", jid);
-    await new Promise((r) => setTimeout(r, ritmo.planDeTecleo(largo).ms));
-  } catch {
-    // sin tecleo se manda igual
-  }
-}
-
-/** Apaga el «escribiendo…» sin esperar: si falla, da igual. */
-function dejarDeTeclear(sock, jid) {
-  if (typeof sock.sendPresenceUpdate !== "function") return;
-  try {
-    Promise.resolve(sock.sendPresenceUpdate("paused", jid)).catch(() => {});
-  } catch {
-    /* nada */
-  }
-}
-
 export function connectSocket(engine, opts) {
   opts = opts || {};
   const sessionDir = opts.sessionDir || "./Sessions/Owner";
@@ -133,9 +92,6 @@ export function connectSocket(engine, opts) {
   let sock = null;
   let retries = 0;
   let isRestarting = false;
-  let reconnectTimer = null;
-  let sesionRequiereRevision = false;
-  let pairingTimer = null;
   let restartStreak = 0;
   let lastRestartAt = 0;
   let patientWarned = false;
@@ -149,26 +105,8 @@ export function connectSocket(engine, opts) {
   const SK = "__sent__:";
 
   const msgRetryCounterCache = new NodeCache({ stdTTL: 3600, checkperiod: 600, useClones: false });
-  // Caché de subidas de medios. La librería la consulta ANTES de subir:
-  // la misma imagen (mismo hash) se sube una sola vez y luego se
-  // reaprovecha el `imageMessage` ya subido en cada `.menu`. Sin esto,
-  // cada menú pagaba la subida entera (10-18 s por redes móviles).
-  // 50 entradas es el tamaño que recomienda la propia librería.
-  const mediaCache = new LRUCache({ max: 50, ttl: 1000 * 60 * 60 * 3 });
-
-  function scheduleReconnect(delayMs) {
-    if (sesionRequiereRevision) return;
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = null;
-      if (!sesionRequiereRevision) start();
-    }, delayMs);
-    if (typeof reconnectTimer.unref === "function") reconnectTimer.unref();
-  }
 
   function remove(s) {
-    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-    if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = null; }
     if (!s) return;
     try { s.ev.removeAllListeners(); } catch {}
     try { s.ws?.close(); } catch {}
@@ -176,11 +114,14 @@ export function connectSocket(engine, opts) {
     try { s.msgRetryCounterCache?.close(); } catch {}
   }
 
-  if (typeof engine.onShutdown === "function") {
-    engine.onShutdown(() => {
-      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-      if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = null; }
-    });
+  function clearSession() {
+    try {
+      if (!fs.existsSync(sessionDir)) return;
+      for (const f of fs.readdirSync(sessionDir)) {
+        try { fs.unlinkSync(path.join(sessionDir, f)); } catch {}
+      }
+      log.warn("Sesión limpiada");
+    } catch (e) { log.error("clearSession: " + (e.message || e)); }
   }
 
   // Cortes de conexión recientes, para poder explicar una seguidilla en
@@ -195,37 +136,21 @@ export function connectSocket(engine, opts) {
   }
 
   async function start() {
-    if (sesionRequiereRevision) return;
     if (isRestarting) return;
     isRestarting = true;
 
     engine.transit(engine.LIFECYCLE.CONNECT);
     log.gray("Conectando con WhatsApp...");
 
-    const { state, saveCreds: sc, close: cerrarBaseAuth } = await useSQLiteAuthState(sessionDir);
-    // Una auth.db por conexión: se cierra al caer el socket (no se acumulan).
-    let authCerrada = false;
-    const cerrarAuth = () => {
-      if (authCerrada) return;
-      authCerrada = true;
-      try { cerrarBaseAuth?.(); } catch {}
-    };
+    const { state, saveCreds: sc } = await useSQLiteAuthState(sessionDir);
 
     let ver;
     try { const v = await obtenerVersion(); ver = v.version; }
     // Fallback verificado en vivo (2026-09): 1044802095 conecta y da QR.
     catch { ver = [2, 3000, 1044802095]; }
 
-    // Persistir al recibir la actualización, antes de que una revocación
-    // cancele la conexión. sc() escribe sincrónicamente antes de resolver;
-    // un fallo se informa y no se declara guardado exitoso.
-    const saveCreds = () => {
-      if (sesionRequiereRevision || authCerrada) return;
-      Promise.resolve(sc()).catch((e) => {
-        health.recordError(e);
-        log.error("saveCreds falló; credenciales no persistidas: " + (e?.message || e));
-      });
-    };
+    let saveTimer;
+    const saveCreds = () => { clearTimeout(saveTimer); saveTimer = setTimeout(sc, 2000); };
 
     console.info = () => {};
     console.debug = () => {};
@@ -250,7 +175,6 @@ export function connectSocket(engine, opts) {
       transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
       emitOwnEvents: true,
       msgRetryCounterCache,
-      mediaCache,
       cachedGroupMetadata: async (jid) => getCachedMeta(jid) ?? undefined,
       getMessage: async (key) => {
         if (!key?.id) return undefined;
@@ -326,34 +250,15 @@ export function connectSocket(engine, opts) {
       }
 
       const esLigero = esEnvioLigero(c);
-      const ritmo = engine.getRitmo && engine.getRitmo();
-      const esCaliente = !!(ritmo && j && ritmo.caliente(j));
-      const isPriority = !!(o && o._priority) || sendQueue.inPriority();
       const qo = {
         messageLength: c?.text?.length || 0,
-        // A quién va: el ritmo cuenta conversaciones nuevas por destinatario.
-        destino: j,
-        esRespuesta: esCaliente,
-        isNewContact: Boolean(ritmo && j && !esCaliente),
         // B1.4: prioridad por flag explícito (_priority) o por ventana de
         // prioridad activa (comandos priority: .menu/.ping/.owner).
-        isPriority,
+        isPriority: !!(o && o._priority) || sendQueue.inPriority(),
         countsForQuota: !esLigero,
       };
       if (o) { delete o._priority; } // no fugarse a Baileys
-      // El «escribiendo…» de antes de mandar. Es la señal más barata que hay
-      // y la única que WhatsApp nombra en su propio documento sobre spam: una
-      // cuenta que nunca enciende el tecleo es señal de abuso. Va dentro del
-      // turno de la cola (no antes), para que el orden sea siempre el mismo.
-      const r = await sendQueue.enqueue(async () => {
-        const tecleando = !esLigero && !isPriority && ritmo && ritmo.ajustes.presencia;
-        if (tecleando) await teclear(s, j, qo.messageLength, ritmo);
-        try {
-          return await origSM(j, c, o);
-        } finally {
-          if (tecleando) dejarDeTeclear(s, j);
-        }
-      }, qo);
+      const r = await sendQueue.enqueue(() => origSM(j, c, o), qo);
       try {
         if (r?.key?.id) {
           const st = { key: r.key, message: c };
@@ -378,37 +283,8 @@ export function connectSocket(engine, opts) {
         if (pn) j = pn;
       }
       const text = m?.conversation || m?.extendedTextMessage?.text || m?.imageMessage?.caption || "";
-
-      // ── Nodo <biz>: sin él WhatsApp acepta el stanza y no pinta la
-      // tarjeta (síntoma exacto: el .menu "se envía" y no llega nada).
-      // Baileys 7.0.0-rc14 lo perdió de su relayMessage; aquí se
-      // repone con la forma que el servidor acepta y los clientes pintan.
-      let opciones = o;
-      try {
-        const tipo = tipoDeBoton(m);
-        if (tipo) {
-          const yaTrae = Array.isArray(o?.additionalNodes)
-            && o.additionalNodes.some((n) => n?.tag === "biz" || n?.tag === "bot");
-          if (!yaTrae) {
-            opciones = {
-              ...(o || {}),
-              additionalNodes: [
-                ...(o?.additionalNodes || []),
-                ...nodoBiz(tipo),
-                ...nodoBot(j), // en 1:1 el cliente pide además <bot biz_bot='1'/>
-              ],
-            };
-          }
-        }
-      } catch { /* si falla, sale como antes: mejor eso que perder el envío */ }
-
-      const ritmo = engine.getRitmo && engine.getRitmo();
-      const esCaliente = !!(ritmo && j && ritmo.caliente(j));
-      return sendQueue.enqueue(() => origRelay(j, m, opciones), {
+      return sendQueue.enqueue(() => origRelay(j, m, o), {
         messageLength: String(text).length,
-        destino: j,
-        esRespuesta: esCaliente,
-        isNewContact: Boolean(ritmo && j && !esCaliente),
         isPriority: sendQueue.inPriority(), // B1.4: tarjetas interactivas de comandos priority
         // Las ediciones y borrados que viajan como protocolMessage no
         // crean mensaje nuevo: respetan el delay pero no gastan cuota.
@@ -431,19 +307,6 @@ export function connectSocket(engine, opts) {
       if (watchdog) watchdog.tick();
       if (engine.getState() < engine.LIFECYCLE.READY) return;
       if (!Array.isArray(messages)) return;
-
-      // Señal de vida para el detector de sordera: si esto deja de llegar con
-      // la conexión «abierta», la sesión está sorda (#2491).
-      const ses = engine.getSesion?.();
-      ses?.sordera?.latido?.();
-
-      // Portón de reentrada: tras reconectar se descartan los mensajes viejos
-      // y los repetidos. Contestar una ráfaga de conversaciones de hace media
-      // hora es peor que no contestar.
-      const entrantes = ses?.activo ? ses.porton.filtrar(messages) : messages;
-      if (entrantes.length === 0) return;
-      messages = entrantes;
-
       for (const msg of messages) {
         try {
           if (!msg?.message || msg.key?.remoteJid === "status@broadcast") continue;
@@ -489,11 +352,6 @@ export function connectSocket(engine, opts) {
             msgStore.set(msg.key.remoteJid + ":" + msg.key.id, msg.message);
             if (msgStore.size > SMAX) msgStore.delete(msgStore.keys().next().value);
           }
-          // Calentar la conversación entrante: responder a quien ya escribió
-          // no gasta el cupo de chats nuevos ni se frena en descanso/madrugada.
-          if (!msg.key?.fromMe && msg.key?.remoteJid) {
-            engine.getRitmo?.()?.anotarEntrante?.(msg.key.remoteJid);
-          }
           if (onMessage) onMessage(s, msg).catch(e => log.error("onMessage: " + (e.message || e)));
         } catch (e) { log.error("msg.upsert: " + (e.message || e)); }
       }
@@ -515,17 +373,13 @@ export function connectSocket(engine, opts) {
         retries = 0;
         isRestarting = false;
         patientWarned = false;
-        // Al volver, el ritmo arranca suave y el portón de reentrada se cierra
-        // unos segundos: el pico de envíos y la reentrega de mensajes viejos
-        // son los dos sustos clásicos de una reconexión.
-        engine.getSesion?.()?.calma?.reiniciar?.();
-        engine.getSesion?.()?.porton?.reiniciar?.();
-        engine.getSesion?.()?.sordera?.reiniciar?.();
         if (typeof engine.resetBootTime === "function") engine.resetBootTime();
         if (Date.now() - lastRestartAt > 60000) restartStreak = 0;
 
         // FORZAR guardado inmediato de credenciales ANTES de que se cierre
-        try { await sc(); } catch (e) { log.warn("saveCreds al conectar: " + (e?.message || e)); }
+        clearTimeout(saveTimer);
+        try { await sc(); } catch {}
+        saveTimer = null;
 
         conectadoDesde = Date.now();
         if (podarCortes(marcasDeCorte).length === 0) pistaDeCortesDada = false;
@@ -543,18 +397,10 @@ export function connectSocket(engine, opts) {
         // Resolver metadata del canal oficial en background
         resolveChannel(s, db).catch(() => {});
 
-        // Pre-subir el video del menú (una sola vez, en segundo plano) para
-        // que el primer `.menu` tampoco tarde: la subida ocurre mientras el
-        // usuario lee el panel, no cuando pide el menú.
+        // B2.2: log estilo Ginko — "Grupos: X" al conectar, y el dato queda
+        // disponible para el panel /health. Con setTimeout para no frenar la
+        // transición READY; si falla no pasa nada (el contador queda en 0).
         setTimeout(async () => {
-          try {
-            const { calentarMediaMenu } = await import("#lib/menu-card");
-            await calentarMediaMenu(s);
-          } catch { /* el menú funciona igual, solo tarda la primera vez */ }
-        }, 20000);
-
-        // B2.2: contador de grupos al conectar para /health.
-        const groupsTimer = setTimeout(async () => {
           try {
             const groups = await s.groupFetchAllParticipating();
             const n = Object.keys(groups || {}).length;
@@ -562,18 +408,16 @@ export function connectSocket(engine, opts) {
             log.info("Grupos: " + n);
           } catch {}
         }, 1500);
-        if (typeof groupsTimer.unref === "function") groupsTimer.unref();
         if (engine.getState() < engine.LIFECYCLE.RUNNING) engine.transit(engine.LIFECYCLE.RUNNING);
         if (watchdog) watchdog.tick();
       }
 
       if (isNewLogin) {
         log.info("Nuevo dispositivo vinculado");
-        // Si veníamos de una sesión rechazada, la marca ya no vale:
-        // esta vinculación es nueva y buena.
-        limpiarMarcaSesionMuerta(sessionDir);
         // Forzar saveCreds inmediato cuando se vincula
-        try { await sc(); } catch (e) { log.warn("saveCreds al vincular: " + (e?.message || e)); }
+        clearTimeout(saveTimer);
+        try { await sc(); } catch {}
+        saveTimer = null;
       }
 
       if (connection === "close") {
@@ -582,43 +426,10 @@ export function connectSocket(engine, opts) {
         // aviso) espera aquí y sale al reconectar. Antes no se pausaba:
         // esos envíos morían contra el socket cerrado y se perdían.
         try { engine.getSendQueue()?.pause?.("conexion"); } catch {}
-        if (pairingTimer) { clearTimeout(pairingTimer); pairingTimer = null; }
 
         remove(s);
 
         const code = lastDisconnect?.error?.output?.statusCode || 0;
-        const motivoInicial = clasificarDesconexion(code, DisconnectReason);
-        if (motivoInicial === "revision") {
-          sesionRequiereRevision = true;
-          isRestarting = false;
-          watchdog?.stop?.();
-          health.recordError(new Error("session_requires_review"));
-          // LA SESIÓN YA NO SIRVE. Antes solo se paraba la reconexión y
-          // se conservaban las credenciales tal cual: el archivo seguía
-          // diciendo `registered: true`, el próximo arranque contestaba
-          // «no hace falta vincular nada» y volvía a chocar con el 401.
-          // Bucle cerrado, sin forma de recuperar el bot. Se deja una
-          // marca para que el arranque vuelva a pedir el número; las
-          // credenciales se conservan para poder mirarlas.
-          const marca = marcarSesionMuerta(sessionDir, "WhatsApp cerró la sesión (" + code + ")");
-          log.error("Sesión requiere intervención administrativa (" + code + "). Credenciales conservadas; reconexión automática detenida.");
-          if (marca) {
-            log.warn("Sesión marcada como rechazada: al reiniciar se volverá a pedir el número (nada de borrar nada a mano).");
-          }
-          // No guardar, borrar, mover ni renombrar credenciales tras esta señal.
-          const cierre = setTimeout(cerrarAuth, 3000);
-          if (typeof cierre.unref === "function") cierre.unref();
-          return;
-        }
-
-        // Última escritura de credenciales y cierre diferido de la auth.db
-        // (da margen a escrituras en vuelo del socket que acaba de caer).
-        if (!authCerrada) {
-          try { await sc(); } catch (e) { log.warn("saveCreds al cerrar: " + (e?.message || e)); }
-        }
-        const cierre = setTimeout(cerrarAuth, 3000);
-        if (typeof cierre.unref === "function") cierre.unref();
-
         const registered = !!state.creds.registered;
 
         // B1.2: el riesgo solo cuenta con sesión YA válida. Durante el
@@ -645,52 +456,90 @@ export function connectSocket(engine, opts) {
           log.warn(corte.pista);
         }
 
-        if (motivoInicial === "reemplazada") {
-          log.warn("Conexión reemplazada; no se reconecta automáticamente.");
+        if ([DisconnectReason.loggedOut, DisconnectReason.forbidden,
+             DisconnectReason.multideviceMismatch].includes(code)) {
+          log.warn("Desvinculado (" + code + ") — limpiando sesión");
+          health.recordError(new Error("logged_out"));
+          clearSession();
+          process.exit(1);
+        }
+
+        if (code === DisconnectReason.connectionReplaced) {
+          log.warn("Conexión reemplazada.");
           isRestarting = false;
           return;
         }
 
+        // ── Sesión inválida: limpiar automáticamente como Ginko-MD ──
+        if (code === DisconnectReason.badSession) {
+          log.warn("Sesión inválida — limpiando y reconectando...");
+          clearSession();
+          isRestarting = false;
+          setTimeout(start, 3000);
+          return;
+        }
+
         // ── RestartRequired (515): normal después del pairing ──
-        // Backoff escalonado si se encadena.
+        // Backoff escalonado si se encadena. Antes este bloque hacía
+        // return ANTES de retries++ con delay fijo de 1s: si el c0 se
+        // repetía (sesión corrupta) → bucle infinito de reconnects cada
+        // segundo, que es el patrón exacto que el servidor marca como
+        // anómalo. Ahora: 1s, 1s, 15s, 60s, 5min; 6+ seguidos en <1min
+        // cada uno → sesión corrupta, limpiar (como Ginko-MD).
         if (code === DisconnectReason.restartRequired || code === 0) {
           const now = Date.now();
           restartStreak = (now - lastRestartAt < 60000) ? restartStreak + 1 : 1;
           lastRestartAt = now;
-          if (clasificarDesconexion(code, DisconnectReason, restartStreak) === "revision") {
-            sesionRequiereRevision = true;
-            isRestarting = false;
-            watchdog?.stop?.();
-            health.recordError(new Error("session_requires_review"));
-            log.error("Demasiados reinicios de sesión; reconexión detenida. Credenciales conservadas; requiere intervención administrativa.");
-            return;
+          if (restartStreak >= 6) {
+            if (registered) {
+              // B1.1: NUNCA borrar una sesión válida. Tormenta de c0 =
+              // sesión corrupta o problema del servidor; se sale con el
+              // auth.db intacto. Si el fallo sigue al re-arrancar, el
+              // usuario borra Sessions/Owner a mano para re-vincular.
+              log.fatal("Demasiados restarts seguidos (c0) — saliendo SIN borrar la sesión");
+              log.warn("Si el fallo persiste al reiniciar, borra la carpeta Sessions/Owner para vincular de nuevo.");
+              process.exit(1);
+            }
+            log.fatal("Demasiados restarts seguidos (c0) — limpiando sesión");
+            clearSession();
+            process.exit(1);
           }
           const rDelays = [1000, 1000, 15000, 60000, 300000];
           const rDelay = rDelays[Math.min(restartStreak - 1, rDelays.length - 1)];
           log.gray(`Reconectando con credenciales nuevas (streak ${restartStreak}) en ${Math.round(rDelay / 1000)}s...`);
           isRestarting = false;
-          scheduleReconnect(rDelay);
+          setTimeout(start, rDelay);
           return;
         }
 
         if (!registered) {
           // B1.2: pairing paciente — aquí los reintentos NO cuentan.
+          // No hay sesión válida que proteger y el usuario necesita tiempo
+          // para teclear el código: reconexión con backoff sin límite,
+          // como Ginko-MD. (Antes: 15 cortes de red durante el pairing
+          // borraban auth.db y había que empezar de cero.)
           const pd = backoffDelay();
           log.gray(`Pairing: desconexión (${code}), reintentando en ${Math.round(pd / 1000)}s...`);
           isRestarting = false;
-          scheduleReconnect(pd);
+          setTimeout(start, pd);
           return;
         }
 
         retries++;
         if (retries > MAX_RETRIES) {
+          // B1.1 (FIX CRÍTICO): antes esto borraba auth.db tras 15
+          // desconexiones de CUALQUIER tipo — incluidos cortes de red
+          // 408/428, fatales en Termux con datos móviles (15 cortes se
+          // alcanzan en ~2 min y perdías la vinculación). Una sesión
+          // válida NUNCA se borra por cortes de red: se pasa a modo
+          // paciente (reintento cada ~5 min) hasta que vuelva la señal.
           if (!patientWarned) {
             log.warn("Muchos reintentos seguidos — modo paciente: reintento cada ~5 min, sesión intacta");
             patientWarned = true;
           }
           const pd = 300000 + Math.floor(Math.random() * 30000);
           isRestarting = false;
-          scheduleReconnect(pd);
+          setTimeout(start, pd);
           return;
         }
 
@@ -703,16 +552,15 @@ export function connectSocket(engine, opts) {
         const d = backoffDelay();
         log.warn(reasonMessages[code] || `Desconexión (${code}), reconectando en ${Math.round(d / 1000)}s...`);
         isRestarting = false;
-        scheduleReconnect(d);
+        setTimeout(start, d);
       }
     });
 
     // Pairing code flow
     if (pairingMethod === "code" && pairingNumber && !state.creds.registered) {
-      pairingTimer = setTimeout(async () => {
-        pairingTimer = null;
+      setTimeout(async () => {
         try {
-          if (!state.creds.registered && !sesionRequiereRevision && !authCerrada) {
+          if (!state.creds.registered) {
             const phone = pairingNumber.replace(/\D/g, "");
             // Marca de diagnóstico: deja constancia en la consola de que el
             // bot SÍ llegó a pedir el código. La usa scripts/verificar-pairing.js,
@@ -726,7 +574,6 @@ export function connectSocket(engine, opts) {
           }
         } catch (e) { log.error("Pairing: " + (e.message || e)); }
       }, pairingDelayMs);
-      if (typeof pairingTimer.unref === "function") pairingTimer.unref();
     }
 
     isRestarting = false;

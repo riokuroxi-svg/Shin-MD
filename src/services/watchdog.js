@@ -36,9 +36,8 @@ export function createWatchdog(engine, opts = {}) {
   let lastRisk = 0;
   let strikes = 0;
   let lastStrike = 0;
-  let breakerTripped = false;
   const MAX_STRIKES = 3;
-  const STRIKE_COOLDOWN_MS = opts.strikeCooldownMs ?? 120000;
+  const STRIKE_COOLDOWN_MS = 120000;
 
   function wsReady(sock) {
     // Baileys: sock.ws.ready (booleano) o readyState (1 = OPEN)
@@ -54,15 +53,14 @@ export function createWatchdog(engine, opts = {}) {
   function doReconnect(reason) {
     const sock = engine.getSock();
     if (!wsReady(sock)) return;
-    if (breakerTripped) return;
-    if (lastStrike > 0 && Date.now() - lastStrike < STRIKE_COOLDOWN_MS) return; // cooldown
-    if (strikes >= MAX_STRIKES) {
-      breakerTripped = true;
-      log.error("Watchdog: " + MAX_STRIKES + " reconnects forzados sin alivio — riesgo de BAN; reconexión forzada pausada hasta recuperación");
-      return;
-    }
+    if (Date.now() - lastStrike < STRIKE_COOLDOWN_MS) return; // breaker
     strikes++;
     lastStrike = Date.now();
+    if (strikes > MAX_STRIKES) {
+      log.error("Watchdog: " + MAX_STRIKES + " reconnects forzados sin alivio — riesgo de BAN; revisar sesión/red (intento manual)");
+      strikes = 0; // espera a que el riesgo baje para volver a intentar
+      return;
+    }
     log.warn("Watchdog: reconnect forzado #" + strikes + " (" + reason + ")");
     try {
       sock.ws.close(); // Baileys reabre la conexión solo
@@ -87,31 +85,23 @@ export function createWatchdog(engine, opts = {}) {
       lastRisk = score;
 
       // 1) Pausa/reanuda la cola según riesgo (anti-ban)
-      // Usa el motivo "riesgo" para no pisarse con la pausa por "conexion".
       if (score >= riskThreshold && !paused) {
         paused = true;
-        queue.pause("riesgo");
+        queue.pause();
         log.warn("Watchdog: riesgo alto (" + score + ") — cola de envíos en pausa");
       } else if (paused && score < riskThreshold) {
         paused = false;
-        queue.resume("riesgo");
+        queue.resume();
         log.info("Watchdog: riesgo normal (" + score + ") — cola reanudada");
       }
 
-      // 2) Conexión stuck / sesión sorda (#2491): unificado aquí para no
-      //    duplicar temporizadores ni provocar tormentas de reconexión.
-      const ses = typeof engine.getSesion === "function" ? engine.getSesion() : null;
-      const sordera = state === engine.LIFECYCLE.RUNNING && ses?.activo && ses.sordera?.revisar?.();
+      // 2) Conexión stuck: el engine dice que está conectado pero no
+      //    hay señales de vida (open/mensajes) desde stuckThresholdMs.
       const idle = Date.now() - lastActivity;
-      const stuck = state >= engine.LIFECYCLE.CONNECT && idle > stuckThresholdMs;
-      if (stuck || sordera) {
+      if (state >= engine.LIFECYCLE.CONNECT && idle > stuckThresholdMs) {
         if (wsReady(sock)) {
-          doReconnect(
-            sordera
-              ? "sesión sorda — sin mensajes entrantes"
-              : "conexión stuck " + Math.round(idle / 60000) + " min sin actividad",
-          );
-        } else if (idle > stuckThresholdMs) {
+          doReconnect("conexión stuck " + Math.round(idle / 60000) + " min sin actividad");
+        } else {
           // sin ws abierta: Baileys ya está reintentando; solo avisar
           log.warn("Watchdog: sin conexión abierta y " + Math.round(idle / 60000) + " min de inactividad");
         }
@@ -122,11 +112,10 @@ export function createWatchdog(engine, opts = {}) {
         doReconnect("riesgo crítico " + score);
       }
 
-      // 4) Conexión y riesgo recuperados → rearmar breaker
-      if (score < riskThreshold && !stuck && !sordera && (strikes > 0 || breakerTripped)) {
-        log.info("Watchdog: riesgo y actividad recuperados — contador de reconnects reseteado");
+      // 4) Riesgo recuperado → resetear breaker
+      if (score < riskThreshold && strikes > 0) {
+        log.info("Watchdog: riesgo recuperado — contador de reconnects reseteado");
         strikes = 0;
-        breakerTripped = false;
       }
     } catch (err) {
       // El watchdog NUNCA debe tumbar el bot por su propio fallo.
@@ -150,8 +139,6 @@ export function createWatchdog(engine, opts = {}) {
     start, stop, check, tick,
     isPaused: () => paused,
     getLastRisk: () => lastRisk,
-    getStrikes: () => strikes,
-    isBreakerTripped: () => breakerTripped,
   };
 }
 

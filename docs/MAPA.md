@@ -1,4 +1,4 @@
-# Mapa de Shin-MD 3.7.19
+# Mapa de Shin-MD 3.7.9
 
 > Generado con `npm run mapa`. No se edita a mano: los números y las listas
 > salen del repositorio, así que si algo se mueve, se vuelve a lanzar.
@@ -31,24 +31,24 @@ para y dice la orden exacta que hay que escribir.
 
 | Carpeta | Archivos | Para qué |
 | --- | --- | --- |
-| `assets/` | 13 | Imágenes y sonidos que el bot envía (menús, avatares, portadas). |
+| `assets/` | 48 | Imágenes y sonidos que el bot envía (menús, avatares, portadas). |
 | `bin/` | — | Temporales de herramientas externas (`yt-dlp` y compañía). Vacía en el repositorio. |
 | `boot/` | 1 | El arranque: licencia, banner, vinculación y carga de servicios. Un solo archivo, en orden. |
-| `cmds/` | 222 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
+| `cmds/` | 219 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
 | `data/` | — | La base de datos del bot y su respaldo JSON. Se crea sola. |
-| `docs/` | 97 | Documentación para quien lee y para quien toca el código. |
+| `docs/` | 77 | Documentación para quien lee y para quien toca el código. |
 | `logs/` | — | El registro diario del bot. |
 | `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
 | `scripts/` | 19 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
 | `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
-| `src/` | 101 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
-| `test/` | 78 | Las pruebas. Una por tema; cada archivo corre solo. |
-| `tools/` | 13 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
+| `src/` | 82 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
+| `test/` | 50 | Las pruebas. Una por tema; cada archivo corre solo. |
+| `tools/` | 11 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
 | `src/commands/` | 6 | El motor de comandos: cargador, router, contexto de mensaje y permisos. |
-| `src/core/` | 6 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
-| `src/lib/` | 68 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
+| `src/core/` | 5 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
+| `src/lib/` | 52 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
 | `src/network/` | 2 | Cola de salida y salud de la red (reintentos, cortes, presión). |
-| `src/services/` | 12 | Servicios con estado: base de datos del bot, economía, descargas, registro, vigía, consola. |
+| `src/services/` | 10 | Servicios con estado: base de datos del bot, economía, descargas, registro, vigía, consola. |
 | `src/storage/` | 5 | Dónde se guarda todo: SQLite, migraciones, caché y memoria de identidades. |
 | `src/web/` | 1 | El panel HTTP local del bot. |
 
@@ -57,7 +57,7 @@ número a propósito: se llenan al correr el bot y al pasar las pruebas, así qu
 contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
 y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
-Son **222 archivos de comando**, **68 utilidades** en `src/lib`, **12 servicios** y **77 archivos de prueba**.
+Son **219 archivos de comando**, **52 utilidades** en `src/lib`, **10 servicios** y **49 archivos de prueba**.
 
 ## El viaje de un mensaje
 
@@ -113,6 +113,7 @@ WhatsApp
 
 | Paquete | Para qué |
 | --- | --- |
+| `@distube/ytdl-core` | Descargar de YouTube cuando `yt-dlp` no está. |
 | `@img/sharp-wasm32` | El `sharp` de respaldo para Android/Termux, donde no hay binario nativo. No se importa: lo usa `sharp`. |
 | `aptoide-scraper` | Buscar APKs en `.apk` (se carga solo cuando se usa). |
 | `awesome-phonenumber` | Validar y formatear teléfonos en `.wastalk` (se carga solo cuando se usa). |
@@ -123,9 +124,15 @@ WhatsApp
 | `dotenv` | Lee el `.env` al arrancar. |
 | `express` | El servidor del panel web local. |
 | `file-type` | Adivinar el tipo real de un archivo por su contenido. |
+| `form-data` | Subir archivos en las APIs que lo piden. |
+| `grapheme-splitter` | Contar caracteres como los cuenta una persona (emojis, acentos). |
+| `human-readable` | Números grandes legibles (1.2 GB, 340 ms). |
+| `jimp` | Edición de imágenes en JavaScript puro (lo que `sharp` no puede en WASM). |
 | `mime-types` | El tipo por la extensión, cuando no hay bytes que mirar. |
+| `moment` | Lo que usa `moment-timezone` por debajo. |
+| `moment-timezone` | Fechas y horas en la zona del dueño. |
 | `node-cache` | Caché en memoria con caducidad. |
-| `node-fetch` | Peticiones HTTP con agente DNS validado contra SSRF (`urlSegura.js`). |
+| `node-fetch` | Peticiones HTTP donde `axios` no encaja (streams, descargas). |
 | `node-webpmux` | Escribir metadatos en stickers WebP animados. |
 | `pino` | El registro interno del conector de WhatsApp. |
 | `qrcode` | Generar la imagen del QR dentro del chat (`.qrcode`), no en la consola. |
@@ -142,10 +149,10 @@ WhatsApp
 | Instalador y publicación | `instalador`, `publicar`, `versiones`, `licencia` | Que el comando de una línea funcione y la versión no se quede vieja |
 | Consola y diseño | `consola`, `consola-bot`, `aesthetic-ui`, `design-system` | Que las cajas cuadren y el texto se lea |
 | Núcleo del bot | `core`, `context`, `router`, `interactive`, `compat`, `cola-incierta` | Enrutado, permisos, contexto, cola de salida |
-| Datos y memoria | `sqlite-respaldo`, `remediacion-a1`, `remediacion-a2`, `remediacion-a2-sqlite`, `remediacion-a3`, `remediacion-integracion`, `economia`, `xp`, `lid`, `db-opcional`, `relevo` | Que nada se pierda ni se sobrescriba al cerrar |
-| Comandos concretos | `apis`, `menucat-fax`, `owner-mx`, `play-fuentes`, `ttt`, `random`, `tiempo`, `ytdlp-cliente`, `limpieza-deps` | Que cada uno haga lo suyo |
+| Datos y memoria | `sqlite-respaldo`, `economia`, `xp`, `lid`, `db-opcional`, `relevo` | Que nada se pierda al cerrar |
+| Comandos concretos | `apis`, `menucat-fax`, `owner-mx`, `play-fuentes`, `ttt`, `random`, `tiempo`, `ytdlp-cliente` | Que cada uno haga lo suyo |
 | Documentación y página | `docs-web`, `mapa`, `web`, `web-audit` | Que lo publicado no mienta |
-| Operación | `vigia`, `mantenimiento`, `warmup-quota`, `conector-parches`, `auditoria`, `sombras`, `endurecimiento-operativo` | Que el bot aguante en un VPS |
+| Operación | `vigia`, `mantenimiento`, `warmup-quota`, `conector-parches`, `auditoria`, `sombras` | Que el bot aguante en un VPS |
 
 ## Lo que se retiró y no vuelve
 
@@ -156,8 +163,6 @@ WhatsApp
 | `global.APIs` sin configurar | Reventaba cuatro comandos con un `TypeError`; ahora se configura en el `.env` |
 | `github-readme-stats` | El servicio devolvía 503; las cifras se generan en casa |
 | `cfonts`, `qrcode-terminal` | Dependencias que nadie importaba (el banner es de una columna, el QR no existe) |
-| `jimp`, `@distube/ytdl-core` | `sharp` ya cubre imágenes y `ytdl-core` quedó obsoleto frente a `yt-dlp` y APIs |
-| `moment`, `moment-timezone`, `grapheme-splitter`, `human-readable`, `form-data` | Sustituidos por APIs nativas de Node 22 (`Intl`, `FormData`, `Blob`, `fetch`) |
 
 ## Por dónde empezar a leer
 

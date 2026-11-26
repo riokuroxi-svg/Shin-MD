@@ -11,7 +11,6 @@
 
 import fs from "fs";
 import path from "path";
-import { randomBytes, createHash } from "crypto";
 
 let _DatabaseSync;
 let _isFallback = false;
@@ -75,7 +74,7 @@ if (!_DatabaseSync) {
     }
 
     run(...params) {
-      return this.db._runStatement(this.sql, params);
+      return this.db._execStatement(this.sql, params, "run");
     }
 
     get(...params) {
@@ -92,86 +91,48 @@ if (!_DatabaseSync) {
       this.filename = filename;
       this.tables = new Map();
       this.isMemory = !filename || filename === ":memory:";
-      this.transactionSnapshot = null;
-      this.degraded = false;
-      if (!this.isMemory && fs.existsSync(filename)) {
-        throw new Error("SQLite real existe; el fallback JSON no puede abrirlo sin riesgo de divergencia: " + filename);
-      }
       this._load();
-    }
-
-    _snapshot() {
-      return new Map([...this.tables].map(([name, table]) => {
-        const copy = /** @type {any} */ (new Map([...table].map(([key, row]) => [key, structuredClone(row)])));
-        if (table.__pk) copy.__pk = [...table.__pk];
-        return [name, copy];
-      }));
     }
 
     _load() {
       if (this.isMemory) return;
-      const jsonPath = this.filename + ".json";
       try {
-        let text;
-        try { text = fs.readFileSync(jsonPath, "utf8"); }
-        catch (err) { if (err.code === "ENOENT") return; throw err; }
-        const raw = JSON.parse(text);
-        if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Formato JSON inválido");
-        const pks = raw[META_PK] || {};
-        for (const [k, v] of Object.entries(raw)) {
-          if (k === META_PK) continue;
-          if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error("Tabla JSON inválida: " + k);
-          const t = /** @type {any} */ (new Map(Object.entries(v)));
-          if (Array.isArray(pks[k])) t.__pk = pks[k];
-          this.tables.set(k, t);
+        const jsonPath = this.filename + ".json";
+        if (fs.existsSync(jsonPath)) {
+          const raw = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+          const pks = raw[META_PK] || {};
+          for (const [k, v] of Object.entries(raw)) {
+            if (k === META_PK) continue;
+            const t = /** @type {any} */ (new Map(Object.entries(v)));
+            if (Array.isArray(pks[k])) t.__pk = pks[k];
+            this.tables.set(k, t);
+          }
         }
-      } catch (err) {
-        this.degraded = true;
-        throw new Error("No se pudo leer almacenamiento JSON; se preservó el archivo", { cause: err });
-      }
+      } catch {}
     }
 
     _save() {
-      if (this.isMemory || this.transactionSnapshot) return;
-      let temp;
-      let fd;
+      if (this.isMemory) return;
       try {
         const dir = path.dirname(this.filename);
-        fs.mkdirSync(dir, { recursive: true });
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         const obj = {};
         const pks = {};
         for (const [tName, map] of this.tables.entries()) {
           obj[tName] = Object.fromEntries(map.entries());
           if (map.__pk) pks[tName] = map.__pk;
         }
+        // Las claves primarias se guardan aparte: las tablas que se crean
+        // en una migración no vuelven a pasar por CREATE TABLE al reiniciar.
         if (Object.keys(pks).length) obj[META_PK] = pks;
-        temp = this.filename + ".json.tmp-" + randomBytes(12).toString("hex");
-        fd = fs.openSync(temp, "wx", 0o600);
-        fs.writeFileSync(fd, JSON.stringify(obj, null, 2), "utf8");
-        fs.fsyncSync(fd);
-        fs.closeSync(fd); fd = undefined;
-        fs.renameSync(temp, this.filename + ".json");
-        temp = undefined;
-        this.degraded = false;
-      } catch (err) {
-        this.degraded = true;
-        throw new Error("No se pudo persistir almacenamiento JSON", { cause: err });
-      } finally {
-        if (fd !== undefined) try { fs.closeSync(fd); } catch {}
-        if (temp) try { fs.unlinkSync(temp); } catch {}
-      }
-    }
-
-    _runStatement(sql, params) {
-      const before = this.transactionSnapshot ? null : this._snapshot();
-      try { return this._execStatement(sql, params, "run"); }
-      catch (err) { if (before) this.tables = before; throw err; }
+        fs.writeFileSync(this.filename + ".json", JSON.stringify(obj, null, 2), "utf8");
+      } catch {}
     }
 
     exec(sql) {
       const stmts = sql.split(";").map(s => s.trim()).filter(Boolean);
       for (const s of stmts) {
-        this._runStatement(s, []);
+        this._execStatement(s, [], "exec");
       }
     }
 
@@ -190,24 +151,6 @@ if (!_DatabaseSync) {
     _execStatement(sql, params, mode) {
       const lower = sql.toLowerCase().trim();
 
-      if (/^begin(?:\s|$)/.test(lower)) {
-        if (this.transactionSnapshot) throw new Error("Transacción ya iniciada");
-        this.transactionSnapshot = this._snapshot();
-        return null;
-      }
-      if (/^commit(?:\s|$)/.test(lower)) {
-        if (!this.transactionSnapshot) throw new Error("No hay transacción activa");
-        const snapshot = this.transactionSnapshot;
-        this.transactionSnapshot = null;
-        try { this._save(); } catch (err) { this.tables = snapshot; throw err; }
-        return null;
-      }
-      if (/^rollback(?:\s|$)/.test(lower)) {
-        if (!this.transactionSnapshot) throw new Error("No hay transacción activa");
-        this.tables = this.transactionSnapshot;
-        this.transactionSnapshot = null;
-        return null;
-      }
       if (lower.startsWith("pragma")) return mode === "all" ? [] : null;
 
       if (lower.startsWith("create table")) {
@@ -226,17 +169,12 @@ if (!_DatabaseSync) {
         return { changes: 0, lastInsertRowid: 0 };
       }
 
-      // INSERT / INSERT OR REPLACE / INSERT OR IGNORE
+      // INSERT OR REPLACE / INSERT INTO
       if (lower.startsWith("insert")) {
-        // OR IGNORE faltaba: ginko-db crea las filas con
-        // `INSERT OR IGNORE INTO g_users (id) VALUES (?)`, así que sin esta
-        // rama la fila NO se creaba y getUser/getChat/getSettings devolvían
-        // undefined para siempre (el bot parecía sano y perdía los datos).
-        const m = sql.match(/insert\s+(?:or\s+(replace|ignore)\s+into|into)\s+([a-zA-Z0-9_]+)\s*\(([^)]+)\)\s*values/i);
+        const m = sql.match(/insert\s+(?:or\s+replace\s+into|into)\s+([a-zA-Z0-9_]+)\s*\(([^)]+)\)\s*values/i);
         if (m) {
-          const esIgnore = /or\s+ignore/i.test(sql);
-          const tableName = m[2];
-          const cols = m[3].split(",").map(c => c.trim().toLowerCase());
+          const tableName = m[1];
+          const cols = m[2].split(",").map(c => c.trim().toLowerCase());
           const table = this._getTable(tableName);
           // Parsear la lista VALUES para distinguir literales (1, 'x', NULL)
           // de placeholders (?). Antes se mapeaban params por posición de
@@ -279,10 +217,6 @@ if (!_DatabaseSync) {
             row[pk[0]] = max + 1;
           }
           const keyVal = pk.map(c => String(row[c])).join("\u0000");
-          if (esIgnore && table.has(keyVal)) {
-            // Como SQLite: la fila existente se queda como está.
-            return { changes: 0, lastInsertRowid: 0 };
-          }
           table.set(keyVal, row);
           this._save();
           return { changes: 1, lastInsertRowid: table.size };
@@ -324,63 +258,6 @@ if (!_DatabaseSync) {
         return mode === "all" ? [] : undefined;
       }
 
-      // UPDATE ... SET col = ?, col2 = valor WHERE ...
-      // Faltaba por completo: `db.prepare("UPDATE g_users SET coins = ? WHERE
-      // id = ?").run(...)` devolvía null y NO escribía nada. En el respaldo
-      // JSON eso significa que el bot guardaba en el vacío (economía, XP,
-      // warnings, ajustes). Se implementa con el mismo lector de condiciones
-      // que SELECT/DELETE, respetando los literales del SET.
-      if (lower.startsWith("update")) {
-        const m = sql.match(/update\s+([a-zA-Z0-9_]+)\s+set\s+(.+?)(?:\s+where\s+(.+))?\s*$/i);
-        if (m) {
-          const tableName = m[1];
-          const setClause = m[2].trim();
-          const whereClause = m[3] ? m[3].trim() : "";
-          const table = this._getTable(tableName);
-
-          // "a = ?, b = 0, c = 'x'" → [[a, "?"], [b, "0"], [c, "'x'"]]
-          const asignaciones = [];
-          let pIdx = 0;
-          for (const trozo of setClause.split(",")) {
-            const am = trozo.match(/^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+?)\s*$/);
-            if (!am) continue;
-            const col = am[1].toLowerCase();
-            const tok = am[2];
-            let valor;
-            if (tok === "?") {
-              valor = params[pIdx] !== undefined ? params[pIdx] : null;
-              pIdx++;
-            } else if (/^'.*'$/.test(tok)) {
-              valor = tok.slice(1, -1);
-            } else if (/^-?\d+(\.\d+)?$/.test(tok)) {
-              valor = Number(tok);
-            } else if (/^null$/i.test(tok)) {
-              valor = null;
-            } else if (/^(true|false)$/i.test(tok)) {
-              valor = /^true$/i.test(tok) ? 1 : 0;
-            } else {
-              valor = params[pIdx] !== undefined ? params[pIdx] : null;
-              pIdx++;
-            }
-            asignaciones.push([col, valor]);
-          }
-
-          const conds = whereClause ? leerCondiciones(whereClause, params.slice(pIdx)) : [];
-          let changes = 0;
-          for (const [k, fila] of table.entries()) {
-            const coincide = conds.length
-              ? conds.every(([col, val]) => String(fila[col]) === String(val))
-              : true;
-            if (!coincide) continue;
-            for (const [col, valor] of asignaciones) fila[col] = valor;
-            table.set(k, fila);
-            changes++;
-          }
-          if (changes) this._save();
-          return { changes, lastInsertRowid: 0 };
-        }
-      }
-
       // DELETE
       if (lower.startsWith("delete")) {
         const m = sql.match(/delete\s+from\s+([a-zA-Z0-9_]+)(?:\s+where\s+(.+))?/i);
@@ -412,68 +289,88 @@ if (!_DatabaseSync) {
     }
 
     close() {
-      if (this.transactionSnapshot) { this.tables = this.transactionSnapshot; this.transactionSnapshot = null; }
+      this._save();
     }
   }
 
   _DatabaseSync = UniversalDatabaseSync;
 }
 
-/** Copia transaccional verificable. El JSON original nunca se mueve ni borra. */
+/**
+ * Puente del respaldo JSON a SQLite real.
+ *
+ * Caso: el bot corrió un tiempo con el respaldo en JSON (`<db>.json`) y
+ * ahora arranca con SQLite real (por ejemplo, tras actualizar Node). Sin
+ * esto, la sesión y los datos se quedarían en el JSON y el bot empezaría
+ * de cero.
+ *
+ * Reglas para que nunca haga daño:
+ *  - La tabla `migrations` NUNCA se copia: el esquema lo crea migrate().
+ *    (Copiarla marcaba migraciones como hechas sin crear sus tablas y el
+ *    bot fallaba con "no such table: settings".)
+ *  - Solo se llenan tablas que existen y están VACÍAS en la base real, así
+ *    que datos nuevos jamás se pisan con datos viejos.
+ *  - Si se copió algo, el JSON se renombra a `.importado` para que no se
+ *    vuelva a leer en el siguiente arranque.
+ *
+ * Llamar DESPUÉS de crear las tablas y ANTES de escribir nada en ellas.
+ *
+ * @param {any} db           instancia de DatabaseSync ya abierta
+ * @param {string} jsonPath  ruta del archivo JSON del respaldo
+ * @returns {number} filas copiadas
+ */
 export function importJsonFallback(db, jsonPath) {
-  if (_isFallback) return 0;
-  return importJsonFallbackToDatabase(db, jsonPath);
-}
-
-// Exportada para verificar el contrato con una base sintética sin iniciar el bot.
-export function importJsonFallbackToDatabase(db, jsonPath) {
-  if (!jsonPath) return 0;
-  let bytes;
-  try { bytes = fs.readFileSync(jsonPath); }
-  catch (err) { if (err.code === "ENOENT") return 0; throw err; }
-  const hash = createHash("sha256").update(bytes).digest("hex");
-  const raw = JSON.parse(bytes.toString("utf8"));
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Formato de respaldo JSON inválido");
-  let total = 0;
-  db.exec("BEGIN IMMEDIATE");
+  if (_isFallback) return 0; // el respaldo ya lee ese JSON por su cuenta
+  if (!jsonPath || !fs.existsSync(jsonPath)) return 0;
+  let raw;
   try {
-    db.exec("CREATE TABLE IF NOT EXISTS shin_json_imports (source TEXT PRIMARY KEY, digest TEXT NOT NULL)");
-    const sourceKey = path.basename(jsonPath);
-    const previous =
-      db.prepare("SELECT digest FROM shin_json_imports WHERE source = ?").get(sourceKey) ||
-      (sourceKey !== jsonPath ? db.prepare("SELECT digest FROM shin_json_imports WHERE source = ?").get(jsonPath) : undefined);
-    if (previous) {
-      if (previous.digest !== hash) throw new Error("El respaldo JSON cambió después de importarse; requiere revisión manual");
-      db.exec("COMMIT");
-      return 0;
+    raw = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+  } catch {
+    return 0;
+  }
+  if (!raw || typeof raw !== "object") return 0;
+
+  let total = 0;
+  for (const [table, rows] of Object.entries(raw)) {
+    if (table === "migrations" || table.startsWith("__")) continue;
+    if (!/^[a-zA-Z0-9_]+$/.test(table)) continue;
+    if (!rows || typeof rows !== "object") continue;
+    const filas = Object.values(rows).filter((r) => r && typeof r === "object");
+    if (!filas.length) continue;
+
+    let existe = false;
+    let vacia = false;
+    try {
+      existe = !!db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get(table);
+      vacia = existe && !db.prepare(`SELECT 1 AS hay FROM ${table} LIMIT 1`).get();
+    } catch {
+      existe = false;
     }
-    for (const [table, rows] of Object.entries(raw)) {
-      if (table === "migrations" || table.startsWith("__")) continue;
-      if (!/^[a-zA-Z0-9_]+$/.test(table) || !rows || typeof rows !== "object" || Array.isArray(rows)) throw new Error("Tabla inválida en respaldo JSON");
-      const entries = Object.values(rows);
-      if (!entries.length) continue;
-      if (!db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)) throw new Error("Falta tabla de destino: " + table);
-      if (db.prepare(`SELECT 1 AS hay FROM "${table}" LIMIT 1`).get()) throw new Error("Destino no vacío, requiere revisión manual: " + table);
-      for (const row of entries) {
-        if (!row || typeof row !== "object" || Array.isArray(row)) throw new Error("Fila inválida en " + table);
-        const cols = Object.keys(row);
-        if (!cols.length || cols.some(c => !/^[a-zA-Z0-9_]+$/.test(c))) throw new Error("Columna inválida en " + table);
-        const names = cols.map(c => `"${c}"`).join(", ");
-        const values = cols.map(c => row[c]);
-        const result = db.prepare(`INSERT INTO "${table}" (${names}) VALUES (${cols.map(() => "?").join(", ")})`).run(...values);
-        if (Number(result.changes) !== 1) throw new Error("No se insertó una fila en " + table);
-        const where = cols.map(c => `"${c}" IS ?`).join(" AND ");
-        if (!db.prepare(`SELECT 1 AS hay FROM "${table}" WHERE ${where} LIMIT 1`).get(...values)) throw new Error("No se verificó la fila en " + table);
-        total++;
+    if (!existe || !vacia) continue;
+
+    for (const row of filas) {
+      const cols = Object.keys(row).filter((c) => /^[a-zA-Z0-9_]+$/.test(c));
+      if (!cols.length) continue;
+      const sql = `INSERT OR IGNORE INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`;
+      try {
+        const r = db.prepare(sql).run(...cols.map((c) => row[c]));
+        if (r && r.changes) total++;
+      } catch {
+        /* fila que no encaja con el esquema actual: se omite */
       }
     }
-    if (total) db.prepare("INSERT INTO shin_json_imports (source, digest) VALUES (?, ?)").run(sourceKey, hash);
-    db.exec("COMMIT");
-    return total;
-  } catch (err) {
-    try { db.exec("ROLLBACK"); } catch {}
-    throw new Error("Migración JSON cancelada; original conservado y revisión necesaria", { cause: err });
   }
+
+  if (total > 0) {
+    try {
+      fs.renameSync(jsonPath, jsonPath + ".importado");
+    } catch {
+      /* si no se puede renombrar no pasa nada: solo se llenan tablas vacías */
+    }
+  }
+  return total;
 }
 
 export const SQLITE_IS_FALLBACK = _isFallback;

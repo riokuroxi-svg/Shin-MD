@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import { esDuenoSocket } from "#permissions";
 import db from '../../src/services/ginko-db.js';
 import { state } from '#lib/theme';
 export default {
@@ -15,7 +14,9 @@ export default {
   run: async ({ msg, sock, args, usedPrefix, command }) => {
     const botId = botJid(sock);
     const config = db.getSettings(botId) || {};
-    if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
+    const isOwner = config.owner;
+    const isSocketOwner = [botId, ...(isOwner ? [isOwner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
+    if (!isSocketOwner) return msg.reply(global.mess.socket);
     const groupId = args[0] || msg.chat;
     try {
       await sock.groupLeave(groupId);

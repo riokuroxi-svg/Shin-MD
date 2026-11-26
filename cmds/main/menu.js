@@ -5,8 +5,13 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 
-import { botJid } from "#serialize";
+import { pickRandom } from "#lib/random";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
+  toSmallCaps,
+  toMathSansBold,
   readMore,
   createBracketBox,
   getCommandBadges,
@@ -17,40 +22,106 @@ import {
 import {
   getWeatherSummary,
   getChannelContext,
+  getVerifiedQuoted,
 } from "../../src/lib/contextBuilder.js";
 import { resolveChannel } from "../../src/lib/channel.js";
-import {
-  CAT_LABELS,
-  CAT_ORDER,
-  localVersion,
-  collectCategories,
-  getRandomBanner,
-  getVideoAsset,
-  getMenuImagePath,
-} from "#lib/menu-shared";
-import { sendInteractive, sendVoiceNote, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
-import { sendMenuCard } from "#lib/menu-card";
-import { getVideoPath } from "#lib/menu-shared";
+import { sendInteractive, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
 import db from "../../src/services/ginko-db.js";
+import { pickBanner } from "#lib/theme";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Nota de voz del menú: solo suena si el dueño dejó una música puesta en
- * data/menu-vn.*. No es obligatoria y nunca rompe el menú (falla en
- * silencio si no hay archivo o no hay ffmpeg).
+ * Obtiene un banner aleatorio de la colección shuffle o assets por defecto
  */
-async function mandarNotaDeVoz(sock, ctx) {
+function getRandomBanner() {
+  // Tanda 1 del sistema de diseño: banner según la hora (día/noche).
+  // media/banners/ manda sobre todo lo demás; si está vacía, se conserva
+  // exactamente el comportamiento anterior (shuffle → assets → MENU_IMAGE).
   try {
-    const { ROOT_DIR: raiz } = await import("#lib/menu-shared");
-    const [fsMod, pathMod] = await Promise.all([import("node:fs"), import("node:path")]);
-    const dir = pathMod.join(raiz, "data");
-    if (!fsMod.existsSync(dir)) return;
-    const archivo = fsMod.readdirSync(dir).find((f) => /^menu-vn\.(mp3|ogg|opus|m4a|wav)$/i.test(f));
-    if (!archivo) return;
-    await sendVoiceNote(sock, ctx.chatId, pathMod.join(dir, archivo), { quoted: ctx.full });
-  } catch {
-    /* la guarnición nunca rompe el menú */
+    const porHora = pickBanner();
+    if (porHora) return fs.readFileSync(porHora);
+  } catch {}
+
+  const shuffleDir = path.resolve(__dirname, "../../assets/image/shuffle");
+  try {
+    if (fs.existsSync(shuffleDir)) {
+      const files = fs.readdirSync(shuffleDir).filter(f => /\.(jpe?g|png|webp)$/i.test(f));
+      if (files.length > 0) {
+        const chosen = pickRandom(files);
+        return fs.readFileSync(path.join(shuffleDir, chosen));
+      }
+    }
+  } catch {}
+
+  const fallbackPaths = [
+    process.env.MENU_IMAGE,
+    path.resolve(__dirname, "../../assets/image/anita-landscape.jpg"),
+    path.resolve(__dirname, "../../assets/image/anita.png"),
+    path.resolve(__dirname, "../../assets/banner-default.png"),
+    path.resolve(__dirname, "../../assets/bocchi-banner.png"),
+  ].filter(Boolean);
+
+  for (const p of fallbackPaths) {
+    try {
+      if (typeof p === "string" && fs.existsSync(p)) {
+        return fs.readFileSync(p);
+      }
+    } catch {}
   }
+  return null;
 }
+
+/**
+ * Obtiene el buffer del video animado para menús gifPlayback
+ */
+function getVideoAsset() {
+  const videoPaths = [
+    process.env.MENU_VIDEO_PATH,
+    path.resolve(__dirname, "../../assets/video/anita-mp4.mp4"),
+  ].filter(Boolean);
+
+  for (const p of videoPaths) {
+    try {
+      if (typeof p === "string" && fs.existsSync(p)) {
+        return fs.readFileSync(p);
+      }
+    } catch {}
+  }
+  return null;
+}
+
+let __localVersion = null;
+function localVersion() {
+  if (__localVersion) return __localVersion;
+  try {
+    const pkgPath = path.join(__dirname, "..", "..", "package.json");
+    __localVersion = JSON.parse(fs.readFileSync(pkgPath, "utf8")).version || "3.0.3";
+  } catch {
+    __localVersion = "3.0.3";
+  }
+  return __localVersion;
+}
+
+const CAT_LABELS = {
+  info: "INFORMACIÓN",
+  main: "PRINCIPAL",
+  utils: "UTILIDADES",
+  utility: "HERRAMIENTAS",
+  downloads: "DESCARGAS",
+  anime: "ANIME",
+  stickers: "STICKERS",
+  economy: "ECONOMÍA",
+  games: "JUEGOS",
+  fun: "DIVERSIÓN",
+  gacha: "GACHA & RPG",
+  group: "GRUPOS & ADMIN",
+  profile: "PERFIL",
+  socket: "SOCKETS & BOTS",
+  nsfw: "NSFW +18",
+  owner: "CREADOR / OWNER",
+  otros: "OTROS",
+};
 
 export default {
   name: "menu",
@@ -68,42 +139,34 @@ export default {
     const greeting = getTimeGreeting();
     const version = localVersion();
     const prefix = ctx.usedPrefix || ".";
-    // El clima es un extra, no el menú: si tarda, se usa un valor neutro.
-    // Antes getWeatherSummary() podía colgar la respuesta hasta 6 s.
-    const weather = await Promise.race([
-      getWeatherSummary().catch(() => null),
-      new Promise((r) => setTimeout(() => r(null), 1200)),
-    ]).then((w) => w || "—");
+    const weather = await getWeatherSummary();
     const channelUrl = globalThis.links?.channel || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522";
 
-    const { cats, seenNames } = collectCategories(commands, { exclude: ["menu"] });
+    // ── Clasificación de Comandos ──
+    const cats = new Map();
+    const seenNames = new Set();
+    for (const [, cmd] of commands || []) {
+      if (!cmd || seenNames.has(cmd.name) || cmd.name === "menu") continue;
+      seenNames.add(cmd.name);
+      const c = (cmd.category || "otros").toLowerCase();
+      if (!cats.has(c)) cats.set(c, []);
+      cats.get(c).push(cmd);
+    }
+
+    const catOrder = [
+      "info", "main", "downloads", "stickers", "anime", "utils", "utility",
+      "economy", "gacha", "games", "fun", "group", "profile", "socket", "nsfw", "owner", "otros"
+    ];
+
     const sub = (ctx.arg || "").toLowerCase().trim();
 
-    // El menú se reconstruye entero (222 comandos, cajas, badges) en cada
-    // invocación y el comando es `priority: true`: un atacante que lo repite
-    // obliga a ese trabajo por cada mensaje, saltándose el tope diario.
-    // Se cachea 60 s POR USUARIO (el menú lleva su nombre, su rango y su
-    // número: cachearlo por chat se los enseñaría a otro). Solo se cachean
-    // las respuestas de TEXTO: las tarjetas llevan un token de un solo uso.
-    const __claveMenu = "menu:" + (ctx.senderId || ctx.chatId || "?") + ":" + prefix + ":" + sub + ":" + (ctx.pushName || "");
-    const __cache = globalThis.__shinMenuCache || (globalThis.__shinMenuCache = new Map());
-    const __hit = __cache.get(__claveMenu);
-    if (__hit && !__hit.esTarjeta && Date.now() - __hit.ts < 60000) return __hit.valor;
-    const __guardarMenu = (valor, esTarjeta) => {
-      try {
-        if (__cache.size > 400) __cache.clear();
-        __cache.set(__claveMenu, { valor, ts: Date.now(), esTarjeta: !!esTarjeta });
-      } catch { /* la caché nunca debe tumbar el menú */ }
-      return valor;
-    };
-
-    // Submenú específico si se pasa argumento (.menu descargas)
+    // ── Submenú específico si se pasa argumento (.menu descargas) ──
     if (sub) {
       const matchedCat = Object.keys(CAT_LABELS).find(c => c === sub || sub.startsWith(c) || c.startsWith(sub)) || sub;
       const list = cats.get(matchedCat) || [];
 
       if (list.length === 0) {
-        return __guardarMenu(`❌ La categoría *${sub}* no existe o está vacía.\n\n💡 *Categorías disponibles:*\n> ${CAT_ORDER.filter(c => cats.has(c)).join(", ")}`, false);
+        return `❌ La categoría *${sub}* no existe o está vacía.\n\n💡 *Categorías disponibles:*\n> ${catOrder.filter(c => cats.has(c)).join(", ")}`;
       }
 
       const emoji = CATEGORY_EMOJIS[matchedCat] || "📁";
@@ -114,28 +177,23 @@ export default {
       const banner = getRandomBanner();
       if (banner) {
         await sock.sendMessage(ctx.chatId, { image: banner, caption: text }, { quoted: ctx.full });
-        return __guardarMenu(null, true);
+        return null;
       }
-      return __guardarMenu(text, false);
+      return text;
     }
 
-    // Recuperar variante de menú configurada usando JID normalizado del bot.
-    // Por defecto se usa la 3 (tarjeta con video en bucle): la variante 1 con
-    // botones sueltos ya no se ve en los clientes nuevos.
-    // 5 = tarjeta única (viewOnce + video + single_select), el formato que
-    // se ve completo en Android. Es la que va por defecto.
-    const VARIANTE_POR_DEFECTO = 5;
-    let menuVariant = VARIANTE_POR_DEFECTO;
+    // ── Recuperar Variante de Menú Configurada ──
+    let menuVariant = 1;
     try {
-      const botId = botJid(sock) || "default";
-      const settings = db.getSettings(botId) || {};
-      menuVariant = Number(settings.menu_variant || settings.menuVariant || VARIANTE_POR_DEFECTO);
+      const botJid = sock?.user?.id || "default";
+      const settings = db.getSettings(botJid) || {};
+      menuVariant = Number(settings.menu_variant || settings.menuVariant || 1);
     } catch {
-      menuVariant = VARIANTE_POR_DEFECTO;
+      menuVariant = 1;
     }
 
-    const ownerCheck = typeof ctx.isOwner === "function" ? ctx.isOwner() : !!ctx.isOwner;
-    const userRole = ownerCheck ? "👑 Creador / Owner" : (ctx.isAdmin ? "🛡️ Administrador" : "👤 Usuario");
+    // ── Ficha de Usuario y Estado del Bot ──
+    const userRole = ctx.isOwner ? "👑 Creador / Owner" : (ctx.isAdmin ? "🛡️ Administrador" : "👤 Usuario");
     const pushName = ctx.pushName || "Usuario";
     const senderNumber = (ctx.senderId || "").split("@")[0].split(":")[0];
 
@@ -157,10 +215,11 @@ export default {
     headerText += `│ ◈ *Prefijo* : \`${prefix}\`\n`;
     headerText += `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n`;
 
+    // ── Construcción de Lista de Categorías ──
     const categoryRows = [];
     let fullCategoriesList = "";
 
-    for (const catKey of CAT_ORDER) {
+    for (const catKey of catOrder) {
       const list = cats.get(catKey);
       if (!list || list.length === 0) continue;
       const emoji = CATEGORY_EMOJIS[catKey] || "📁";
@@ -176,6 +235,11 @@ export default {
       fullCategoriesList += createBracketBox(label, cmdLines, emoji);
     }
 
+    // ── Botonera ──────────────────────────────────────────────────
+    // WhatsApp solo dibuja TRES botones: el cuarto se caía sin avisar.
+    // Ahora los de más viajan en la hoja desplegable (bottom_sheet),
+    // y la lista lleva una primera sección destacada con lo que de
+    // verdad usa la gente, para no obligar a bajar por categorías.
     const POPULARES = [
       { cmd: "play", titulo: "🎵 Descargar música", desc: "Pásame un nombre o un enlace" },
       { cmd: "sticker", titulo: "🖼️ Hacer sticker", desc: "Responde a una foto o vídeo" },
@@ -183,11 +247,9 @@ export default {
       { cmd: "ia", titulo: "🤖 Preguntar a la IA", desc: "Escribe tu pregunta" },
     ];
     const existentes = new Set();
-    for (const list of cats.values()) {
-      for (const c of list || []) {
-        existentes.add(c.name);
-        for (const a of c.aliases || []) existentes.add(a);
-      }
+    for (const list of cats.values()) for (const c of (list || [])) {
+      existentes.add(c.name);
+      for (const a of (c.aliases || [])) existentes.add(a);
     }
     const popularRows = POPULARES
       .filter(p => existentes.has(p.cmd))
@@ -199,11 +261,8 @@ export default {
     }
     menuSections.push({ title: "反魂 · Categorías", rows: categoryRows });
 
-    // Usa la misma portada en la tarjeta y en la vista previa del selector.
-    const posterPath = getMenuImagePath();
-
     const menuButtons = [
-      singleSelect("📂 Explorar Categorías", menuSections, { thumbnailPath: posterPath || undefined }),
+      singleSelect("📂 Explorar Categorías", menuSections),
       quickReply("🗂️ Categorías (.menucat)", "menucat"),
       quickReply("📜 Ver Todo (.allmenu)", "allmenu"),
       quickReply("🏓 Ping", "ping"),
@@ -218,102 +277,13 @@ export default {
     };
 
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
+    const banner = getRandomBanner();
+    const videoAsset = getVideoAsset();
 
-    // Variante 5 (por defecto): portada ilustrada, resumen corto y un
-    // selector nativo para navegar por las categorías y los accesos rápidos.
-    if (menuVariant === 5) {
-      // La imagen fija es la opción más consistente en WhatsApp. Quien
-      // prefiera movimiento puede pedirlo explícitamente con MENU_MEDIA=video.
-      const medioPedido = String(process.env.MENU_MEDIA || "image").toLowerCase();
-      const usarVideo = medioPedido === "video";
-      const videoPath = usarVideo ? getVideoPath() : null;
-      const imagePath = usarVideo ? null : getMenuImagePath();
-      const cardBody = [
-        `✨ *SHIN-MD* · *v${version}*`,
-        `${greeting}, *${pushName}*`,
-        "",
-        `📚 *${seenNames.size} comandos* · *${cats.size} categorías*`,
-        `🛡️ ${userRole}  ·  ⏱️ ${uptimeFormatted}`,
-        `⌨️ Prefijo: \`${prefix}\``,
-        "",
-        `Elige *Explorar categorías* para abrir el menú.`,
-        `⚡ Atajos: \`${prefix}play\` · \`${prefix}sticker\` · \`${prefix}ia\``,
-        "",
-        `📢 Canal oficial: ${channelUrl}`,
-      ].join("\n");
+    // ── VARIANTES DE RENDERIZADO ──
 
-      const enviado = await sendMenuCard(sock, ctx.chatId, {
-        title: "反魂 · Shin-MD",
-        body: cardBody,
-        footer: "Shin-MD · Menú principal",
-        ...(usarVideo ? { videoPath } : { imagePath }),
-        selector: {
-          title: "📂 Explorar Categorías",
-          sections: [
-            ...menuSections,
-            // Acceso directo al listado completo, dentro del selector
-            // (mismo tipo de botón, sin romper las restricciones).
-            {
-              title: "⚡ Acceso rápido",
-              rows: [
-                { title: "▤ Todos los comandos", description: "Listado completo", id: prefix + "allmenu" },
-                { title: "♡ Creador", description: "Contacto del dueño", id: prefix + "owner" },
-              ],
-            },
-          ],
-        },
-        // La tarjeta de oferta/código y la hoja inferior: lo que hace
-        // que el cliente pinte los botones de abajo. Sin esto el
-        // teléfono enseña sólo el botón del selector, que es lo que se
-        // veía antes.
-        optionTitle: "Shin-MD",
-        optionText: "Abrir opciones",
-        offerText: "Panel",
-        offerCode: prefix + "menu",
-        // IMPORTANTE: junto a un `single_select` no se pueden mezclar
-        // `quick_reply`s. La librería avisa: los botones tienen que ser
-        // todos del mismo tipo ("keep every button the same kind as the
-        // first"), o el cliente no sabe qué flujo dibujar y pinta la
-        // tarjeta como "no soportada". Por eso el segundo acceso va
-        // como una sección más del MISMO selector, no como botón aparte.
-        contextInfo: getChannelContext({ mentionedJid: [ctx.senderId] }),
-        quoted: ctx.full,
-      });
-      if (enviado) {
-        void mandarNotaDeVoz(sock, ctx);
-        return null;
-      }
-      // si la tarjeta falló, seguimos abajo con la variante 3
-    }
-
-    // Variante 4: Compact Dashboard
-    if (menuVariant === 4) {
-      const ramMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
-      const compactBody =
-        `📊 *SHIN-MD v${version} · Panel Rápido*\n` +
-        `Hola *${pushName}* (${userRole})\n\n` +
-        `• *Uptime:* ${uptimeFormatted}\n` +
-        `• *RAM:* ${ramMb} MB · *Prefijo:* \`${prefix}\`\n` +
-        `• *Comandos:* ${seenNames.size} en ${cats.size} categorías\n` +
-        `• *Clima:* ${weather}\n\n` +
-        `_Usa el selector o los botones para navegar._`;
-
-      await sendInteractive(sock, ctx.chatId, {
-        title: `📊 SHIN-MD ${version}`,
-        body: compactBody,
-        footer: "Shin-MD · Dashboard Compacto",
-        buttons: menuButtons,
-        hoja: menuHoja,
-        quoted: ctx.full,
-        fallbackText: compactBody + `\n\n${prefix}allmenu · ${prefix}menucat · ${prefix}ping`,
-      });
-      void mandarNotaDeVoz(sock, ctx);
-      return null;
-    }
-
-    // Variante 3: Video Animado GifPlayback (buffer leído solo al usarse)
-    const videoParaV3 = menuVariant === 3 ? getVideoAsset() : null;
-    if (menuVariant === 3 && videoParaV3) {
+    // Variante 3: Video Animado GifPlayback
+    if (menuVariant === 3 && videoAsset) {
       const interactiveBody = headerText +
         `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
         `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
@@ -326,18 +296,24 @@ export default {
         title: "✨ SHIN-MD " + version,
         body: interactiveBody,
         footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
-        video: videoParaV3,
+        video: videoAsset,
         gifPlayback: true,
         buttons: menuButtons,
         hoja: menuHoja,
         quoted: ctx.full,
         fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
       });
-      void mandarNotaDeVoz(sock, ctx);
       return null;
     }
 
-    // Variante 2: Menú de texto completo con ReadMore (sin botones)
+    // Variante 2: menú en texto, sin botones.
+    //
+    // Antes esta rama se comía TAMBIÉN todos los grupos (`ctx.isGroup ||`),
+    // así que en un grupo el menú nunca llegaba a la tarjeta interactiva:
+    // daba igual cuántos botones se le pusieran, salía como imagen con
+    // texto. Ya no: el grupo recibe la tarjeta igual que un privado, y si
+    // el envío nativo fallara, sendInteractive cae solo a este mismo texto
+    // (va como fallbackText más abajo).
     if (menuVariant === 2) {
       const finalContent = headerText +
         `_Toca "Leer más" para desplegar todas las categorías_ ⬇️\n` +
@@ -345,14 +321,12 @@ export default {
         fullCategoriesList +
         `\n📢 *Canal Oficial:* ${channelUrl}\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`;
 
-      const bannerV2 = getRandomBanner();
-      if (bannerV2) {
+      if (banner) {
         await sock.sendMessage(
           ctx.chatId,
-          { image: bannerV2, caption: finalContent, contextInfo: channelCtx },
+          { image: banner, caption: finalContent, contextInfo: channelCtx },
           { quoted: ctx.full }
         );
-        void mandarNotaDeVoz(sock, ctx);
         return null;
       }
 
@@ -361,11 +335,10 @@ export default {
         { text: finalContent, contextInfo: channelCtx },
         { quoted: ctx.full }
       );
-      void mandarNotaDeVoz(sock, ctx);
       return null;
     }
 
-    // Variante 1: Tarjeta Interactiva con Banner Rotativo
+    // Variante 1 (Por defecto en DM): Tarjeta Interactiva con Banner Rotativo
     const interactiveBody = headerText +
       `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
       `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
@@ -378,14 +351,13 @@ export default {
       title: "✨ SHIN-MD " + version,
       body: interactiveBody,
       footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
-      image: getRandomBanner(),
+      image: banner,
       buttons: menuButtons,
       hoja: menuHoja,
       quoted: ctx.full,
       fallbackText: headerText + readMore + fullCategoriesList + `\n📢 *Canal Oficial:* ${channelUrl}`,
     });
 
-    void mandarNotaDeVoz(sock, ctx);
     return null;
   },
 };

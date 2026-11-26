@@ -13,30 +13,30 @@ export default {
   category: 'owner',
   description: 'Ejecutar código JavaScript en el bot.',
   isOwner: true,
-  run: async ({ msg, sock, args, command, text }) => {
-    const require = createRequire(import.meta.url);
+  run: async ({ msg, sock, args, command, text, __dirname }) => {
+    const require = createRequire(__dirname);
     if (!text.trim()) {
       return sock.reply(msg.chat, '《✧》 Debes escribir un comando a ejecutar.', msg);
     }
-    const _text = (command === 'e' ? 'return ' : '') + text;
+    let _text = (command === 'e' ? 'return ' : '') + text;
     let _return, _syntax = '';
     try {
       await msg.react('🕒');
       let i = 15;
-      const f = { exports: {} };
-      const exec = new (async () => {}).constructor('print', 'msg', 'sock', 'require', 'Array', 'process', 'args', 'module', 'exports', 'argument', _text);
-      _return = await exec.call(sock, (...printArgs) => {
+      let f = { exports: {} };
+      let exec = new (async () => {}).constructor('print', 'msg', 'sock', 'require', 'Array', 'process', 'args', 'module', 'exports', 'argument', _text);
+      _return = await exec.call(sock, (...args) => {
         if (--i < 1) return;
-        return sock.reply(msg.chat, format(...printArgs), msg);
+        return sock.reply(msg.chat, format(...args), msg);
       }, msg, sock, require, Array, process, args, f, f.exports, [sock]);
       await msg.react('✔️');
     } catch (e) {
-      const err = syntaxerror(_text, 'Execution Function', { allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true, sourceType: 'module' });
+      let err = syntaxerror(_text, 'Execution Function', { allowReturnOutsideFunction: true, allowAwaitOutsideFunction: true, sourceType: 'module' });
       if (err) _syntax = '```' + err + '```\n\n';
       _return = e;
       await msg.react('✖️');
     } finally {
-      await sock.reply(msg.chat, _syntax + format(_return), msg);
+      sock.reply(msg.chat, _syntax + format(_return), msg);
     }
   }
 };

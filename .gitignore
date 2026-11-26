@@ -42,12 +42,7 @@ config.private.js
 cookies.txt
 *.cookies.txt
 audit/
-# Copia temporal generada para revisar el README.
-.vista-readme-*.html
-
-# Sello de integridad y su clave HMAC: son de ESTA instalación, no del repo.
-data/.shin-integridad.json
-data/.shin-clave
+.vista-readme-*.html   # copia temporal para revisar el README
 
 # Installer state (one per installation, never committed)
 .shin-install
@@ -56,6 +51,3 @@ data/.shin-clave
 # Python
 __pycache__/
 *.pyc
-
-# Caché de medios subidos (se regenera sola)
-data/media-cache.json

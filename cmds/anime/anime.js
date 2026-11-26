@@ -39,8 +39,7 @@ export default {
         }`;
       const res = await fetch('https://graphql.anilist.co', {
         method: 'POST',
-        signal: AbortSignal.timeout(15000),
-        headers: { 'Content-Type': 'application/json', 'User-Agent': 'Shin-MD/3.7', 'Accept': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'User-Agent': 'GinkoBot/1.0', 'Accept': 'application/json' },
         body: JSON.stringify({ query, variables: { s: text } }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

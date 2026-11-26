@@ -22,6 +22,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import log from "#logger";
+import { downloadAudioYtdlp, processMp3ForWhatsApp, getMp3Duration, isMp3Valid } from "#lib/mp3Utils";
 import { resolveYtdlpBinary } from "#lib/fastFetch";
 import { argsClienteYtdlp } from "#lib/ytdlp-cliente";
 

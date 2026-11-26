@@ -36,6 +36,7 @@ const COVER_EXT = /\.(jpe?g|png)$/i;
 // Tope duro: una portada >500KB hace que WhatsApp Android renombre el audio
 // a AUD-xxxx (ver cabecera de este archivo). Las que se pasen, se ignoran.
 const COVER_MAX_BYTES = 500 * 1024;
+const ALBUM_NAME = (process.env.MUSIC_ALBUM_NAME || 'Shin-MD').slice(0, 60);
 const DEFAULT_ARTIST = (process.env.MUSIC_ARTIST_NAME || 'Shin-MD').slice(0, 60);
 let ffmpegDisponible = null;
 

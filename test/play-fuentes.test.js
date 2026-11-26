@@ -22,7 +22,6 @@ import {
   parseDurationSeconds,
   esMp4Valido,
   getVideoId,
-  descargarAudioSmart,
 } from "../src/lib/play-fuentes.js";
 
 test("sanitizeFilename deja un nombre de archivo usable", () => {
@@ -64,62 +63,4 @@ test("getVideoId acepta id suelto y todos los formatos de enlace", () => {
   assert.equal(getVideoId(""), null);
   assert.equal(getVideoId("buscar funk mambo"), null, "una búsqueda no es un id");
   assert.equal(getVideoId(null), null);
-});
-
-test("descargarAudioSmart invalida un stream 502 y prueba otro proveedor", async () => {
-  const query = "RUXXS Echidna";
-  const sources = [
-    { url: "https://cdn.invalid/expired", provider: "Spotify Turbo CDN" },
-    { url: "https://cdn.invalid/working", provider: "Nexray Turbo CDN", seconds: 91 },
-  ];
-  const calls = [];
-  const urls = [];
-  const invalidated = [];
-  const getAudioUrl = async (q, options) => {
-    calls.push({ q, options });
-    return sources.find(source => !options.excludeProviders.includes(source.provider)) || null;
-  };
-  const fastFetch = async url => {
-    urls.push(url);
-    return url.endsWith("expired")
-      ? new Response("Bad Gateway", { status: 502 })
-      : new Response(Buffer.alloc(32 * 1024, 0x49), { status: 200 });
-  };
-
-  const result = await descargarAudioSmart(
-    { title: "RUXXS", channel: "Echidna", url: "https://youtu.be/dQw4w9WgXcQ" },
-    { getAudioUrl, fastFetch, invalidateAudioUrl: async q => invalidated.push(q) },
-  );
-
-  assert.deepEqual(urls, ["https://cdn.invalid/expired", "https://cdn.invalid/working"]);
-  assert.equal(calls.length, 2);
-  assert.deepEqual(calls[1].options.excludeProviders, ["Spotify Turbo CDN"]);
-  assert.equal(calls[1].options.refresh, true);
-  assert.deepEqual(invalidated, [query]);
-  assert.equal(result.origen, "Nexray Turbo CDN");
-  assert.equal(result.seconds, 91);
-  assert.equal(result.buffer.length, 32 * 1024);
-});
-
-test("descargarAudioSmart agota tres CDNs y devuelve el último error HTTP", async () => {
-  const providers = ["Spotify Turbo CDN", "Nexray Turbo CDN", "SoundCloud Progressive CDN"];
-  const calls = [];
-  const invalidated = [];
-  const getAudioUrl = async (_query, options) => {
-    calls.push(options.excludeProviders);
-    const provider = providers.find(name => !options.excludeProviders.includes(name));
-    return provider ? { url: `https://cdn.invalid/${provider}`, provider } : null;
-  };
-  const fastFetch = async () => new Response("Bad Gateway", { status: 502 });
-
-  await assert.rejects(
-    descargarAudioSmart(
-      { title: "tema", channel: "artista" },
-      { getAudioUrl, fastFetch, invalidateAudioUrl: async query => invalidated.push(query) },
-    ),
-    /HTTP 502 al descargar stream/,
-  );
-  assert.equal(calls.length, 3);
-  assert.deepEqual(invalidated, ["tema artista", "tema artista", "tema artista"]);
-  assert.deepEqual(calls[2], providers.slice(0, 2));
 });

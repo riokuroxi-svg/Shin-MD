@@ -5,7 +5,7 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  play.js — Reproductor y descargador interactivo estilo Shin-MD
+//  play.js — Reproductor y descargador interactivo estilo Ginko-MD
 //  · Tarjeta interactiva con botones nativos (Audio MP3 / Video MP4)
 //  · Precalentado en segundo plano (Background Audio Preheating)
 //  · Caché RAM + Disco para entrega instantánea (0ms)
@@ -18,7 +18,7 @@ import { buildBottomSheet, buildMessageParams } from "#lib/native-params";
 import { createProgress } from "#lib/progress";
 import {
   descargarBuffer, sanitizeFilename, esMp4Valido, getVideoId, getVideoInfo,
-  obtenerAudioProcesado, precalentarAudio, descargarVideoApis, prepararYtdlp, resolverAudioPoDirecto,
+  obtenerAudioProcesado, precalentarAudio, descargarVideoApis, prepararYtdlp,
 } from "#lib/play-fuentes";
 
 
@@ -233,7 +233,7 @@ async function ejecutarDescarga(sock, job, modo, m) {
       const p = getPendingMap(sock);
       p.delete(job.cardId);
       try { sock._shinPlayTokens?.delete(job._token); } catch {}
-    }, 60000).unref?.();
+    }, 60000);
   } catch (e) {
     job._procesando = false;
     // El aviso ya está en pantalla: se edita. Antes se borraba y se
@@ -263,9 +263,7 @@ export default {
 
   async handler(sock, ctx, engine) {
     try {
-      const modoPo = String(process.env.SHIN_PO_MODE || "legacy").trim() === "bgutil";
-      // En PO experimental no se instala ni se selecciona otro yt-dlp automáticamente.
-      const hayYtdlp = modoPo ? false : await prepararYtdlp();
+      const hayYtdlp = await prepararYtdlp();
 
       if (!ctx.arg) {
         return "🎵 *SHIN MUSIC PLAYER*\n\n" +
@@ -284,12 +282,11 @@ export default {
         const prog = createProgress(sock, ctx.chatId, { quoted: ctx.full });
         await prog.start({ title: "Descargando audio", detail: input, pct: 20 });
         try {
-          let job = {
+          const job = {
             url: videoId ? `https://youtu.be/${videoId}` : input,
             videoId,
             title: input,
           };
-          if (modoPo) job = await resolverAudioPoDirecto(job);
           const procesado = await obtenerAudioProcesado(job);
           const safeName = `${sanitizeFilename(input)}.mp3`;
           const audioPayload = {
@@ -439,7 +436,7 @@ export default {
           p.delete(card.key.id);
           try { sock._shinPlayTokens?.delete(j._token); } catch {}
         }
-      }, PENDING_TTL_MS).unref?.();
+      }, PENDING_TTL_MS);
 
       try { await sock.sendMessage(ctx.chatId, { react: { text: "✅", key: ctx.full.key } }); } catch {}
       return null;

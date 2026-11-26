@@ -17,7 +17,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadCommands } from "#commands";
-import { collectCategories } from "../src/lib/menu-shared.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(__dirname, "..");
@@ -28,36 +27,11 @@ const RESUMEN = path.join(RAIZ, "test", "resumen-suite.json");
 const PAQUETE = path.join(RAIZ, "package.json");
 
 /**
- * Cuenta el catálogo tal como lo ve el bot: comandos distintos, nombres con
- * alias, categorías y carpetas de `cmds/`. Es la única fuente de estas cifras:
- * la página, el README y `docs/assets/datos.json` se escriben con lo que salga
- * de aquí.
- *
- * Las categorías se cuentan con `collectCategories()`, que es la misma función
- * que usan `.menu` y `.menucat`: así el número que anuncia la página es el que
- * imprime el bot, no una cuenta paralela.
- */
-function contarCatalogo(comandos, catalogo) {
-  const dirCmds = path.join(RAIZ, "cmds");
-  return {
-    unicos: catalogo.length,
-    nombres: comandos.size,
-    alias: comandos.size - catalogo.length,
-    categorias: collectCategories(comandos).cats.size,
-    carpetas: fs.readdirSync(dirCmds, { withFileTypes: true }).filter((d) => d.isDirectory())
-      .length,
-  };
-}
-
-/**
  * Números que la página anuncia, tomados de la realidad del repositorio:
  * pruebas y archivos de la última corrida de la suite, versión mínima de
- * Node del package.json y el catálogo contado por `contarCatalogo()`.
- * Nada escrito a mano.
- *
- * @param {{unicos:number, nombres:number, alias:number, categorias:number, carpetas:number}} catalogo
+ * Node del package.json y total de comandos. Nada escrito a mano.
  */
-function numerosReales(catalogo) {
+function numerosReales(totalComandos) {
   let pruebas = 0;
   let total = 0;
   let archivos = 0;
@@ -71,50 +45,29 @@ function numerosReales(catalogo) {
       "⚠  No hay test/resumen-suite.json: corre `npm test` para tener los números reales."
     );
   }
-  // El número de archivos de prueba se cuenta en el disco, no se copia del
-  // resumen: al añadir una prueba nueva y no volver a pasar la suite entera, el
-  // resumen se queda con el número viejo y la página anunciaba 49 archivos
-  // cuando ya había 51. Los que existen son un hecho comprobable; las pruebas
-  // que pasan, solo lo sabe la última corrida.
-  const enDisco = fs
-    .readdirSync(path.join(RAIZ, "test"))
-    .filter((f) => f.endsWith(".test.js")).length;
-  if (!archivos || enDisco !== archivos) archivos = enDisco;
+  if (!pruebas) {
+    // Sin resumen, se cuentan los archivos para no dejar huecos en la página.
+    archivos =
+      archivos ||
+      fs.readdirSync(path.join(RAIZ, "test")).filter((f) => f.endsWith(".test.js")).length;
+  }
   const pkg = JSON.parse(fs.readFileSync(PAQUETE, "utf8"));
   const node = (pkg.engines?.node || "22").replace(/[^0-9.]/g, "").replace(/\.0$/, "");
   // `docs/assets/datos.json` alimenta los gráficos del README y lo comprueba
   // `test/docs-web.test.js`. Nada lo actualizaba: había que acordarse a mano,
   // y cuando se olvidaba la página decía 397 y el README 378. Se escribe aquí
-  // porque este es el único sitio que ya sabe los números de la última corrida
-  // y el catálogo que acaba de cargar.
-  {
+  // porque este es el único sitio que ya sabe los números de la última corrida.
+  if (pruebas) {
     const rutaDatos = path.join(RAIZ, "docs", "assets", "datos.json");
     try {
       const datos = JSON.parse(fs.readFileSync(rutaDatos, "utf8"));
-      const claves = [
-        "pruebas",
-        "pruebasTotal",
-        "archivos",
-        "comandos",
-        "nombres",
-        "alias",
-        "categorias",
-      ];
-      const antes = JSON.stringify(claves.map((k) => datos[k]));
-      if (pruebas) {
-        datos.pruebas = pruebas;
-        datos.pruebasTotal = total || pruebas;
-      }
+      const antes = JSON.stringify([datos.pruebas, datos.pruebasTotal, datos.archivos]);
+      datos.pruebas = pruebas;
+      datos.pruebasTotal = total || pruebas;
       datos.archivos = archivos;
-      datos.comandos = catalogo.unicos;
-      datos.nombres = catalogo.nombres;
-      datos.alias = catalogo.alias;
-      datos.categorias = catalogo.categorias;
-      if (JSON.stringify(claves.map((k) => datos[k])) !== antes) {
+      if (JSON.stringify([datos.pruebas, datos.pruebasTotal, datos.archivos]) !== antes) {
         fs.writeFileSync(rutaDatos, `${JSON.stringify(datos, null, 2)}\n`);
-        console.log(
-          `  ✓ docs/assets/datos.json al día · ${datos.pruebas}/${datos.pruebasTotal} · ${archivos} archivos · ${catalogo.unicos} comandos`
-        );
+        console.log(`  ✓ docs/assets/datos.json al día · ${pruebas}/${total} · ${archivos} archivos`);
       }
     } catch (err) {
       console.warn(`  ⚠  no pude actualizar docs/assets/datos.json: ${err.message}`);
@@ -124,85 +77,9 @@ function numerosReales(catalogo) {
     __PRUEBAS__: String(pruebas || "—"),
     __PRUEBAS_TOTAL__: String(total || pruebas || "—"),
     __ARCHIVOS__: String(archivos || "—"),
-    __COMANDOS__: String(catalogo.unicos),
-    __NOMBRES__: String(catalogo.nombres),
-    __ALIAS__: String(catalogo.alias),
-    __CATEGORIAS__: String(catalogo.categorias),
-    __CARPETAS__: String(catalogo.carpetas),
+    __COMANDOS__: String(totalComandos),
     __NODE__: node,
   };
-}
-
-/**
- * Las cifras de comandos que la documentación escribe en prosa se reescriben
- * con el catálogo recién contado.
- *
- * Por qué: cada sitio llevaba su propia cuenta y ninguna coincidía con el
- * cargador — el README decía 213, la cabecera de `scripts/auditar-comandos.mjs`
- * 217 y la plantilla de la página 211 comandos «en 18 carpetas». Con esto,
- * `npm run docs:web` deja las tres con el mismo número y ninguna se escribe a
- * mano.
- *
- * `docs/PROCEDENCIA.md` no entra aquí a propósito: es un acta fechada
- * (2026-09-29) con su propio desglose por linaje, y reescribirle el total sin
- * rehacer el desglose la dejaría contradiciéndose.
- */
-const CIFRAS_EN_PROSA = [
-  [
-    "README.md",
-    [
-      [/\bLos \d+ comandos\b/g, (n) => `Los ${n.unicos} comandos`],
-      [
-        /\b\d+ comandos y \d+ pruebas\b/g,
-        (n, numeros) => `${n.unicos} comandos y ${numeros.__PRUEBAS__} pruebas`,
-      ],
-      [/alt="\d+ comandos"/g, (n) => `alt="${n.unicos} comandos"`],
-      [
-        /\b\d+ comandos en \d+ categorías, \d+ nombres con \d+ alias\b/g,
-        (n) =>
-          `${n.unicos} comandos en ${n.categorias} categorías, ${n.nombres} nombres con ${n.alias} alias`,
-      ],
-      [
-        /\b\d+ comandos únicos · \d+ nombres en total \(\d+ alias\) · \d+ categorías\b/g,
-        (n) =>
-          `${n.unicos} comandos únicos · ${n.nombres} nombres en total (${n.alias} alias) · ${n.categorias} categorías`,
-      ],
-      [
-        /\bLas \d+ categorías con sus comandos\b/g,
-        (n) => `Las ${n.categorias} categorías con sus comandos`,
-      ],
-      [/\b\d+ categorías\b/g, (n) => `${n.categorias} categorías`],
-      [
-        /\b\d+\/\d+ pruebas\b/g,
-        (n, numeros) => `${numeros.__PRUEBAS__}/${numeros.__PRUEBAS_TOTAL__} pruebas`,
-      ],
-      [
-        /\bpruebas en \d+ archivos\b/g,
-        (n, numeros) => `pruebas en ${numeros.__ARCHIVOS__} archivos`,
-      ],
-      [/\blas \d+ pruebas\b/g, (n, numeros) => `las ${numeros.__PRUEBAS__} pruebas`],
-    ],
-  ],
-  [
-    "scripts/auditar-comandos.mjs",
-    [[/\bPasa por los \d+ comandos\b/g, (n) => `Pasa por los ${n.unicos} comandos`]],
-  ],
-];
-
-function sincronizarCifras(catalogo, numeros) {
-  for (const [rel, reglas] of CIFRAS_EN_PROSA) {
-    const ruta = path.join(RAIZ, rel);
-    if (!fs.existsSync(ruta)) continue;
-    const antes = fs.readFileSync(ruta, "utf8");
-    let despues = antes;
-    for (const [re, reemplazo] of reglas) {
-      despues = despues.replace(re, (...args) => reemplazo(catalogo, numeros, ...args));
-    }
-    if (despues !== antes) {
-      fs.writeFileSync(ruta, despues);
-      console.log(`  ✓ ${rel} al día · ${catalogo.unicos} comandos`);
-    }
-  }
 }
 
 /** Deja solo lo que la página usa, en el mismo orden en que lo espera. */
@@ -242,9 +119,7 @@ async function principal() {
 
   // Los marcadores de números se sustituyen por la realidad del repo.
   let html = plantilla.replace(MARCADOR, JSON.stringify(catalogo));
-  const contado = contarCatalogo(comandos, catalogo);
-  const numeros = numerosReales(contado);
-  sincronizarCifras(contado, numeros);
+  const numeros = numerosReales(catalogo.length);
   for (const [clave, valor] of Object.entries(numeros)) {
     html = html.split(clave).join(valor);
   }

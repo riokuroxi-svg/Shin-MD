@@ -6,17 +6,11 @@
  */
 import log from "#logger";
 import { botJid, deleteCachedMeta, getCachedMeta, normalizeJid, resolveJidSync, resolveParticipantJid, setCachedMeta } from "#serialize";
-import { aprenderDeGrupo, mismaPersona } from "#lib/lid";
 import chalk from 'chalk';
+import moment from 'moment-timezone';
 import db from '../src/services/ginko-db.js';
+import defaultAvatar from "#lib/default-avatar";
 import { generateWelcomeCard } from '../src/lib/cardGenerator.js';
-
-const RELOJ_EVENTO = new Intl.DateTimeFormat('en-US', {
-  timeZone: 'America/Bogota',
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: true,
-});
 
 function getGroupAdmins(participants) {
   return (participants ?? []).filter(p => p.admin === 'admin' || p.admin === 'superadmin').map(p => p.id).filter(Boolean);
@@ -27,10 +21,7 @@ function resolveEventParticipant(p, sock) {
   return resolveParticipantJid(p, sock) || normalizeJid(p.id || p.phoneNumber || p.jid || p.lid || '') || '';
 }
 
-export default async (sock) => {
-  if (!sock?.ev || sock._shinEventsBound) return;
-  sock._shinEventsBound = true;
-
+export default async (sock, msg) => {
   sock.ev.on('group-participants.update', async (anu) => {
     try {
       if (['add', 'remove', 'leave', 'promote', 'demote'].includes(anu.action)) {
@@ -46,23 +37,20 @@ export default async (sock) => {
         }
         return null;
       })();
-      if (metadata?.participants) aprenderDeGrupo(metadata);
-
       const groupAdmins = metadata ? getGroupAdmins(metadata.participants) : [];
       const botId = botJid(sock);
       const chat = db.getChat(anu.id) || {};
       const settings = db.getSettings(botId) || {};
       const primaryBotId = chat?.primaryBot;
-      const isPrimary = !primaryBotId || mismaPersona(primaryBotId, botId);
       const now = new Date();
       const colombianTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Bogota' }));
       const tiempo = colombianTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/,/g, '');
-      const tiempo2 = RELOJ_EVENTO.format(now);
+      const tiempo2 = moment.tz('America/Bogota').format('hh:mm A');
       const memberCount = metadata?.participants?.length || 0;
       const isSelf = (settings.self ?? false) || (chat.isMute ?? false);
       if (isSelf) return;
 
-      for (const p of anu.participants || []) {
+      for (const p of anu.participants) {
         const jid = resolveEventParticipant(p, sock);
         if (!jid) continue;
         const phone = jid.split('@')[0];
@@ -73,7 +61,7 @@ export default async (sock) => {
           pp = null;
         }
 
-        if (anu.action === 'add' && chat?.welcome && isPrimary) {
+        if (anu.action === 'add' && chat?.welcome && (!primaryBotId || primaryBotId === botId)) {
           if (!metadata) continue;
           let caption;
           if (chat.sWelcome && chat.sWelcome.trim() !== '') {
@@ -101,7 +89,7 @@ export default async (sock) => {
           }
         }
 
-        if ((anu.action === 'remove' || anu.action === 'leave') && chat?.goodbye && isPrimary) {
+        if ((anu.action === 'remove' || anu.action === 'leave') && chat?.goodbye && (!primaryBotId || primaryBotId === botId)) {
           if (!metadata) continue;
           let caption;
           if (chat.sGoodbye && chat.sGoodbye.trim() !== '') {
@@ -123,21 +111,13 @@ export default async (sock) => {
             db.setChatUser(anu.id, jid, 'afkReason', '');
           }
         }
-        if (anu.action === 'promote' && chat?.alerts && isPrimary) {
-          const authorJid = normalizeJid(anu.author) || anu.author || '';
-          const authorTag = authorJid ? `@${authorJid.split('@')[0]}` : 'un administrador';
-          await sock.sendMessage(anu.id, {
-            text: `「🛡️」 *@${phone}* ha sido promovido a *Administrador* por *${authorTag}.*`,
-            mentions: [jid, ...(authorJid ? [authorJid] : []), ...groupAdmins],
-          });
+        if (anu.action === 'promote' && chat?.alerts && (!primaryBotId || primaryBotId === botId)) {
+          const authorJid = normalizeJid(anu.author) || anu.author;
+          await sock.sendMessage(anu.id, { text: `「🛡️」 *@${phone}* ha sido promovido a *Administrador* por *@${authorJid.split('@')[0]}.*`, mentions: [jid, authorJid, ...groupAdmins] });
         }
-        if (anu.action === 'demote' && chat?.alerts && isPrimary) {
-          const authorJid = normalizeJid(anu.author) || anu.author || '';
-          const authorTag = authorJid ? `@${authorJid.split('@')[0]}` : 'un administrador';
-          await sock.sendMessage(anu.id, {
-            text: `「⚠️」 *@${phone}* ha sido degradado de *Administrador* por *${authorTag}.*`,
-            mentions: [jid, ...(authorJid ? [authorJid] : []), ...groupAdmins],
-          });
+        if (anu.action === 'demote' && chat?.alerts && (!primaryBotId || primaryBotId === botId)) {
+          const authorJid = normalizeJid(anu.author) || anu.author;
+          await sock.sendMessage(anu.id, { text: `「⚠️」 *@${phone}* ha sido degradado de *Administrador* por *@${authorJid.split('@')[0]}.*`, mentions: [jid, authorJid, ...groupAdmins] });
         }
       }
     } catch (err) {

@@ -6,19 +6,18 @@
  */
 // ═══════════════════════════════════════════════════════════════════
 //  router.js — Router de comandos
-//  Pipeline: mensaje → serializar → hooks before → prefijo/permisos →
-//            cooldown → handler
+//  Pipeline: mensaje → middlewares before → serializar →
+//            detectar prefijo/comando → cooldown → permisos → handler
 //  Todo envío pasa por la cola anti-ban del engine.
 // ═══════════════════════════════════════════════════════════════════
 
 import log from "#logger";
 import { loadCommands, reloadCommand } from "#commands";
-import { botJid, isAdmin, serializeMessage } from "#serialize";
+import { serializeMessage } from "#serialize";
 import { buildCommandContext } from "./context.js";
 import createCooldown from "#cooldown";
 import checkPermissions from "#permissions";
 import { parseButtonResponse } from "#interactive";
-import { mismaPersona } from "#lib/lid";
 import db from "../services/ginko-db.js";
 
 export const BOT_PREFIXES = process.env.BOT_PREFIX
@@ -27,34 +26,20 @@ export const BOT_PREFIXES = process.env.BOT_PREFIX
 
 export const BOT_PREFIX = BOT_PREFIXES[0] || ".";
 
-// Avisos de "no tienes permiso": uno cada 30 s por chat+usuario. Sin esto,
-// cada mensaje denegado produce una respuesta (amplificación).
-const avisosDenegado = new Map();
-function obtenerCacheAvisos() {
-  return {
-    get(k) { const v = avisosDenegado.get(k); if (v && Date.now() - v.ts < 30000) return v; if (v) avisosDenegado.delete(k); return null; },
-    set(k, _v, ttl) {
-      if (avisosDenegado.size > 500) avisosDenegado.clear();
-      avisosDenegado.set(k, { ts: Date.now(), ttl });
-    },
-  };
-}
-
-const selfModeCache = new Map();
+let selfMode = { value: false, ts: 0 };
 function isSelfMode(sock) {
-  const botId = botJid(sock);
-  if (!botId) return false;
   const now = Date.now();
-  const cached = selfModeCache.get(botId);
-  if (cached && now - cached.ts < 30000) return cached.value;
-  let value = false;
+  if (now - selfMode.ts < 30000) return selfMode.value;
+  selfMode.ts = now;
   try {
-    const settings = db.getSettings(botId) || {};
-    value = !!settings.self;
-  } catch {}
-  if (selfModeCache.size > 100) selfModeCache.clear();
-  selfModeCache.set(botId, { value, ts: now });
-  return value;
+    const botJid = sock?.user?.id;
+    if (!botJid) { selfMode.value = false; return false; }
+    const settings = db.getSettings(botJid) || {};
+    selfMode.value = !!settings.self;
+  } catch {
+    selfMode.value = false;
+  }
+  return selfMode.value;
 }
 
 export function createRouter(engine, opts) {
@@ -70,7 +55,7 @@ export function createRouter(engine, opts) {
   function countUnique() {
     if (!commands) return 0;
     const seen = new Set();
-    for (const [, cmd] of commands) seen.add(cmd.name);
+    for (const [name, cmd] of commands) seen.add(cmd.name);
     return seen.size;
   }
 
@@ -102,11 +87,9 @@ export function createRouter(engine, opts) {
    */
   async function runBefores(sock, ctx) {
     if (!commands?.befores?.length) return;
+    // Un solo constructor de contexto para hooks y comandos (context.js).
     const { msg, groupMetadata, participants, isAdmins, isBotAdmins, isOwner } =
-      await buildCommandContext(sock, ctx, engine, {
-        commandName: ctx.commandName,
-        isCommands: !!ctx.isCommands,
-      });
+      await buildCommandContext(sock, ctx, engine, { commandName: ctx.commandName });
 
     for (const hook of commands.befores) {
       try {
@@ -125,23 +108,17 @@ export function createRouter(engine, opts) {
       // Respuesta de botón (clic en un botón interactivo)
       const btnId = parseButtonResponse(msg);
       if (btnId) {
-        const m = String(btnId).trim().match(/^([^\s:]+)(?:[:\s]+([\s\S]*))?$/);
-        if (m) {
-          const [, btnCmd, btnArg = ""] = m;
-          const virtualMsg = {
-            ...msg,
-            message: { conversation: BOT_PREFIX + btnCmd + (btnArg ? " " + btnArg : "") },
-          };
-          return handle(sock, virtualMsg);
-        }
+        const [btnCmd, ...btnArgs] = btnId.split(":");
+        const btnArg = btnArgs.join(" ");
+        const virtualMsg = {
+          ...msg,
+          message: { conversation: BOT_PREFIX + btnCmd + (btnArg ? " " + btnArg : "") },
+        };
+        return handle(sock, virtualMsg);
       }
 
       const ctx = serializeMessage(msg, sock);
       if (!ctx.text || ctx.chatId === "status@broadcast") return;
-
-      if (!ctx.fromMe && ctx.chatId) {
-        engine?.getRitmo?.()?.anotarEntrante?.(ctx.chatId);
-      }
 
       // Detectar prefijo
       let usedPrefix = "";
@@ -154,38 +131,24 @@ export function createRouter(engine, opts) {
 
       ctx.usedPrefix = usedPrefix;
 
-      const typed = usedPrefix
-        ? (ctx.text.slice(usedPrefix.length).trim().split(/\s+/)[0] || "")
-        : "";
+      // Nombre tecleado por el usuario (normalizado). Se calcula aquí
+      // porque los hooks `before` reciben `msg.command`: antilink lo usa
+      // para no expulsar a quien invoca el comando de invitación.
+      const typed = ctx.text.slice(usedPrefix.length).trim().split(/\s+/)[0] || "";
       ctx.commandName = typed.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-      const cmd = usedPrefix && ctx.commandName ? getCommand(ctx.commandName) : null;
-      ctx.isCommands = !!cmd;
-
+      // Log visual en terminal para todo mensaje recibido (estilo Ginko-MD)
       if (typeof opts.onMessage === "function") {
         try { opts.onMessage(ctx, usedPrefix); } catch {}
       }
 
-      // Ejecutar middlewares 'before' (anti-link, anti-status, afk...)
+      // ── Ejecutar middlewares 'before' (anti-link, anti-status, afk...) ──
       await runBefores(sock, ctx);
 
       // Si está en self mode (solo dueño), rechazar a cualquiera que no sea el owner
       const ownerJid = engine?.getOwnerJid?.();
       const isOwnerUser = ctx.isOwner ? ctx.isOwner(ownerJid) : false;
       if (isSelfMode(sock) && !isOwnerUser && !ctx.fromMe) return;
-
-      // Registrar actividad pasiva (nombre, XP, stats diarios del grupo)
-      const botId = botJid(sock);
-      if (!ctx.fromMe && !ctx.isBot && ctx.senderId && !usedPrefix) {
-        db.recordActivity({
-          chatId: ctx.chatId,
-          senderId: ctx.senderId,
-          botId,
-          pushName: ctx.pushName,
-          isGroup: ctx.isGroup,
-          isCommand: false,
-        });
-      }
 
       // Si no tiene prefijo, no procesar como comando
       if (!usedPrefix) return;
@@ -194,72 +157,31 @@ export function createRouter(engine, opts) {
       if (ctx.fromMe && !isSelfMode(sock) && !isOwnerUser) return;
 
       const raw = ctx.text.slice(usedPrefix.length).trim();
-      if (!raw || !cmd) return;
+      if (!raw) return;
 
-      // Reglas de grupo (primaryBot, bot off / isBanned, adminonly)
-      if (ctx.isGroup) {
-        let chat = null;
-        try { chat = db.getChat(ctx.chatId); } catch {}
-        if (chat) {
-          if (chat.primaryBot && botId && !mismaPersona(chat.primaryBot, botId) && cmd.name !== "setprimary") {
-            return;
-          }
-          if (chat.isBanned && cmd.name !== "bot" && !isOwnerUser) {
-            return;
-          }
-          if (chat.adminonly && !isOwnerUser && !(await isAdmin(sock, ctx.chatId, ctx.senderId))) {
-            return;
-          }
-        }
+      const cmd = getCommand(ctx.commandName);
+      if (!cmd) return;
+
+      // Doble palomita azul: el usuario ve que el bot leyó su comando.
+      // Solo en comandos reales (no en cada mensaje del grupo) para no
+      // mandar tráfico de más. Nunca frena ni rompe el comando.
+      if (!ctx.fromMe && process.env.READ_RECEIPTS !== "0" && typeof sock.readMessages === "function") {
+        try { sock.readMessages([msg.key]).catch(() => {}); } catch {}
       }
 
-      // Cooldown / antispam. `esDueno` es lo que decide si el atajo de
-      // ownerOnly aplica: un desconocido que invoca un comando de dueño
-      // se frena como cualquier otro (antes no se frenaba nunca).
-      if (cooldown.check({ senderId: ctx.senderId, cmd, text: ctx.text, esDueno: isOwnerUser })) return;
+      // Cooldown / antispam
+      if (cooldown.check({ senderId: ctx.senderId, cmd, text: ctx.text })) return;
 
-      // Permisos. El rechazo NO se responde a cada mensaje: un atacante
-      // que insiste convertiría esto en un amplificador (1 entrada = 1
-      // salida). Se avisa una vez cada 30 s por chat, y el resto se
-      // ignora en silencio.
+      // Permisos
       const denied = await checkPermissions(sock, ctx, cmd, engine);
       if (denied) {
-        const claveAviso = "denegado:" + ctx.chatId + ":" + (ctx.senderId || "?");
-        const cacheAvisos = obtenerCacheAvisos();
-        if (!cacheAvisos.get(claveAviso)) {
-          cacheAvisos.set(claveAviso, 1, 30000);
-          await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
-        }
+        await sock.sendMessage(ctx.chatId, { text: denied }, { quoted: msg });
         return;
-      }
-
-      const sendQueue = engine?.getSendQueue?.();
-
-      // Doble palomita azul: solo en comandos autorizados cuando la cola está activa
-      if (
-        !ctx.fromMe &&
-        msg?.key?.id &&
-        process.env.READ_RECEIPTS !== "0" &&
-        typeof sock.readMessages === "function" &&
-        !sendQueue?.isPaused?.()
-      ) {
-        try { Promise.resolve(sock.readMessages([msg.key])).catch(() => {}); } catch {}
-      }
-
-      // Registrar ejecución del comando en DB (XP, stats, lastCmd, commandsejecut)
-      if (!ctx.fromMe && !ctx.isBot && ctx.senderId) {
-        db.recordActivity({
-          chatId: ctx.chatId,
-          senderId: ctx.senderId,
-          botId,
-          pushName: ctx.pushName,
-          isGroup: ctx.isGroup,
-          isCommand: true,
-        });
       }
 
       // Ejecutar
       const start = Date.now();
+      const sendQueue = engine?.getSendQueue?.();
       const usePriority = !!(cmd.priority && sendQueue && typeof sendQueue.enterPriority === "function");
       if (usePriority) sendQueue.enterPriority();
       try {
@@ -286,9 +208,7 @@ export function createRouter(engine, opts) {
     }
   }
 
-  const router = { init, handle, reload, getCommand, commandList, countUnique, PREFIX: BOT_PREFIX, PREFIXES: BOT_PREFIXES };
-  globalThis.__shinRouter = router;
-  return router;
+  return { init, handle, reload, getCommand, commandList, countUnique, PREFIX: BOT_PREFIX, PREFIXES: BOT_PREFIXES };
 }
 
 export default createRouter;

@@ -7,14 +7,13 @@
 // ── .subircookies (B3) — guarda el cookies.txt de YouTube por WhatsApp ──
 // Envía el archivo cookies.txt como DOCUMENTO con caption .subircookies
 // (o responde al documento con .subircookies). El bot lo guarda en
-// ./cookies.txt y yt-dlp lo usa automáticamente cuando existe.
+// ./cookies.txt y el downloader lo usa con YTDL_ENABLED=1.
 // Las cookies expiran cada 1-2 meses: cuando .play vuelva a fallar en el
 // servidor, exportas de nuevo y repites el comando.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { downloadMediaMessage } from "baileys";
-import { getRealMessage } from "#serialize";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -22,10 +21,8 @@ const TARGET = path.join(ROOT, "cookies.txt");
 const MAX_BYTES = 256 * 1024;
 
 async function downloadDocument(msg) {
-  if (!msg?.message) return null;
   try {
-    const normalized = { ...msg, message: getRealMessage(msg.message) || msg.message };
-    const buf = await downloadMediaMessage(normalized, "buffer", {});
+    const buf = await downloadMediaMessage(msg, "buffer", {});
     return Buffer.isBuffer(buf) ? buf : null;
   } catch {
     return null;
@@ -62,10 +59,9 @@ export default {
       return "🚫 Esto no parece un cookies.txt de YouTube (no encontré dominios youtube/google).";
     }
 
-    fs.writeFileSync(TARGET, buf, { mode: 0o600 });
-    try { fs.chmodSync(TARGET, 0o600); } catch {}
+    fs.writeFileSync(TARGET, buf);
     return "✓ Cookies guardadas (`cookies.txt`, " + buf.length + " bytes).\n" +
-      "· Se usan automáticamente con `yt-dlp` cuando está disponible.\n" +
+      "· Se usan en `.play` con `YTDL_ENABLED=1` en .env.\n" +
       "· Expiran cada 1-2 meses: cuando falle de nuevo, exporta y repite.\n" +
       "· El archivo NUNCA se sube a GitHub (.gitignore).";
   },

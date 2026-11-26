@@ -9,10 +9,7 @@ import { botJid } from "#serialize";
 import { pickRandom } from "#lib/random";
 import { delay } from 'baileys';
 import db from '../../src/services/ginko-db.js';
-import { tiempoLargo, esperaRestante } from "#lib/tiempo";
-
-/** Lo mínimo entre dos tiradas. */
-const ESPERA_SLOT_MS = 30000;
+import { tiempoLargo as formatTime } from "#lib/tiempo";
 
 export default {
   command: ['slot'],
@@ -30,11 +27,9 @@ export default {
       return msg.reply(`❀ Por favor, ingresa la cantidad que deseas apostar.`);
     }
     const apuesta = parseInt(args[0]);
-    // Una espera nunca puede durar más que ella misma: si el dato guardado es
-    // imposible, se da por cumplida en vez de castigar con años de bloqueo.
-    const esperaSlot = esperaRestante(user.lastslot, ESPERA_SLOT_MS);
-    if (esperaSlot.esperaMs > 0) {
-      return msg.reply(`ꕥ Debes esperar *${tiempoLargo(esperaSlot.esperaMs)}* para usar *${usedPrefix + command}* nuevamente.`);
+    if (Date.now() - user.lastslot < 30000) {
+      const restante = user.lastslot + 30000 - Date.now();
+      return msg.reply(`ꕥ Debes esperar *${formatTime(restante)}* para usar *${usedPrefix + command}* nuevamente.`);
     }
     if (apuesta < 100) {
       return msg.reply(`ꕥ El mínimo para apostar es de 100 *${currency}*.`);

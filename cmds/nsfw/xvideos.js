@@ -14,37 +14,30 @@ export default {
   command: ["xvideos"],
   category: 'nsfw',
   description: 'Buscar y descargar videos de XVideos.',
-  run: async ({ msg, sock, args, usedPrefix }) => {
+  run: async ({ msg, sock, args, usedPrefix, command, text }) => {
     const chat = db.getChat(msg.chat);
     if (!chat.nsfw) return msg.reply(`ꕥ El contenido *NSFW* está desactivado en este grupo.\n\nUn *administrador* puede activarlo con el comando:\n» *${usedPrefix}nsfw on*`);
     try {
-      const query = args.join(" ").trim();
+      const query = args.join(" ");
       if (!query) return msg.reply("《✧》 Por favor, ingresa el título o URL del video de XVIDEOS.");
-      const isUrl = /xvideos\.com/i.test(query);
+      const isUrl = query.includes("xvideos.com");
       if (isUrl) {
         const res = await xvideosdl(query);
         const { duration, views, likes, deslikes } = res.result;
         const dll = res.result.url;
-        if (!dll) return msg.reply("《✧》 No se encontró el enlace de descarga del video.");
         const videoBuffer = await getBuffer(dll);
-        if (!videoBuffer?.length) return msg.reply("《✧》 El video descargado está vacío.");
 
-        const mensaje = {
-          document: videoBuffer,
-          mimetype: "video/mp4",
-          fileName: `${(res.result.title || "xvideos").slice(0, 80)}.mp4`,
-          caption: `乂 ¡XVIDEOS - DOWNLOAD! 乂
+        let mensaje = { document: videoBuffer, mimetype: "video/mp4", fileName: `${res.result.title}.mp4`, caption: `乂 ¡XVIDEOS - DOWNLOAD! 乂
 
 ≡ Título : ${res.result.title}
 ≡ Duración : ${duration || "Desconocida"}
 ≡ Likes : ${likes || "Desconocidos"}
 ≡ Des-Likes : ${deslikes || "Desconocidos"}
-≡ Vistas : ${views || "Desconocidas"}`
-        };
+≡ Vistas : ${views || "Desconocidas"}` };
         await sock.sendMessage(msg.chat, mensaje, { quoted: msg });
         return;
       }
-      const res = await search(query);
+      const res = await search(encodeURIComponent(query));
       if (!res.length) return msg.reply("《✧》 No se encontraron resultados.");
       const list = res.slice(0, 10).map((v, i) => `${i + 1}\n≡ Título : ${v.title}\n≡ Link : ${v.url}`).join("\n\n");
       const caption = `乂 ¡XVIDEOS - SEARCH! 乂\n\n${list}\n\n> » Usa directamente la URL de uno de los vídeos para descargarlo.`;
@@ -56,38 +49,43 @@ export default {
 };
 
 async function search(query) {
-  const url = `https://www.xvideos.com/?k=${encodeURIComponent(query)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
-  const $ = cheerio.load(html);
-  const results = [];
-  $("div.mozaique > div").each((index, element) => {
-    const title = $(element).find("p.title a").attr("title");
-    const href = $(element).find("p.title a").attr("href");
-    const videoUrl = href ? "https://www.xvideos.com" + href : "";
-    const quality = $(element).find("span.video-hd-mark").text().trim();
-    if (title && videoUrl) results.push({ title, url: videoUrl, quality });
+  return new Promise(async (resolve, reject) => {
+    try {
+      const url = `https://www.xvideos.com/?k=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      const results = [];
+      $("div.mozaique > div").each((index, element) => {
+        const title = $(element).find("p.title a").attr("title");
+        const videoUrl = "https://www.xvideos.com" + $(element).find("p.title a").attr("href");
+        const quality = $(element).find("span.video-hd-mark").text().trim();
+        if (title && videoUrl) results.push({ title, url: videoUrl, quality });
+      });
+      resolve(results);
+    } catch (error) {
+      reject(error);
+    }
   });
-  return results;
 }
 
 async function xvideosdl(url) {
-  const res = await fetch(url, { method: "get", signal: AbortSignal.timeout(20000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const html = await res.text();
-  const $ = cheerio.load(html, { xmlMode: false });
-  const title = $("meta[property='og:title']").attr("content");
-  const duration = (() => {
-    const s = parseInt($('meta[property="og:duration"]').attr("content"), 10) || 0;
-    return s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`
-      : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s`
-        : `${s}s`;
-  })();
-  const views = $("span.nb_views").text().trim() || $("strong.mobile-hide").text().trim();
-  const likes = $("span.rating-good-nbr").text().trim();
-  const deslikes = $("span.rating-bad-nbr").text().trim();
-  const thumb = $("meta[property='og:image']").attr("content");
-  const videoUrl = $("#html5video > #html5video_base > div > a").attr("href");
-  return { status: 200, result: { title, duration, url: videoUrl, views, likes, deslikes, thumb } };
+  return new Promise((resolve, reject) => {
+    fetch(url, { method: "get" }).then(res => res.text()).then(res => {
+      const $ = cheerio.load(res, { xmlMode: false });
+      const title = $("meta[property='og:title']").attr("content");
+      const duration = (() => {
+        const s = parseInt($('meta[property="og:duration"]').attr("content"), 10) || 0;
+        return s >= 3600 ? `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`
+             : s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s`
+             : `${s}s`;
+      })();
+      const views = $("span.nb_views").text().trim() || $("strong.mobile-hide").text().trim();
+      const likes = $("span.rating-good-nbr").text().trim();
+      const deslikes = $("span.rating-bad-nbr").text().trim();
+      const thumb = $("meta[property='og:image']").attr("content");
+      const videoUrl = $("#html5video > #html5video_base > div > a").attr("href");
+      resolve({ status: 200, result: { title, duration, url: videoUrl, views, likes, deslikes, thumb }});
+    }).catch(err => reject(err));
+  });
 }

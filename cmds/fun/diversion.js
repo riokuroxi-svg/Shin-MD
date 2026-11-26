@@ -87,8 +87,10 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 export default {
   command: ['chiste', 'dato', 'datointeresante', 'consejo', 'piropo', '8ball', '8bola', 'ship', 'pareja', 'dado', 'moneda', 'coin'],
   category: 'fun',
-  description: 'Comandos divertidos: chistes, datos, piropos, bola 8, ship, dado, moneda.',
-  run: async ({ msg, command, usedPrefix, text, args }) => {
+  description: 'Comandos divertidos: chistes, datos, piropos, bola 8, love, dado, moneda.',
+  run: async ({ msg, sock, command, usedPrefix, text, args }) => {
+    const senderName = msg.pushName || msg.sender.split('@')[0];
+
     // CHISTE
     if (command === 'chiste') return msg.reply(`😂 *Chiste*\n\n${pick(chistes)}`);
 
@@ -113,10 +115,9 @@ export default {
 
     // SHIP / PAREJA
     if (command === 'ship' || command === 'pareja') {
-      const digits = (text || '').replace(/\D/g, '');
-      const target = msg.mentionedJid?.[0] || msg.quoted?.sender || (digits ? `${digits}@s.whatsapp.net` : null);
+      const target = msg.mentionedJid?.[0] || (text && text.trim() + '@s.whatsapp.net');
       if (!target) {
-        return msg.reply(`《✧》 Etiqueta a alguien para calcular compatibilidad.\n> Ej: ${usedPrefix}ship @amigo`);
+        return msg.reply(`《✧》 Etiqueta a alguien para calcular compatibilidad.\n> Ej: ${usedPrefix}love @amigo`);
       }
       const porcentaje = Math.floor(Math.random() * 101);
       let comentario;

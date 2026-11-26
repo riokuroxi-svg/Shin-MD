@@ -38,13 +38,12 @@ const TABLA = `
 
 /** Columnas que se suman al fusionar (dinero, XP, objetos contados). */
 const SUMAR = new Set([
-  "coins", "bank", "exp", "xp", "minxp", "maxxp", "usedcommands",
+  "coins", "bank", "exp", "xp", "minxp", "maxxp", "usedcommands", "Subs",
   "wins", "losses", "games", "count", "uses", "amount",
 ]);
 /** Columnas de tiempo: al fusionar vale la más reciente (no se duplica el premio). */
 const RECIENTE = new Set([
-  "streak", "weeklyStreak", "monthlyStreak", "Subs",
-  "reportCooldown", "sugCooldown", "timeTrade",
+  "streak", "weeklyStreak", "monthlyStreak",
   "lastDailyGlobal", "lastWeeklyGlobal", "lastMonthlyGlobal",
   "lastCmd", "lastdaily", "lastweekly", "lastmonthly", "lastwork", "lastfish",
   "lasthunt", "lastmine", "lastcrime", "laststeal", "lastslut", "lastadventure",
@@ -55,7 +54,7 @@ const RECIENTE = new Set([
 /** Listas donde se unen los elementos sin repetir. */
 const LISTAS = new Set(["warnings", "robVictims", "characters"]);
 /** Columnas que guardan JSON aunque su nombre no lo diga. */
-const JSON_COLS = new Set(["stats", "inventory", "tools", "weapons", "rolls", "sales", "intercambios", "regalosPendientes"]);
+const JSON_COLS = new Set(["metadatos", "metadatos2", "stats", "inventory", "tools", "weapons", "rolls"]);
 
 const num = (v) => {
   if (v === null || v === undefined || v === "") return 0;
@@ -299,9 +298,12 @@ function fusionarPersonajes(db, lid, pn) {
 /** Avisos de grupo: el campo que identifica a la persona es `warned_jid`. */
 function fusionarAvisos(db, lid, pn) {
   if (!tablaExiste(db, "group_warns")) return 0;
-  // Sin try/catch: un fallo real debe deshacer la fusión (ver fusionarCuentas).
-  const r = db.prepare("UPDATE group_warns SET warned_jid = ? WHERE warned_jid = ?").run(pn, lid);
-  return r?.changes || 0;
+  try {
+    const r = db.prepare("UPDATE group_warns SET warned_jid = ? WHERE warned_jid = ?").run(pn, lid);
+    return r?.changes || 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -329,24 +331,13 @@ export function fusionarCuentas(db, lidJid, pnJid) {
     ["group_warns", () => fusionarAvisos(db, lid, pn)],
   ];
 
-  // Todo o nada: si un paso falla se deshace la fusión entera y el error
-  // sube a lid.js, que la reintenta. Sin esto quedaba la cuenta partida
-  // entre el LID y el teléfono (y un reintento sumaría dos veces).
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    for (const [nombre, paso] of pasos) {
-      try {
-        if (paso() > 0) tocado = true;
-      } catch (err) {
-        err.pasoFusion = nombre;
-        throw err;
-      }
+  for (const [nombre, paso] of pasos) {
+    try {
+      if (paso() > 0) tocado = true;
+    } catch (err) {
+      // Una tabla con un esquema raro no puede impedir las demás fusiones.
+      log.warn("[identities] fusionar " + nombre + ": " + (err?.message || err));
     }
-    db.exec("COMMIT");
-  } catch (err) {
-    try { db.exec("ROLLBACK"); } catch {}
-    log.warn("[identities] fusión deshecha en " + (err?.pasoFusion || "?") + ": " + (err?.message || err));
-    throw err;
   }
   return tocado;
 }

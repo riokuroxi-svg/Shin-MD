@@ -15,52 +15,6 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import log from "#logger";
 
-function esHostLoopback(host) {
-  const h = String(host || "").trim().toLowerCase().replace(/^\[|\]$/g, "");
-  if (h === "localhost" || h === "::1" || h === "::ffff:127.0.0.1") return true;
-  if (/^127(?:\.\d{1,3}){3}$/.test(h)) {
-    return h.split(".").every(n => Number(n) <= 255);
-  }
-  return false;
-}
-
-/**
- * Estado del blindaje para /health: las cinco capas, con lo que encontró
- * cada una. Un árbol cambiado o una dependencia con señales raras no debe
- * ser invisible desde fuera del bot.
- */
-function integridadParaSalud() {
-  const s = globalThis.__shinSeguridad;
-  if (s) {
-    return {
-      estado: s.estado,
-      modo: s.modo,
-      ok: s.ok,
-      bloquea: s.bloquea,
-      motivos: s.motivos,
-      capas: s.capas,
-      hallazgos: (s.hallazgos || []).slice(0, 10).map((h) => ({
-        regla: h.regla,
-        gravedad: h.gravedad,
-        archivo: h.archivo,
-      })),
-    };
-  }
-  // Compatibilidad con el formato viejo (por si el preload no corrió).
-  const r = globalThis.__shinIntegridad;
-  if (!r) return { estado: "sin-datos", nota: "la comprobación no corrió en este arranque" };
-  if (r.estado === "igual") return { estado: "ok", paquetes: r.paquetes, selloEn: r.selloEn };
-  if (r.estado === "sin-sello") return { estado: "sin-sello", nota: "node index.js --sellar" };
-  if (r.estado === "sellado") return { estado: "ok", paquetes: r.paquetes };
-  return {
-    estado: "cambio",
-    cambiados: (r.cambiados || []).length,
-    nuevos: (r.nuevos || []).length,
-    faltan: (r.faltan || []).length,
-    ejemplos: [...(r.cambiados || []), ...(r.nuevos || [])].slice(0, 5),
-  };
-}
-
 export function createWebServer(engine, opts) {
   opts = opts || {};
   const port = opts.port !== undefined
@@ -68,16 +22,19 @@ export function createWebServer(engine, opts) {
     : (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
   let host = opts.host || (process.env.LOOPBACK === "0" ? "0.0.0.0" : "127.0.0.1");
 
-  // B5.2: cualquier host no-loopback (0.0.0.0, ::, IP LAN/pública) exige
-  // contraseña obligatoria. Failsafe: sin PANEL_PASSWORD vuelve a 127.0.0.1.
-  // Usuario fijo: "admin", comparación en tiempo constante y candado anti
-  // fuerza bruta (10 intentos fallidos por IP ⇒ 429 por 5 minutos).
+  // B5.2: panel expuesto en red (LOOPBACK=0) ⇒ contraseña obligatoria.
+  // Failsafe: sin PANEL_PASSWORD el panel vuelve a loopback aunque pidas
+  // exponerlo — antes, LOOPBACK=0 dejaba riesgo/cola/memoria a la vista
+  // de cualquiera en tu red. Usuario fijo: "admin".
+  // Auditoría 2026-09-25: ahora también se valida el usuario (antes
+  // cualquier usuario con la contraseña pasaba) y hay candado anti
+  // fuerza bruta: 10 intentos fallidos por IP ⇒ 429 por 5 minutos.
   const panelPass = process.env.PANEL_PASSWORD || "";
-  if (!esHostLoopback(host) && !panelPass) {
-    log.warn("Panel: host no-loopback (" + host + ") sin PANEL_PASSWORD — por seguridad solo escuchará en 127.0.0.1");
+  if (host === "0.0.0.0" && !panelPass) {
+    log.warn("Panel: LOOPBACK=0 sin PANEL_PASSWORD — por seguridad solo escuchará en 127.0.0.1");
     host = "127.0.0.1";
   }
-  const authEnabled = !esHostLoopback(host) && !!panelPass;
+  const authEnabled = host === "0.0.0.0" && !!panelPass;
 
   const PANEL_USER = "admin";
   const MAX_FAILS = 10;
@@ -139,6 +96,10 @@ export function createWebServer(engine, opts) {
     });
   }
 
+  function json(ok, data, code) {
+    return res => res.status(code || 200).json({ ok, ...data });
+  }
+
   let appVersion = "3.0.3";
   try {
     const pkg = JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8"));
@@ -158,19 +119,6 @@ export function createWebServer(engine, opts) {
     });
   });
 
-  // Diagnóstico: qué le pasa al bot, por qué, y qué hacer. Una línea para
-  // el móvil (/salud) y el detalle para cuando hay que mirar (/salud?json=1).
-  app.get("/salud", (req, res) => {
-    const v = opts.salud ? opts.salud.veredicto() : null;
-    if (!v) return res.status(503).json({ ok: false, error: "diagnóstico no montado" });
-    if (req.query && (req.query.json === "1" || req.query.json === "true")) {
-      return res.json({ ok: true, ...v });
-    }
-    return res.type("text/plain; charset=utf-8").send(
-      v.resumen + "\n" + v.causas.map((c) => `\n[${c.gravedad.toUpperCase()}] ${c.codigo}\n  qué pasa: ${c.sintoma}\n  por qué:   ${c.causa}\n  qué hacer: ${c.remedio}`).join("\n") + "\n",
-    );
-  });
-
   app.get("/health", (req, res) => {
     const h = engine.getHealth().getStatus();
     const q = engine.getSendQueue();
@@ -185,10 +133,6 @@ export function createWebServer(engine, opts) {
       uncertain: q && typeof q.getStats === "function" ? q.getStats().inciertos : 0,
       groups: typeof engine.getGroupCount === "function" ? engine.getGroupCount() : 0,
       memoryMB: Math.round(process.memoryUsage().rss / 1048576),
-      diagnostico: opts.salud ? opts.salud.veredicto().resumen : null,
-      // Cadena de suministro: un árbol de dependencias cambiado no debe
-      // ser invisible desde fuera.
-      integridad: integridadParaSalud(),
     });
   });
 

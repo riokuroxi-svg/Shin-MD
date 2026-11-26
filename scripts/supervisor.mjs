@@ -24,9 +24,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { spawn } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 export const VENTANA_MS = 120_000;
 export const MAX_CAIDAS = 5;
@@ -80,13 +78,7 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
     // Capturando, se lee aquí para pintarlo dentro del panel; si nadie
     // leyera el tubo, el bot se quedaría clavado al llenarse.
     const flujo = capturar ? "pipe" : "inherit";
-    // El preload de seguridad va ANTES del bot: en ESM los imports del
-    // entry ya se ejecutaron cuando su código empieza, así que una
-    // comprobación que viva dentro del bot llega tarde. Con `--import`
-    // el árbol se revisa antes de cargar `baileys`.
-    const preload = path.join(raiz, "scripts", "preload-integridad.mjs");
-    const previos = fs.existsSync(preload) ? ["--import", pathToFileURL(preload).href] : [];
-    hijo = spawn(process.execPath, [...previos, entrada, ...argumentos], {
+    hijo = spawn(process.execPath, [entrada, ...argumentos], {
       cwd: raiz,
       stdio: [capturar ? "ignore" : "inherit", flujo, flujo, "ipc"],
       env: { ...process.env, ...env, SHIN_VIGILADO: "1" },
@@ -106,14 +98,12 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
     avisar("arrancado", { pid });
     estado = "activo";
 
-    let pidioReinicio = false;
     hijo.on("message", (mensaje) => {
-      if (mensaje === "restart" && !pidioReinicio) {
-        pidioReinicio = true;
+      if (mensaje === "restart") {
         reinicios += 1;
         estado = "reiniciando";
         avisar("pidioReiniciar", { reinicios });
-        try { hijo?.kill("SIGTERM"); } catch {}
+        hijo.kill("SIGTERM");
       }
     });
 
@@ -129,9 +119,8 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
       return "parar";
     }
 
-    // Reinicio pedido explícitamente por IPC: se levanta sin contarlo como
-    // caída. Un SIGTERM externo sin petición sí cuenta en el presupuesto.
-    if (pidioReinicio && (signal === "SIGTERM" || code === 0)) {
+    // SIGTERM tras un reinicio pedido: se levanta sin contarlo como caída.
+    if (signal === "SIGTERM") {
       estado = "reiniciando";
       avisar("reiniciando", { reinicios });
       await espera(400);

@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import { mismaPersona } from "#lib/lid";
 import os from 'os';
 import db from '../../src/services/ginko-db.js';
 
@@ -16,39 +15,33 @@ export default {
   run: async ({ msg, sock, usedPrefix, command }) => {
     const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
-    const botname = botSettings.botname || 'Shin-MD';
-    const namebot = botSettings.namebot || 'Shin-MD';
+    const botname = botSettings.botname || 'Bot';
+    const namebot = botSettings.namebot || 'Bot';
     const monedas = botSettings.currency || 'Yenes';
     const prefijo = botSettings.prefix;
     const owner = botSettings.owner || '';
-    const mainJid = botJid(global.sock);
-    const isOficialBot = Boolean(mainJid && botId && mismaPersona(botId, mainJid));
+    const isOficialBot = global.sock?.user?.id && botId === (botJid(global.sock));
     const botType = isOficialBot ? 'Principal/Owner' : 'Sub Bot';
 
     let desar = 'Oculto';
-    const ownerIsJid = owner && /@(s\.whatsapp\.net|lid)$/i.test(owner);
-    if (ownerIsJid) {
+    if (owner && !isNaN(owner.replace(/@s\.whatsapp\.net$/, ''))) {
       const userData = db.getUser(owner);
       desar = userData?.genre || 'Oculto';
     }
 
     const platform = os.type();
+    const now = new Date();
+    const colombianTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
     const nodeVersion = process.version;
     const sistemaUptime = rTime(os.uptime());
-    const uptimeDate = new Date(Date.now() - process.uptime() * 1000);
-    const formattedUptimeDate = uptimeDate.toLocaleString('es-ES', {
-      timeZone: 'America/Mexico_City',
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).replace(/^./, m => m.toUpperCase());
-    const instagram = (global.links && global.links.instagram) || '';
+    const uptime = process.uptime();
+    const uptimeDate = new Date(colombianTime.getTime() - uptime * 1000);
+    const formattedUptimeDate = uptimeDate.toLocaleString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/^./, m => m.toUpperCase());
+      const instagram = (global.links && global.links.instagram) || '';
 
+    // Resolver JID del canal en background
     const { resolveChannel, getChannelInfo } = await import('#lib/channel');
-    resolveChannel(sock, db).catch(() => {});
+    resolveChannel(sock, db).catch(()=>{});
     const chInfo = getChannelInfo();
     let dbCanalId = chInfo.id || botSettings.newsletter_id || '';
     let dbCanalName = (chInfo.resolved ? chInfo.name : '') || botSettings.nameid || '';
@@ -56,9 +49,6 @@ export default {
     if (dbCanalName && /yuki|ყµҡเ/i.test(dbCanalName)) { dbCanalId = ''; dbCanalName = ''; }
 
     try {
-      const ownerDisplay = owner
-        ? (ownerIsJid ? `@${owner.split('@')[0]}` : owner)
-        : 'Oculto por privacidad';
       const lines = [`✐ Información del bot *${botname}!*`, '',
         `✿ *Nombre Corto ›* ${namebot}`,
         `✿ *Nombre Largo ›* ${botname}`,
@@ -69,7 +59,7 @@ export default {
         `❒ *NodeJS ›* ${nodeVersion}`,
         `❒ *Activo desde ›* ${formattedUptimeDate}`,
         `❒ *Sistema Activo ›* ${sistemaUptime}`,
-        `❒ *${desar === 'Hombre' ? 'Dueño' : desar === 'Mujer' ? 'Dueña' : 'Dueño(a)'} ›* ${ownerDisplay}`
+        `❒ *${desar === 'Hombre' ? 'Dueño' : desar === 'Mujer' ? 'Dueña' : 'Dueño(a)'} ›* ${owner ? (!isNaN(owner.replace(/@s\.whatsapp\.net$/, '')) ? `@${owner.split('@')[0]}` : owner) : "Oculto por privacidad"}`
       ];
       if (instagram) lines.push('', `> \`Instagram:\` ${instagram}`);
       const message = lines.join('\n').trim();
@@ -82,8 +72,7 @@ export default {
           newsletterName: dbCanalName
         }
       } : {};
-      const mentions = ownerIsJid ? [owner] : [];
-      await sock.sendMessage(msg.chat, { text: message, mentions, contextInfo }, { quoted: msg });
+      await sock.sendMessage(msg.chat, { text: message, contextInfo }, { quoted: msg });
     } catch (e) {
       return msg.reply(`> Ocurrió un error con *${usedPrefix + command}*.\n> [Error: *${e.message}*]`);
     }
@@ -100,5 +89,5 @@ function rTime(seconds) {
   const hDisplay = h > 0 ? h + (h === 1 ? ' hora, ' : ' horas, ') : '';
   const mDisplay = m > 0 ? m + (m === 1 ? ' minuto, ' : ' minutos, ') : '';
   const sDisplay = s > 0 ? s + (s === 1 ? ' segundo' : ' segundos') : '';
-  return dDisplay + hDisplay + mDisplay + sDisplay || '0 segundos';
+  return dDisplay + hDisplay + mDisplay + sDisplay;
 }

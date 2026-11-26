@@ -15,12 +15,11 @@ export default {
   command: ['wastalk', 'stalknum', 'numbstalk', 'perfilwa', 'infowa'],
   category: 'utils',
   description: 'Ver información pública de un número de WhatsApp.',
-  run: async ({ msg, sock, usedPrefix, text }) => {
-    const digits = text ? text.replace(/\D/g, '') : '';
+  run: async ({ msg, sock, usedPrefix, command, text }) => {
     let who =
       msg.mentionedJid?.[0] ||
       msg.quoted?.sender ||
-      (digits ? `${digits}@s.whatsapp.net` : null);
+      (text && text.trim() ? text.trim().replace(/[^0-9]/g, '') + '@s.whatsapp.net' : null);
 
     if (!who) {
       return msg.reply(

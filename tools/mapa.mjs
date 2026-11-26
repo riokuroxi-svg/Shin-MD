@@ -58,12 +58,18 @@ const DEPENDENCIAS = {
   chalk: "Color en la terminal, con soporte de 256 colores y NO_COLOR.",
   dotenv: "Lee el `.env` al arrancar.",
   express: "El servidor del panel web local.",
+  "moment-timezone": "Fechas y horas en la zona del dueño.",
+  moment: "Lo que usa `moment-timezone` por debajo.",
   "readline-sync": "Preguntar el número de vinculación en la terminal.",
   axios: "Peticiones HTTP de los comandos.",
-  "node-fetch": "Peticiones HTTP con agente DNS validado contra SSRF (`urlSegura.js`).",
+  "node-fetch": "Peticiones HTTP donde `axios` no encaja (streams, descargas).",
   cheerio: "Leer HTML de las webs que se scrapean.",
+  "form-data": "Subir archivos en las APIs que lo piden.",
   "file-type": "Adivinar el tipo real de un archivo por su contenido.",
   "mime-types": "El tipo por la extensión, cuando no hay bytes que mirar.",
+  "grapheme-splitter": "Contar caracteres como los cuenta una persona (emojis, acentos).",
+  "human-readable": "Números grandes legibles (1.2 GB, 340 ms).",
+  jimp: "Edición de imágenes en JavaScript puro (lo que `sharp` no puede en WASM).",
   sharp: "Redimensionar y convertir imágenes rápido.",
   "@img/sharp-wasm32": "El `sharp` de respaldo para Android/Termux, donde no hay binario nativo. No se importa: lo usa `sharp`.",
   "node-cache": "Caché en memoria con caducidad.",
@@ -72,8 +78,10 @@ const DEPENDENCIAS = {
   "awesome-phonenumber": "Validar y formatear teléfonos en `.wastalk` (se carga solo cuando se usa).",
   "aptoide-scraper": "Buscar APKs en `.apk` (se carga solo cuando se usa).",
   qrcode: "Generar la imagen del QR dentro del chat (`.qrcode`), no en la consola.",
+  "@distube/ytdl-core": "Descargar de YouTube cuando `yt-dlp` no está.",
   "syntax-error": "Señalar la línea exacta cuando un comando no compila.",
   ws: "WebSocket del panel web.",
+  "ytdlp-turbo": "Atajo interno para descargar con `yt-dlp` cuando está instalado.",
 };
 
 const SCRIPTS = {
@@ -104,6 +112,7 @@ const SCRIPTS = {
 // ─────────────────────── recuento real ───────────────────────
 
 const leer = (p) => fs.readFileSync(path.join(RAIZ, p), "utf8");
+const existe = (p) => fs.existsSync(path.join(RAIZ, p));
 
 /**
  * Archivos de una carpeta, contados de verdad.
@@ -186,6 +195,7 @@ export function generarMapa() {
   const pruebas = fs.readdirSync(path.join(RAIZ, "test")).filter((f) => f.endsWith(".test.js")).length;
   const libs = contar("src/lib");
   const servicios = contar("src/services");
+  const scripts = contar("scripts");
 
   push(
     `# Mapa de Shin-MD ${pkg.version}`,
@@ -266,7 +276,7 @@ export function generarMapa() {
     "| Orden | Qué hace |",
     "| --- | --- |",
   );
-  for (const nombre of Object.keys(pkg.scripts || {})) {
+  for (const [nombre, descripcion] of Object.entries(pkg.scripts || {})) {
     push(`| \`npm run ${nombre}\` | ${SCRIPTS[nombre] || "_sin describir_"} |`);
   }
 
@@ -291,10 +301,10 @@ export function generarMapa() {
     "| Instalador y publicación | `instalador`, `publicar`, `versiones`, `licencia` | Que el comando de una línea funcione y la versión no se quede vieja |",
     "| Consola y diseño | `consola`, `consola-bot`, `aesthetic-ui`, `design-system` | Que las cajas cuadren y el texto se lea |",
     "| Núcleo del bot | `core`, `context`, `router`, `interactive`, `compat`, `cola-incierta` | Enrutado, permisos, contexto, cola de salida |",
-    "| Datos y memoria | `sqlite-respaldo`, `remediacion-a1`, `remediacion-a2`, `remediacion-a2-sqlite`, `remediacion-a3`, `remediacion-integracion`, `economia`, `xp`, `lid`, `db-opcional`, `relevo` | Que nada se pierda ni se sobrescriba al cerrar |",
-    "| Comandos concretos | `apis`, `menucat-fax`, `owner-mx`, `play-fuentes`, `ttt`, `random`, `tiempo`, `ytdlp-cliente`, `limpieza-deps` | Que cada uno haga lo suyo |",
+    "| Datos y memoria | `sqlite-respaldo`, `economia`, `xp`, `lid`, `db-opcional`, `relevo` | Que nada se pierda al cerrar |",
+    "| Comandos concretos | `apis`, `menucat-fax`, `owner-mx`, `play-fuentes`, `ttt`, `random`, `tiempo`, `ytdlp-cliente` | Que cada uno haga lo suyo |",
     "| Documentación y página | `docs-web`, `mapa`, `web`, `web-audit` | Que lo publicado no mienta |",
-    "| Operación | `vigia`, `mantenimiento`, `warmup-quota`, `conector-parches`, `auditoria`, `sombras`, `endurecimiento-operativo` | Que el bot aguante en un VPS |",
+    "| Operación | `vigia`, `mantenimiento`, `warmup-quota`, `conector-parches`, `auditoria`, `sombras` | Que el bot aguante en un VPS |",
     "",
     "## Lo que se retiró y no vuelve",
     "",
@@ -305,8 +315,6 @@ export function generarMapa() {
     "| `global.APIs` sin configurar | Reventaba cuatro comandos con un `TypeError`; ahora se configura en el `.env` |",
     "| `github-readme-stats` | El servicio devolvía 503; las cifras se generan en casa |",
     "| `cfonts`, `qrcode-terminal` | Dependencias que nadie importaba (el banner es de una columna, el QR no existe) |",
-    "| `jimp`, `@distube/ytdl-core` | `sharp` ya cubre imágenes y `ytdl-core` quedó obsoleto frente a `yt-dlp` y APIs |",
-    "| `moment`, `moment-timezone`, `grapheme-splitter`, `human-readable`, `form-data` | Sustituidos por APIs nativas de Node 22 (`Intl`, `FormData`, `Blob`, `fetch`) |",
     "",
     "## Por dónde empezar a leer",
     "",

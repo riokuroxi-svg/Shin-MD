@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { crearEntrada } from "#lib/entrada";
-import { crearSalud } from "#server-salud";
 import { normalizePhone, parseArgs } from "../src/lib/cli-args.js";
 import { estadoSesion, hayTerminalDetras, leerDeTerminal, planDeVinculacion } from "../src/lib/vinculacion.js";
 import * as ui from "../src/services/consola.js";
@@ -18,6 +16,7 @@ import { instalarAPIs } from "../src/lib/apis.js";
 
 import "dotenv/config";
 import chalk from "chalk";
+import moment from "moment-timezone";
 import readlineSync from "readline-sync";
 import fs from "fs";
 import path from "path";
@@ -36,7 +35,6 @@ import { installLogFilter } from "../src/services/log-filter.js";
 import { installAntiCrash } from "../src/services/anti-crash.js";
 import { createTempCleaner } from "../src/services/temp-cleaner.js";
 import { createMemoryMonitor } from "../src/services/memory-monitor.js";
-import { pasoDeIntegridad } from "../src/services/integridad-arranque.js";
 
 // Consola limpia (sin el ruido de cifrado de libsignal) y que un corte de
 // red suelto no tumbe al bot. Van antes de conectar con WhatsApp.
@@ -67,23 +65,6 @@ printBanner();
   }
   // La versión y el autor ya los dice el banner: aquí solo se comprueba
   // que la copia trae lo que la licencia exige.
-}
-
-// ─── Cadena de suministro ───────────────────────────────────────
-// Las cinco capas del blindaje viven en src/services/integridad-arranque.js.
-// Normalmente ya corrieron en el preload (`--import`), o sea ANTES de que
-// este archivo cargara `baileys`; aquí solo se confirma el resultado.
-// Si alguien arranca con `node index.js` a secas, esta es la última red:
-// comprueba igual, pero ya con las dependencias cargadas (por eso el
-// camino bueno es `npm start`, que sí pone el preload).
-//   · `--sellar` fija la foto actual y sale, sin arrancar el bot.
-//   · SHIN_INTEGRIDAD=estricto: un árbol cambiado no arranca (falla cerrado).
-{
-  const __args = process.argv.slice(2);
-  const __sella = __args.includes("--sellar") || __args.includes("--seal");
-  if (!pasoDeIntegridad(__args)) {
-    process.exit(__sella ? 0 : 1);
-  }
 }
 
 // Red de seguridad del conector: el npm install aplica los parches a
@@ -142,16 +123,8 @@ function __dirname() {
 // entraba soltaba un cuadro de siete filas con colores distintos a los del
 // resto de la consola: en un grupo activo eso es ilegible. Ahora se lee
 // como un registro y comparte la paleta del resto.
-const RELOJ_CONSOLA = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "America/Mexico_City",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
-
 function logIncomingMessage(ctx, usedPrefix) {
-  const t = RELOJ_CONSOLA.format(new Date());
+  const t = moment().tz("America/Mexico_City").format("HH:mm:ss");
   const donde = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "privado";
   log.ui(ui.mensaje({
     hora: t,
@@ -163,7 +136,7 @@ function logIncomingMessage(ctx, usedPrefix) {
 }
 
 function logCommand(ctx, cmdName, ms) {
-  const t = RELOJ_CONSOLA.format(new Date());
+  const t = moment().tz("America/Mexico_City").format("HH:mm:ss");
   const donde = ctx.isGroup ? (ctx.groupName || ctx.chatId) : "privado";
   log.ui(ui.mensaje({
     hora: t,
@@ -238,21 +211,6 @@ let phoneNumber = "";
 switch (plan.accion) {
   case "nada":
     console.log(ui.estado("ok", "sesión existente: no hace falta vincular nada."));
-    break;
-  case "revincular":
-    // La sesión guardada existe pero WhatsApp ya la rechazó. Se dice sin
-    // rodeos y se pide el número como si fuera la primera vez: decir
-    // «no hace falta vincular nada» aquí era mentirle al usuario y
-    // dejarlo en un bucle con el 401.
-    console.warn("");
-    console.warn(ui.estado("warn", "la sesión guardada ya no sirve (" + plan.motivo + ")."));
-    console.warn("  " + chalk.hex("#8B82A3")("WhatsApp la cerró; hay que vincular el número otra vez. Las credenciales viejas se conservan."));
-    console.warn("");
-    phoneNumber = preguntarNumero();
-    if (!phoneNumber) {
-      console.error(ui.estado("error", "ese número no tiene dígitos usables."));
-      process.exit(1);
-    }
     break;
   case "usar":
     phoneNumber = plan.numero;
@@ -337,19 +295,6 @@ async function main() {
     const v = parseInt(process.env[nombre] || "", 10);
     return Number.isFinite(v) && v > 0 ? v : null;
   };
-  // B2.2: cargar estado persistido de warm-up y ritmo para no reiniciar
-  // cuotas ni olvidar chats calientes al reiniciar el proceso.
-  let savedWarmup = {};
-  try {
-    const raw = db.settings.get("warmup_state");
-    if (raw) savedWarmup = JSON.parse(raw);
-  } catch {}
-  let savedRitmo = {};
-  try {
-    const raw = db.settings.get("ritmo_state");
-    if (raw) savedRitmo = JSON.parse(raw);
-  } catch {}
-
   const warmupOff = /^(0|off|no|false)$/i.test((process.env.WARMUP || "").trim()) || /^(0|off|no|false)$/i.test((process.env.WARMUP_LIMIT || "").trim());
   if (warmupOff) {
     throttlerOpts.warmUpStartMsgsPerDay = Number.MAX_SAFE_INTEGER;
@@ -361,124 +306,26 @@ async function main() {
     if (iniEnv) throttlerOpts.warmUpStartMsgsPerDay = iniEnv;
     if (maxEnv) throttlerOpts.warmUpMaxMsgsPerDay = maxEnv;
     if (diasEnv) throttlerOpts.warmUpDays = diasEnv;
-    // Rampa del perfil veterano: 0 (por defecto) = tope completo desde hoy.
-    const rampaVet = parseInt(process.env.RAMPA_VETERANO_DIAS || "", 10);
-    if (Number.isFinite(rampaVet) && rampaVet > 0) throttlerOpts.rampaVeteranoDias = rampaVet;
     // Coherencia: el tope final nunca puede quedar por debajo del inicial
     // (si no, getDailyLimit() decrecería con los días: absurdo).
     const ini = throttlerOpts.warmUpStartMsgsPerDay ?? 20;
-    const max = throttlerOpts.warmUpMaxMsgsPerDay ?? 2000;
+    const max = throttlerOpts.warmUpMaxMsgsPerDay ?? 500;
     if (max < ini) {
       throttlerOpts.warmUpMaxMsgsPerDay = ini;
       log.warn("WARMUP_MAX_MSGS era menor que WARMUP_START_MSGS; se igualó a " + ini);
     }
   }
-  if (savedWarmup && typeof savedWarmup === "object") {
-    if (savedWarmup.warmUpLastReset === today) {
-      throttlerOpts.warmUpMsgsToday = Number(savedWarmup.warmUpMsgsToday) || 0;
-    }
-    throttlerOpts.warmUpLastReset = savedWarmup.warmUpLastReset || today;
-    throttlerOpts.totalSent = Number(savedWarmup.totalSent) || 0;
-    if (savedWarmup.perfil) throttlerOpts.perfil = savedWarmup.perfil;
-  }
 
-  // D8: la cuota se guardaba sólo cada 60 s. Un corte en medio dejaba al bot
-  // creyendo que había enviado menos de lo que envió y, al volver, con cupo
-  // que ya había gastado. Ahora también se guarda cada N envíos.
-  const GUARDAR_CADA = Number(process.env.GUARDAR_CUOTA_CADA) || 10;
-  let persistirCuota = () => {};
-  let enviosSinGuardar = 0;
-  const alEnviar = () => {
-    enviosSinGuardar += 1;
-    if (enviosSinGuardar >= GUARDAR_CADA) {
-      enviosSinGuardar = 0;
-      persistirCuota();
-    }
-  };
-
-  // Anti-ban configurable: sin tope por defecto (0 = sin límite), para no
-  // cambiar el comportamiento de quien ya lo tiene funcionando.
-  const maxPorMinuto = Math.max(0, parseInt(process.env.MAX_POR_MINUTO || "0", 10) || 0);
-  const reintentos = process.env.REINTENTOS !== undefined
-    ? Math.max(0, parseInt(process.env.REINTENTOS, 10) || 0)
-    : 3;
-  if (maxPorMinuto > 0) log.info("Techo de salida: " + maxPorMinuto + " mensajes por minuto como máximo.");
-
-  const engine = createEngine({
-    throttler: throttlerOpts,
-    ritmoEstado: savedRitmo,
-    alEnviar,
-    maxPorMinuto,
-    reintentos,
-  });
+  const engine = createEngine({ throttler: throttlerOpts });
   const warmupStats = engine.getThrottler().getStats();
   log.info("Perfil del número: " + numberProfile + " (antigüedad " + ageDays + "d) — delay base " + throttlerOpts.baseDelayMs + "ms, warm-up " + throttlerOpts.warmUpDays + " días, tope de hoy " + (warmupOff ? "SIN TOPE (WARMUP=off)" : warmupStats.dailyLimit + " mensajes"));
   const watchdog = createWatchdog(engine, { intervalMs: 10000, stuckThresholdMs: 300000 });
   watchdog.start();
-  // Diagnóstico: qué le pasa al bot, por qué y qué hacer (ver informe 10).
-  // `entrada` se construye al levantar el router; la referencia la conecta
-  // al diagnóstico para que los descartes de entrada no queden invisibles.
-  let entrada = null;
-  const salud = crearSalud({
-    engine,
-    entrada: () => (entrada ? entrada.stats() : undefined),
-  });
-  const webServer = createWebServer(engine, {
-    port: parseInt(process.env.PORT || "3000", 10),
-    salud,
-  });
-
-  // Aviso cuando el estado CAMBIA, no en cada vuelta: un bot que grita cada
-  // minuto se ignora. La recuperación también se avisa.
-  let ultimoEstado = "sano";
-  const saludTimer = setInterval(() => {
-    try {
-      const v = salud.veredicto();
-      if (v.estado === ultimoEstado) return;
-      const mejora = v.estado === "sano";
-      ultimoEstado = v.estado;
-      if (mejora) {
-        log.success("Salud: el bot volvió a estar sano. " + v.resumen);
-      } else {
-        log.warn("Salud: " + v.resumen);
-        for (const c of v.causas) {
-          log.warn("  · " + c.codigo + ": " + c.sintoma);
-          log.warn("    qué hacer: " + c.remedio);
-        }
-      }
-    } catch {}
-  }, 60000);
-  if (typeof saludTimer.unref === "function") saludTimer.unref();
-  engine.onShutdown(() => clearInterval(saludTimer));
+  createWebServer(engine, { port: parseInt(process.env.PORT || "3000", 10) });
 
   // Mantenimiento 24/7: temporales viejos fuera y aviso si la RAM se dispara.
-  const tempCleaner = createTempCleaner();
-  tempCleaner.start();
-  const memoryMonitor = createMemoryMonitor();
-  memoryMonitor.start();
-
-  function persistAntibanState() {
-    try {
-      const thState = engine.getThrottler()?.state;
-      if (thState) db.settings.set("warmup_state", JSON.stringify(thState));
-      const rtState = engine.getRitmo()?.estado;
-      if (rtState) db.settings.set("ritmo_state", JSON.stringify(rtState));
-    } catch (err) {
-      log.warn("No se pudo guardar el estado antiban: " + (err?.message || err));
-    }
-  }
-  persistirCuota = persistAntibanState;
-  const persistTimer = setInterval(persistAntibanState, 60000);
-  if (typeof persistTimer.unref === "function") persistTimer.unref();
-
-  engine.onShutdown(async () => {
-    clearInterval(persistTimer);
-    persistAntibanState();
-    watchdog.stop();
-    tempCleaner.stop();
-    memoryMonitor.stop();
-    await webServer.close();
-  });
+  createTempCleaner().start();
+  createMemoryMonitor().start();
 
   // (Antes: si OWNER_NUMBER no existía, `undefined + "@s.whatsapp.net"`
   //  dejaba owner_jid = "undefined@s.whatsapp.net" — owner fantasma.)
@@ -497,15 +344,7 @@ async function main() {
     const ownerJidReal = (ownerAlias || ownerNum) + "@s.whatsapp.net";
     db.settings.set("owner_jid", ownerJidReal);
     engine.setOwnerJid(ownerJidReal);
-    // El número del dueño se muestra TAPADO: la consola queda en el
-    // historial de la terminal y, en Termux, en las capturas que se
-    // comparten. Con los últimos 4 dígitos basta para reconocerlo.
-    const tapar = (n) => (n && n.length > 4 ? "*".repeat(n.length - 4) + n.slice(-4) : "****");
-    if (ownerAlias) {
-      log.info(
-        "Owner móvil MX: acepto «" + tapar(ownerNum) + "» y su forma en JID «" + tapar(ownerAlias) + "».",
-      );
-    }
+    if (ownerAlias) log.info("Owner móvil MX: acepto «" + ownerNum + "» y su forma en JID «" + ownerAlias + "».");
   }
 
   // ── Globals legacy de Ginko ─────────────────────────────────────
@@ -516,14 +355,14 @@ async function main() {
   globalThis.links = {
     channel: process.env.CHANNEL_LINK || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522",
     channelCode: process.env.CHANNEL_CODE || "0029VbDVFpSGJP89hfZUe522",
-    channelName: process.env.CHANNEL_NAME || "Roxi-svg",
+    channelName: process.env.CHANNEL_NAME || "Shin-MD Official Channel",
     instagram: process.env.INSTAGRAM_LINK || "https://www.instagram.com/__ikg.05",
     github: "https://github.com/riokuroxi-svg/Shin-MD",
     support: process.env.SUPPORT_LINK || "",
   };
   globalThis.multiplier = 2;
   globalThis.botname = "Shin-MD";
-  globalThis.conns = [];
+  globalThis.conns = new Map();
   globalThis.mess = {
     default: "⚠️ Comando no disponible.",
     socket: "🚫 *Solo el dueño* puede usar este comando.",
@@ -569,37 +408,12 @@ async function main() {
   const router = createRouter(engine, { onCommand: logCommand, onMessage: logIncomingMessage });
   await router.init();
 
-  // D6: los mensajes que llegan pasan por una puerta con tope. Antes se
-  // lanzaba un handler por mensaje sin límite: una avalancha eran cientos de
-  // handlers peleando por la misma base y la misma CPU.
-  //
-  // Medido: el tope NO acelera nada (con 300 mensajes, el trabajo de CPU tarda
-  // lo mismo con o sin puerta) y cuesta latencia (con 32 a la vez, 300
-  // mensajes tardan 1 s en vez de 0,1 s). Lo que compra es un techo: 300
-  // handlers a la vez dejan de ser posibles. Va con holgura para que una
-  // ráfaga normal pase entera; ENTRADA_CONCURRENTES=0 la apaga.
-  entrada = crearEntrada({
-    concurrentes: process.env.ENTRADA_CONCURRENTES !== undefined
-      ? Number(process.env.ENTRADA_CONCURRENTES)
-      : 32,
-    enEspera: Number(process.env.ENTRADA_EN_ESPERA) || 1000,
-    alDescartar: ({ enEspera, atendidos, descartados }) => {
-      // Un aviso por episodio, no uno por mensaje.
-      if (descartados === 1 || descartados % 50 === 0) {
-        log.warn(
-          "Entrada llena: " + enEspera + " mensajes esperando, " + atendidos +
-            " atendidos, " + descartados + " descartados desde el arranque.",
-        );
-      }
-    },
-  });
-
   const sockModule = connectSocket(engine, {
     sessionDir,
     // Siempre por código: el QR se retiró de la consola.
     pairingMethod: "code",
     pairingNumber: phoneNumber,
-    onMessage: (s, m) => entrada.ejecutar(() => router.handle(s, m)),
+    onMessage: (s, m) => router.handle(s, m),
     onReady: async s => {
       globalThis.sock = s;
       try {

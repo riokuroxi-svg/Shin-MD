@@ -15,22 +15,6 @@ const COLOR_NAMES = ['Rojo', 'Azul', 'Verde', 'Amarillo', 'Morado', 'Naranja'];
 const COLOR_HEX = ['#ff4444', '#4488ff', '#44dd44', '#ffdd44', '#bb44ff', '#ff8844'];
 
 const games = new Map();
-const GAME_TTL_MS = 10 * 60 * 1000;
-
-function setGame(userId, state) {
-  if (state.timer) clearTimeout(state.timer);
-  state.timer = setTimeout(() => {
-    if (games.get(userId) === state) games.delete(userId);
-  }, GAME_TTL_MS);
-  state.timer.unref?.();
-  games.set(userId, state);
-}
-
-function clearGame(userId) {
-  const s = games.get(userId);
-  if (s?.timer) clearTimeout(s.timer);
-  games.delete(userId);
-}
 
 function rand(max) { return Math.floor(Math.random() * max); }
 
@@ -89,7 +73,7 @@ export default {
     let state = games.get(userId);
 
     if (ctx.arg === 'stop' || ctx.arg === 'salir') {
-      clearGame(userId);
+      games.delete(userId);
       return '🚪 Juego terminado.';
     }
 
@@ -102,9 +86,8 @@ export default {
         total: 10,
         current: newRound(),
         startTime: Date.now(),
-        timer: null,
       };
-      setGame(userId, state);
+      games.set(userId, state);
       return doRound(sock, ctx, state);
     }
 
@@ -128,7 +111,7 @@ export default {
     state.startTime = Date.now();
 
     if (state.lives <= 0 || state.round > state.total) {
-      clearGame(userId);
+      games.delete(userId);
       const pct = Math.round(state.score / (state.total * 100) * 100);
       let rank = '⚪ Novato';
       if (pct > 80) rank = '🟣 Leyenda';
@@ -140,7 +123,7 @@ export default {
     }
 
     state.current = newRound();
-    setGame(userId, state);
+    games.set(userId, state);
     return doRound(sock, ctx, state);
   }
 };

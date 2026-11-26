@@ -6,27 +6,24 @@
  */
 import { botJid } from "#serialize";
 import db from '../../src/services/ginko-db.js';
-
 export default {
   command: ['bot'],
   category: 'group',
   description: 'Activar o desactivar el bot en el grupo.',
-  groupOnly: true,
   isAdmin: true,
   run: async ({ msg, sock, args }) => {
-    const chat = db.getChat(msg.chat) || {};
+    const chat = db.getChat(msg.chat);
     const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
-    const namebot = botSettings.botname || botSettings.namebot || global.botname || 'Shin-MD';
+    const namebot = botSettings.namebot || 'Bot';
     const estado = chat.isBanned ? 1 : 0;
-    const sub = args[0]?.toLowerCase();
-    if (sub === 'off') {
+    if (args[0] === 'off') {
       if (estado) return msg.reply('《✧》 El *Bot* ya estaba *desactivado* en este grupo.');
       chat.isBanned = 1;
       db.setChat(msg.chat, 'isBanned', 1);
       return msg.reply(`《✧》 Has *Desactivado* a *${namebot}* en este grupo.`);
     }
-    if (sub === 'on') {
+    if (args[0] === 'on') {
       if (!estado) return msg.reply(`《✧》 *${namebot}* ya estaba *activado* en este grupo.`);
       chat.isBanned = 0;
       db.setChat(msg.chat, 'isBanned', 0);

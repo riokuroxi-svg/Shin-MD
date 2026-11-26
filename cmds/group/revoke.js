@@ -6,15 +6,12 @@
  */
 
 import { state } from '#lib/theme';
-
 export default {
   command: ['revoke', 'restablecer'],
   category: 'group',
   description: 'Restablecer el enlace del grupo.',
-  groupOnly: true,
-  isAdmin: true,
   botAdmin: true,
-  run: async ({ msg, sock }) => {
+  run: async ({ msg, sock, usedPrefix, command }) => {
     try {
       await sock.groupRevokeInvite(msg.chat);
       const code = await sock.groupInviteCode(msg.chat);

@@ -206,7 +206,7 @@ def aviso():
     lineas = [
         "WhatsApp puede sancionar cuentas que automatizan mensajes. Shin-MD trae el anti-ban más",
         "cuidado de su categoría —jitter gaussiano, calentamiento diario y monitor de riesgo—",
-        "pero no lo elimina: el riesgo queda mitigado, no suprimido. Usa un número secundario.",
+        "pero ningún bot es inmune. Si banean tu número personal, la responsabilidad es tuya.",
         "Un chip barato cuesta menos que tu cuenta de siempre.",
     ]
     y = 128

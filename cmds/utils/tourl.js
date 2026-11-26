@@ -5,6 +5,8 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import log from "#logger";
+import FormData from 'form-data';
+import fetch from 'node-fetch';
 import db from '../../src/services/ginko-db.js';
 import { sendInteractive, ctaCopy, ctaUrl } from "#interactive";
 
@@ -29,18 +31,25 @@ async function uploadLitterbox(buffer, mime, time = '24h') {
   const form = new FormData();
   form.append('reqtype', 'fileupload');
   form.append('time', time);
-  form.append(
-    'fileToUpload',
-    new Blob([buffer], { type: mime || 'application/octet-stream' }),
-    generateUniqueFilename(mime),
-  );
-
-  const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
-    method: 'POST',
-    body: form,
-    signal: AbortSignal.timeout(45000),
+  form.append('fileToUpload', buffer, {
+    filename: generateUniqueFilename(mime),
+    contentType: mime
   });
-  const text = (await res.text()).trim();
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 45000);
+  let res, text;
+  try {
+    res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+      method: 'POST',
+      body: form.getBuffer(),
+      headers: form.getHeaders(),
+      signal: ctrl.signal
+    });
+    text = (await res.text()).trim();
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok || !text.startsWith('https://')) {
     throw new Error('Litterbox falló: HTTP ' + res.status + ' - ' + text.slice(0, 120));
   }

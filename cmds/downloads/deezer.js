@@ -13,19 +13,17 @@ export default {
   command: ['deezer', 'dzr', 'deezermusic'],
   category: 'downloads',
   description: 'Buscar música en Deezer (preview de 30 segundos).',
-  run: async ({ msg, sock, usedPrefix, text }) => {
+  run: async ({ msg, sock, usedPrefix, command, text }) => {
     if (!text) return msg.reply(`《✧》 Escribe qué canción buscar.\n> Ejemplo: ${usedPrefix}deezer Bad Bunny Diles`);
     try {
       await msg.react('🎧');
+      // Buscar
       const url = `https://api.deezer.com/search?q=${encodeURIComponent(text)}&limit=1`;
-      const res = await runGuarded('deezer', async () => fetch(url, { signal: AbortSignal.timeout(15000) }));
+      const res = await runGuarded('deezer', async () => fetch(url));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const track = data?.data?.[0];
-      if (!track) {
-        await msg.react('❌');
-        return msg.reply('《✧》 No encontré esa canción en Deezer.');
-      }
+      if (!track) return msg.reply('《✧》 No encontré esa canción en Deezer.');
 
       const caption = [
         `🎧 *Deezer*`,
@@ -39,24 +37,27 @@ export default {
         '_Se envía un preview de 30s (Deezer no da canciones completas gratis)._',
       ].join('\n');
 
-      const cover = track.album?.cover_medium || track.album?.cover;
-      if (cover) {
+      // Enviar portada + info
+      if (track.album?.cover_medium || track.album?.cover) {
+        const cover = track.album?.cover_medium || track.album?.cover;
         await sock.sendMessage(msg.chat, { image: { url: cover }, caption }, { quoted: msg });
       } else {
         await msg.reply(caption);
       }
 
+      // Enviar preview de audio (30s)
       if (track.preview) {
-        const audioRes = await fetch(track.preview, { signal: AbortSignal.timeout(15000) });
+        const audioRes = await fetch(track.preview);
         if (audioRes.ok) {
           const buf = Buffer.from(await audioRes.arrayBuffer());
           await sock.sendMessage(msg.chat, {
             audio: buf,
             mimetype: 'audio/mpeg',
-            fileName: `${track.artist?.name || 'Artista'} - ${track.title}.mp3`,
+            fileName: `${track.artist.name} - ${track.title}.mp3`,
           }, { quoted: msg });
         }
       } else {
+        if (!(track.album?.cover_medium)) await msg.reply(caption);
         await msg.reply('⚠️ Esta canción no tiene preview disponible.');
       }
       await msg.react('✔️');

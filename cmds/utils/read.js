@@ -11,20 +11,19 @@ export default {
   command: ['readviewonce', 'read', 'readvo'],
   category: 'utils',
   description: 'Convertir imagen/video de una vista a contenido.',
-  run: async ({ msg, sock }) => {
+  run: async ({ msg, sock, usedPrefix, command }) => {
     const quoted = msg.quoted;
     if (!quoted) {
       return msg.reply('《✧》 Por favor, responde a un mensaje "ViewOnce" para ver su contenido.');
     }
     try {
       await msg.react('🕒');
-      const raw = quoted.message || (quoted.type && quoted.msg ? { [quoted.type]: quoted.msg } : quoted);
-      const content = extractMessageContent(raw) || raw;
-      const messageType = content ? Object.keys(content).find(k => /^(image|video|audio)Message$/i.test(k)) : null;
-      const mediaMessage = messageType ? content[messageType] : null;
-      if (!messageType || !mediaMessage) {
-        return msg.reply('《✧》 No se pudo extraer el contenido multimedia.');
+      const content = extractMessageContent(quoted.message || quoted);
+      if (!content) {
+        return msg.reply('《✧》 No se pudo extraer el contenido.');
       }
+      const messageType = Object.keys(content)[0];
+      const mediaMessage = content[messageType];
       const stream = await downloadContentFromMessage(mediaMessage, messageType.replace('Message', '').toLowerCase());
       if (!stream) {
         return msg.reply('《✧》 No se pudo descargar el contenido.');

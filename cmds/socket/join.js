@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import { esDuenoSocket } from "#permissions";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['join', 'unir'],
@@ -14,7 +13,8 @@ export default {
   run: async ({ msg, sock, args }) => {
     const idBot = botJid(sock);
     const config = db.getSettings(idBot) || {};
-    if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
+    const isOwner2 = [idBot, ...(config.owner ? [config.owner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
+    if (!isOwner2) return msg.reply(global.mess.socket);
     if (!args[0]) return msg.reply('《✧》 Ingresa el enlace del grupo para unir el bot.');
     const linkRegex = /chat\.whatsapp\.com\/([0-9A-Za-z]{20,24})/i;
     const match = args[0].match(linkRegex);

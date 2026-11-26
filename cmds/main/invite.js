@@ -5,12 +5,9 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import { mismaPersona } from "#lib/lid";
+import defaultAvatar from "#lib/default-avatar";
 import db from '../../src/services/ginko-db.js';
-import { tiempoLargo as msToTime, esperaRestante } from "#lib/tiempo";
-
-/** Lo mínimo entre dos invitaciones. */
-const ESPERA_INVITAR_MS = 3600000;
+import { tiempoLargo as msToTime } from "#lib/tiempo";
 const linkRegex = /chat\.whatsapp\.com\/([0-9A-Za-z]{20,24})(?:\s+[0-9]{1,3})?/i;
 
 async function getGroupName(sock, chatId) {
@@ -28,15 +25,16 @@ export default {
   description: 'Invitar el bot a un grupo.',
   run: async ({ msg, sock, args }) => {
     db.setCreate('users', [msg.sender], 'jointime', 0);
-    const user = db.getUser(msg.sender);
+    let user = db.getUser(msg.sender);
     const grupo = msg.isGroup ? await getGroupName(sock, msg.chat) : 'Chat privado';
     const botId = botJid(sock);
     const botSettings = db.getSettings(botId) || {};
     const botname = botSettings.botname || 'Bot';
     const dueño = botSettings.owner || '';
-    const { esperaMs } = esperaRestante(user.jointime, ESPERA_INVITAR_MS);
-    if (esperaMs > 0) {
-      return msg.reply(`ꕥ Espera *${msToTime(esperaMs)}* para volver a enviar otra invitacion.`);
+    const cooldown = 3600000;
+    const nextTime = user.jointime + cooldown;
+    if (Date.now() - user.jointime < cooldown) {
+      return msg.reply(`ꕥ Espera *${msToTime(nextTime - Date.now())}* para volver a enviar otra invitacion.`);
     }
     if (!args || !args.length) {
       return msg.reply('《✧》 Ingresa el enlace para invitar al bot a tu grupo.');
@@ -46,8 +44,9 @@ export default {
     if (!match || !match[1]) {
       return msg.reply('《✧》 El enlace ingresado no es válido o está incompleto.');
     }
-    const isOficialBot = !!(botId && global.sock?.user?.id && mismaPersona(botId, botJid(global.sock)));
+    const isOficialBot = botId === ((global.sock?.user?.id?.split(':')[0] ?? null) && ((global.sock?.user?.id?.split(':')[0] ?? null) && (botJid(global.sock))));
     const botType = isOficialBot ? 'Principal/Owner' : 'Sub Bot';
+    const pp = await sock.profilePictureUrl(msg.sender, 'image').catch(() => defaultAvatar());
     const userName = user?.name || 'Usuario';
     const sugg = `❀ 𝗦𝗢𝗟𝗜𝗖𝗜𝗧𝗨𝗗 𝗥𝗘𝗖𝗜𝗕𝗜𝗗𝗔
 

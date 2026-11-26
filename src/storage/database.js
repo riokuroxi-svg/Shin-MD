@@ -38,9 +38,6 @@ export function createDatabase(dbPath) {
 
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA synchronous = NORMAL;");
-  for (const sufijo of ["-wal", "-shm"]) {
-    try { if (fs.existsSync(resolved + sufijo)) fs.chmodSync(resolved + sufijo, 0o600); } catch {}
-  }
   // Complemento de B1.3: el checkpoint del commit a68059b solo cubre
   // auth.js. La DB principal (usuarios, economía, settings) también usa
   // WAL: consolidarla al abrir evita arrastrar un WAL huérfano tras un
@@ -91,9 +88,7 @@ export function createDatabase(dbPath) {
     const n = importJsonFallback(db, resolved + ".json");
     if (n > 0) log.info("Datos recuperados del respaldo JSON: " + n + " filas");
   } catch (err) {
-    log.error("Migración de base falló; se conservó el respaldo: " + (err.message || err));
-    try { db.close(); } catch {}
-    throw err;
+    log.warn("No se pudo leer el respaldo JSON de la base: " + (err.message || err));
   }
 
   // Helpers de settings
@@ -122,12 +117,10 @@ export function createDatabase(dbPath) {
 
   function close() {
     try { db.close(); } catch {}
-    if (defaultDb === inst) defaultDb = null;
     log.gray("Database closed");
   }
 
-  const inst = { db, migrate, settings, close };
-  return inst;
+  return { db, migrate, settings, close };
 }
 
 let defaultDb = null;

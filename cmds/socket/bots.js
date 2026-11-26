@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
-import { resolveParticipantJid } from '#serialize';
-import { mismaPersona } from '#lib/lid';
 import fs from 'fs';
 import path from 'path';
 import db from '../../src/services/ginko-db.js';
@@ -45,8 +43,7 @@ export default {
     const from = msg.key.remoteJid;
     const isAll = args[0]?.toLowerCase() === 'all';
     const groupMetadata = msg.isGroup ? await sock.groupMetadata(from).catch(() => null) : null;
-    const groupParticipants = (groupMetadata?.participants || []).map((p) => resolveParticipantJid(p, sock) || p.id).filter(Boolean);
-    const isInGroup = (jid) => groupParticipants.some((p) => mismaPersona(p, jid));
+    const groupParticipants = (groupMetadata?.participants || []).map((p) => p.id);
     const mainNumber = cleanNumber(global.sock?.user?.id || sock?.user?.id || '');
     const mainBotJid = mainNumber ? `${mainNumber}@s.whatsapp.net` : '';
     const activeBots = getActiveBotNumbers();
@@ -56,14 +53,14 @@ export default {
     const mentionedJid = [];
     const formatBot = async (number, label) => {
       const jid = `${number}@s.whatsapp.net`;
-      if (!isAll && !isInGroup(jid)) return null;
+      if (!isAll && !groupParticipants.includes(jid)) return null;
       mentionedJid.push(jid);
       const data = db.getSettings(jid);
       const name = data?.namebot || 'Bot';
       return `- [${label} *${name}*] › @${number}`;
     };
     const isMainActive = Boolean(mainNumber);
-    if (isMainActive && mainBotJid && (isAll || isInGroup(mainBotJid))) {
+    if (isMainActive && mainBotJid && (isAll || groupParticipants.includes(mainBotJid))) {
       const data = db.getSettings(mainBotJid);
       const name = data?.namebot || 'Bot';
       mentionedJid.push(mainBotJid);

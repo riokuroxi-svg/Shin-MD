@@ -10,9 +10,8 @@ export default {
   command: ['hidetag', 'tag'],
   category: 'group',
   description: 'Enviar un mensaje mencionando a todos los usuarios del grupo.',
-  groupOnly: true,
   isAdmin: true,
-  run: async ({ msg, sock, args, participants }) => {
+  run: async ({ msg, sock, args, usedPrefix, command, text, groupMetadata, participants }) => {
     const groupParticipants = participants || [];
     const mentions = groupParticipants.map(p => p.id).filter(Boolean);
     const userText = (args.join(' ') || '').trim();

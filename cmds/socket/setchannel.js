@@ -5,7 +5,6 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 import { botJid } from "#serialize";
-import { esDuenoSocket } from "#permissions";
 import db from '../../src/services/ginko-db.js';
 export default {
   command: ['setchannel', 'setbotchannel'],
@@ -13,8 +12,9 @@ export default {
   description: 'Cambiar el canal del bot.',
   run: async ({ msg, sock, args }) => {
     const idBot = botJid(sock);
-    const config = db.getSettings(idBot) || {};
-    if (!esDuenoSocket(sock, msg.sender, config)) return msg.reply(global.mess.socket);
+    let config = db.getSettings(idBot) || {};
+    const isOwner2 = [idBot, ...(config.owner ? [config.owner] : []), ...global.owner.map(num => num + '@s.whatsapp.net')].includes(msg.sender);
+    if (!isOwner2) return msg.reply(global.mess.socket);
     const value = args.join(' ').trim();
     if (!value) {
       return msg.reply(`❀ Ingresa el enlace de un canal de WhatsApp.\n\nEjemplo:\n*${msg.usedPrefix}setchannel* https://whatsapp.com/channel/XXXXXXXXXXXXXX`);

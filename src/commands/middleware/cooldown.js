@@ -50,14 +50,7 @@ export function createCooldown(opts) {
     const key = "spam:" + userId;
     const count = cache.get(key) || 0;
     if (count >= MAX_REQUESTS) return true;
-    // El TTL es el de la PRIMERA marca de la ventana: antes, cada mensaje
-    // lo renovaba otra vez y la ventana de un minuto no cerraba jamás
-    // mientras el usuario siguiera escribiendo (el «10 por minuto» se
-    // convertía en «10 y luego bloqueo hasta que pares»).
-    const hasta = cache.get(key + ":hasta");
-    const restante = hasta ? Math.max(1000, hasta - Date.now()) : WINDOW_MS;
-    if (!hasta) cache.set(key + ":hasta", Date.now() + WINDOW_MS, WINDOW_MS);
-    cache.set(key, count + 1, restante);
+    cache.set(key, count + 1, WINDOW_MS);
     return false;
   }
 
@@ -72,12 +65,8 @@ export function createCooldown(opts) {
    *   usan las pruebas para simular el paso del tiempo.
    * @returns {boolean} true si hay que ignorar el mensaje
    */
-  function check({ senderId, cmd, text, ahora, esDueno }) {
-    // Solo el DUEÑO se salta el freno. Antes este atajo se aplicaba a
-    // cualquiera que invocara un comando ownerOnly: un desconocido mandaba
-    // `.get` en bucle y el bot le contestaba el rechazo a cada mensaje,
-    // sin techo y sin pasar por Brain (1 entrada = 1 salida).
-    if (cmd && cmd.ownerOnly && esDueno) return false;
+  function check({ senderId, cmd, text, ahora }) {
+    if (cmd && cmd.ownerOnly) return false; // el owner no se limita
 
     // Capa nueva (Shin-Lab): ráfagas, texto repetido y flood de comandos.
     // `ahora` solo lo usan las pruebas para simular el paso del tiempo.

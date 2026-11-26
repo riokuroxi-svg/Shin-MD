@@ -20,11 +20,10 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import axios from "axios";
-import { getAudioUrl, invalidateAudioUrl } from "#downloader";
+import { getAudioUrl } from "#downloader";
 import { searchYouTube, getVideoInfoById } from "#lib/youtubeSearch";
 import { fastFetch, globalFetchCache, isYtdlpAvailable, resolveYtdlpBinary } from "#lib/fastFetch";
 import { downloadAudioSourceYtdlp, processMp3ForWhatsApp, isMp3Valid } from "#lib/mp3Utils";
-import { obtenerAudioPo } from "#lib/po-play";
 import log from "#logger";
 
 // ── Red y archivos ──────────────────────────────────────────
@@ -42,9 +41,12 @@ export async function descargarBuffer(url, timeoutMs = 5000) {
 // ── Caché de audio: RAM y disco ─────────────────────────────
 const MAX_MB_AUDIO = 50 * 1024 * 1024;
 
+const MB = 1024 * 1024;
+
 const AUDIO_CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_AUDIO_CACHE_ENTRIES = 10;
 const DISK_AUDIO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_DISK_AUDIO_CACHE_BYTES = 350 * MB;
 const DISK_AUDIO_CACHE_DIR = path.join(process.cwd(), "cache", "play-audio");
 
 
@@ -143,14 +145,8 @@ export async function getVideoInfo(input, video_id) {
   return null;
 }
 
-// En modo PO, el alias directo también necesita resolver búsquedas a un ID.
-export async function resolverAudioPoDirecto(job, buscar = getVideoInfo) {
-  if (job.videoId) return job;
-  const info = await buscar(job.title || job.url, null);
-  const id = getVideoId(info?.videoId || info?.url || "");
-  if (!id) throw new Error("No se encontró un video para el audio solicitado");
-  return { ...job, videoId: id, url: `https://youtu.be/${id}`, title: info.title || job.title, channel: info.author?.name || job.channel };
-}
+// ── Caché RAM + Disco de Audio Procesado ─────────────────────
+
 
 // ── Caché RAM + Disco de Audio Procesado ─────────────────────
 const audioProcesadoCache = new Map();
@@ -212,12 +208,8 @@ async function descargarAudioFuenteYtdlp(url) {
   return { buffer: src.buffer, origen: "raw-local", ext: src.ext };
 }
 
-export async function descargarAudioSmart(job, deps = {}) {
-  const resolver = deps.getAudioUrl || getAudioUrl;
-  const fetchStream = deps.fastFetch || fastFetch;
-  const invalidar = deps.invalidateAudioUrl || invalidateAudioUrl;
-
-  // 1. Probar yt-dlp local si está disponible.
+async function descargarAudioSmart(job) {
+  // 1. Probar yt-dlp local si está disponible
   if (ytdlpDisponible && job.url) {
     try {
       const src = await descargarAudioFuenteYtdlp(job.url);
@@ -225,53 +217,21 @@ export async function descargarAudioSmart(job, deps = {}) {
     } catch {}
   }
 
-  // 2. Un CDN puede entregar una URL firmada que ya caducó o responder 502.
-  //    Invalida esa URL y prueba una vez con cada proveedor alternativo.
+  // 2. Probar Turbo Downloader CDN (Spotify Izuka, Nexray, SoundCloud Progressive)
   const query = job.title ? `${job.title} ${job.channel || ""}` : (job.url || "");
-  const excluidos = new Set();
-  let ultimoError = null;
-
-  for (let intento = 0; intento < 3; intento++) {
-    let audioData;
-    try {
-      audioData = await resolver(query, {
-        refresh: intento > 0,
-        excludeProviders: [...excluidos],
-      });
-    } catch (error) {
-      if (!ultimoError) ultimoError = error;
-      break;
-    }
-
-    if (!audioData?.url) break;
-    const proveedor = audioData.provider || `fuente-${intento + 1}`;
-
-    try {
-      const res = await fetchStream(audioData.url, { timeout: 20000 });
-      if (!res?.ok) {
-        const status = Number(res?.status) || 0;
-        try { await res?.body?.cancel(); } catch {}
-        throw new Error(`HTTP ${status || "desconocido"} al descargar stream`);
-      }
-
-      const buffer = Buffer.from(await res.arrayBuffer());
-      if (buffer.length < 20 * 1024) throw new Error("Audio corrupto o muy pequeño");
-      return { buffer, origen: proveedor || "turbo-cdn", seconds: audioData.seconds || 0 };
-    } catch (error) {
-      ultimoError = error;
-      excluidos.add(proveedor);
-      try { await invalidar(query); } catch {}
-      if (intento < 2) log.warn(`[play] stream de ${proveedor} falló (${error.message}); probando otra fuente`);
-    }
+  const audioData = await getAudioUrl(query);
+  if (audioData?.url) {
+    const res = await fastFetch(audioData.url, { timeout: 20000 });
+    if (!res.ok) throw new Error(`HTTP ${res.status} al descargar stream`);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length < 20 * 1024) throw new Error("Audio corrupto o muy pequeño");
+    return { buffer, origen: audioData.provider || "turbo-cdn", seconds: audioData.seconds || 0 };
   }
 
-  throw ultimoError || new Error("No se pudo obtener el audio de ninguna fuente");
+  throw new Error("No se pudo obtener el audio de ninguna fuente");
 }
 
 async function prepararAudioProcesado(job) {
-  const modo = String(process.env.SHIN_PO_MODE || "legacy").trim();
-  if (modo === "bgutil") return await obtenerAudioPo(job);
-  if (modo !== "legacy") throw new Error("Modo de audio no reconocido");
   const title = sanitizeFilename(job.title || "Audio");
   const cached = leerAudioDiskCache(job);
   if (cached) return cached;
@@ -307,8 +267,7 @@ async function prepararAudioProcesado(job) {
 
 export function obtenerAudioProcesado(job) {
   limpiarAudioCache();
-  const id = audioCacheKey(job);
-  const key = id ? `${String(process.env.SHIN_PO_MODE || "legacy").trim()}:${id}` : null;
+  const key = audioCacheKey(job);
   const cached = key ? audioProcesadoCache.get(key) : null;
   if (cached && cached.expires > Date.now()) return cached.promise;
   const promise = prepararAudioProcesado(job).catch(e => {
@@ -324,8 +283,6 @@ export function obtenerAudioProcesado(job) {
  * apenas se envía la tarjeta visual, eliminando la espera del usuario.
  */
 export function precalentarAudio(job) {
-  // En el modo experimental no se solicitan tokens antes de que el usuario elija audio.
-  if (String(process.env.SHIN_PO_MODE || "legacy").trim() === "bgutil") return;
   obtenerAudioProcesado(job).catch(() => {});
 }
 

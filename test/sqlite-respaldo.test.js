@@ -125,8 +125,8 @@ test("puente: los datos del respaldo pasan a SQLite real una sola vez", async ()
   const { createDatabase } = await import("../src/storage/database.js");
   const real = createDatabase(ruta);
   assert.equal(real.settings.get("prefijo"), "!");
-  assert.ok(fs.existsSync(ruta + ".json"), "el JSON original se conserva tras copiarlo");
-  assert.ok(!fs.existsSync(ruta + ".json.importado"), "la migración no mueve el original");
+  assert.ok(fs.existsSync(ruta + ".json.importado"), "el JSON se renombra tras copiarlo");
+  assert.ok(!fs.existsSync(ruta + ".json"));
 
   // 3) Un dato nuevo no se pisa en el siguiente arranque.
   real.settings.set("prefijo", "#");

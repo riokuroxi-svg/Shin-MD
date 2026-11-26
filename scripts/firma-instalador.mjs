@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, "..");
+const INSTALADOR = path.join(RAIZ, "install.sh");
 const ARRANQUE = path.join(RAIZ, "shin.sh");
 const RESUMEN = path.join(RAIZ, "SHA256SUMS");
 

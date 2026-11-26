@@ -11,32 +11,10 @@ import log from "#logger";
 // los chats. Tras este tiempo se trata como fallo y se sigue con el siguiente.
 // (La operación huérfana puede terminar más tarde en segundo plano; no es
 // cancelable, pero ya no bloquea nada.)
-// 120 s dejaba la cola entera parada dos minutos por una sola promesa colgada
-// (medido en el banco: un envío colgado bloquea a todos los demás). 20 s cubre
-// de sobra un envío normal —el servicio p95 medido fue de 83 ms— y libera la cola.
-const SEND_TIMEOUT_MS = 20000;
+const SEND_TIMEOUT_MS = 120000;
 
 // Marca de «no sé si salió». Ver el comentario de abajo, en el reintento.
 export const CODIGO_INCIERTO = "ENVIO_INCIERTO";
-// WhatsApp restringe escribir a contactos nuevos (error 463, «reachout timelock»).
-export const CODIGO_TIMELOCK = "REACHOUT_TIMELOCK";
-// La cola tiene techo: cuando se llena, se dice en vez de crecer hasta el OOM.
-export const CODIGO_COLA_LLENA = "COLA_LLENA";
-
-/**
- * ¿El error es un timelock del servidor (463)? No es un fallo de red: la sesión
- * está bien y los chats abiertos siguen saliendo; lo que WhatsApp bloquea es
- * escribir a contactos nuevos. Reintentar aquí es lo peor que se puede hacer.
- * @param {unknown} err
- * @returns {boolean}
- */
-export function esTimelock(err) {
-  if (!err) return false;
-  const e = /** @type {any} */ (err);
-  if (e.code === CODIGO_TIMELOCK) return true;
-  const texto = String(e.message || e);
-  return /error\s*463|reachout.?timelock|restrict_all_companions/i.test(texto);
-}
 
 function withTimeout(promise, ms, label) {
   let t;
@@ -77,82 +55,12 @@ export function esFalloDeConexion(err) {
 
 export function createSendQueue(throttler, health, opts = {}) {
   const timeoutMs = opts.timeoutMs || SEND_TIMEOUT_MS;
-  // El ritmo humano (conversaciones nuevas, reloj, tecleo). Es opcional: si no
-  // llega, la cola se comporta como siempre y nada de esto estorba.
-  const ritmo = opts.ritmo || null;
-  // Las piezas de sesión (calma tras reconectar, descanso diario). Opcionales.
-  const sesion = opts.sesion || null;
   // Cuánto puede esperar un mensaje a que vuelva la conexión antes de
   // darse por perdido. 5 min cubre el corte típico de datos móviles; más
   // allá de eso el que escribió ya se fue.
   const esperaReconexionMs = opts.esperaReconexionMs || 300000;
-  // D8: se avisa de cada envío que salió, para que quien lleva la cuenta de la
-  // cuota pueda guardarla sin esperar al temporizador de un minuto.
-  const alEnviar = typeof opts.alEnviar === "function" ? opts.alEnviar : null;
-  function avisarEnvio() {
-    if (!alEnviar) return;
-    try { alEnviar(); } catch {}
-  }
-  // Anti-ban: cuántas veces se reintenta un fallo normal y cuánto se espera.
-  // Antes eran 2 intentos separados por un tiempo fijo: todos los mensajes que
-  // fallaban a la vez reintentaban a la vez, y eso es un pico.
-  const reintentos = opts.reintentos !== undefined ? Math.max(0, Number(opts.reintentos) || 0) : 3;
-  const reintentoBaseMs = opts.reintentoBaseMs || 2000;
-  const reintentoTopeMs = opts.reintentoTopeMs || 60000;
-  // Anti-ban: techo global de salida por minuto, independiente del ritmo por
-  // mensaje. El ritmo dice «este mensaje espera 1,2 s»; esto dice «en total no
-  // salen más de N por minuto», que es como lo cuenta el servidor.
-  const maxPorMinuto = Number(opts.maxPorMinuto) || 0;
-  // Arranca con una ráfaga pequeña, no con el minuto entero: si el cubo empieza
-  // lleno, al reiniciar el bot salen N mensajes de golpe — justo el pico que se
-  // quiere evitar. La ráfaga es configurable por si hace falta más margen.
-  const rafagaInicial = Math.min(maxPorMinuto, Number(opts.rafagaInicial) || 10);
-  let fichas = maxPorMinuto ? rafagaInicial : 0;
-  let ultimaRecarga = Date.now();
-  function recargarFichas() {
-    if (!maxPorMinuto) return;
-    const ahora = Date.now();
-    fichas = Math.min(maxPorMinuto, fichas + ((ahora - ultimaRecarga) * maxPorMinuto) / 60000);
-    ultimaRecarga = ahora;
-  }
-  function hayFicha() {
-    if (!maxPorMinuto) return true;
-    recargarFichas();
-    return fichas >= 1;
-  }
-  function gastarFicha() {
-    if (!maxPorMinuto) return;
-    recargarFichas();
-    fichas = Math.max(0, fichas - 1);
-  }
-  function msHastaFicha() {
-    if (!maxPorMinuto) return 0;
-    return Math.max(50, Math.ceil(((1 - fichas) * 60000) / maxPorMinuto));
-  }
-
-  /**
-   * Espera antes del intento `intento` (1 = primer reintento).
-   * Exponencial y con jitter: dos fallos simultáneos no vuelven a salir juntos.
-   */
-  function esperaDeReintento(intento, messageLength) {
-    const exponencial = Math.min(reintentoTopeMs, reintentoBaseMs * 2 ** (intento - 1));
-    const conJitter = Math.round(exponencial * (0.5 + Math.random() * 0.5));
-    const porRitmo = throttler ? throttler.calcDelay({ messageLength: messageLength || 0 }) : 0;
-    return Math.max(conJitter, porRitmo);
-  }
-  // Techo de la cola. 200 000 tareas medidas en el banco son ~173 MB de heap;
-  // a partir de cierto punto es mejor decir «no» que quedarse sin memoria.
-  const maxCola = Number(opts.maxCola) > 0 ? Number(opts.maxCola) : 2000;
-  // Avisos hacia afuera. La cola no sabe hablar por WhatsApp: avisa y el boot decide.
-  const alFallar = typeof opts.alFallar === "function" ? opts.alFallar : null;
-  const alRechazar = typeof opts.alRechazar === "function" ? opts.alRechazar : null;
-  const avisarTimelock = typeof opts.avisarTimelock === "function" ? opts.avisarTimelock : null;
   const queue = [];
   let processing = false;
-  let rechazadas = 0;      // no entraron: la cola estaba llena
-  let timelocks = 0;       // veces que el servidor nos frenó con 463
-  let timelockHasta = 0;   // fin del timelock activo (0 = ninguno)
-  let colaMuerta = 0;      // enviados que terminaron sin saber si llegaron
   // La pausa lleva MOTIVOS, no un booleano. Antes, cualquier `resume()`
   // reanudaba la cola aunque hubiera otro motivo para tenerla parada: el
   // watchdog la pausaba por riesgo alto y la reconexión la reanudaba tres
@@ -173,39 +81,6 @@ export function createSendQueue(throttler, health, opts = {}) {
   // una vez por minuto, para siempre, sin decir cuánto era el tope ni cuándo
   // se libera. Ahora se avisa UNA sola vez por episodio y con datos útiles.
   let avisoTopeDado = false;
-  let avisoRitmoDado = null;
-  let despertar = null;
-  let despertarReanudacion = null;
-  /** ¿Hay timelock activo ahora? Si venció, se limpia y se dice. */
-  function enTimelock() {
-    if (!timelockHasta) return false;
-    if (Date.now() >= timelockHasta) {
-      timelockHasta = 0;
-      log.info("Timelock terminado: vuelve el envío a contactos nuevos");
-      return false;
-    }
-    return true;
-  }
-
-  /**
-   * Registra un 463. Respeta la hora de fin que mandó el servidor; si no la
-   * mandó, asume 24 h. Avisa una sola vez por bloqueo.
-   */
-  function anotarTimelock(fin) {
-    const yaActivo = enTimelock();
-    timelocks += 1;
-    const DURA_POR_DEFECTO = 24 * 3600 * 1000;
-    timelockHasta = Number(fin) > Date.now() ? Number(fin) : Date.now() + DURA_POR_DEFECTO;
-    log.warn(
-      "Timelock (463): WhatsApp restringe escribir a contactos NUEVOS hasta " +
-        new Date(timelockHasta).toISOString() +
-        ". Los chats ya abiertos siguen saliendo; la sesión es válida y no hay que reconectar.",
-    );
-    if (!yaActivo && avisarTimelock) {
-      try { avisarTimelock({ hasta: timelockHasta, timelocks }); } catch {}
-    }
-  }
-
   function avisarTopeDiario(th) {
     if (avisoTopeDado) return;
     avisoTopeDado = true;
@@ -218,10 +93,6 @@ export function createSendQueue(throttler, health, opts = {}) {
       detalle = ` (${s.msgsToday}/${s.dailyLimit} hoy · día ${s.day} del warm-up · se reinicia en ${horas}h ${mins}m)`;
     } catch {}
     log.warn("Tope diario del warm-up alcanzado" + detalle);
-    // Esto antes solo existía en el log. Ahora el boot puede avisar por chat.
-    if (typeof opts.avisarTope === "function") {
-      try { opts.avisarTope({ detalle, stats: th.getStats ? th.getStats() : null }); } catch {}
-    }
     log.warn("Los envíos normales esperan; .menu/.ping y las reacciones siguen pasando. Ajusta con WARMUP_START_MSGS / WARMUP_MAX_MSGS / WARMUP=off en .env, o revísalo con .warmup");
   }
 
@@ -235,277 +106,153 @@ export function createSendQueue(throttler, health, opts = {}) {
    * @param {number} topeMs
    */
   async function esperarReanudacion(topeMs) {
-    if (!paused) return true;
-    const fin = Date.now() + Math.max(0, topeMs);
+    const fin = Date.now() + topeMs;
     while (paused && Date.now() < fin) {
-      const restante = fin - Date.now();
-      if (restante <= 0) break;
-      await new Promise((r) => {
-        const timer = setTimeout(() => {
-          despertarReanudacion = null;
-          r();
-        }, Math.min(250, restante));
-        despertarReanudacion = () => {
-          clearTimeout(timer);
-          despertarReanudacion = null;
-          r();
-        };
-      });
+      await new Promise((r) => setTimeout(r, 250));
     }
     return !paused;
   }
 
   function enqueue(fn, opts) {
     opts = opts || {};
-    if (queue.length >= maxCola) {
-      rechazadas += 1;
-      const e = Object.assign(
-        new Error("Cola llena (" + queue.length + "/" + maxCola + "): el mensaje no se acepta"),
-        { code: CODIGO_COLA_LLENA, profundidad: queue.length, maxCola },
-      );
-      log.warn(e.message + " (" + rechazadas + " rechazados en esta sesión)");
-      if (alRechazar) {
-        try { alRechazar({ profundidad: queue.length, maxCola, rechazadas }); } catch {}
-      }
-      return Promise.reject(e);
-    }
     return new Promise((resolve, reject) => {
       queue.push({ fn, opts, resolve, reject, ts: Date.now() });
-      // Si la cola está esperando (tope, ritmo o descanso), se despierta: una
-      // respuesta que sí podía salir no debe esperar detrás de un bloqueado.
-      if (despertar) {
-        const d = despertar;
-        despertar = null;
-        d();
-      }
       if (!processing) process();
     });
-  }
-
-  /**
-   * Duerme `ms` pero se despierta si entra una tarea nueva o la cola se pausa.
-   */
-  async function esperarTurno(ms) {
-    const fin = Date.now() + Math.max(50, ms);
-    while (Date.now() < fin) {
-      if (paused || queue.length === 0) return;
-      const tramo = Math.min(250, fin - Date.now());
-      let despertado = false;
-      await new Promise((r) => {
-        const timer = setTimeout(() => {
-          despertar = null;
-          r();
-        }, tramo);
-        despertar = () => {
-          despertado = true;
-          clearTimeout(timer);
-          despertar = null;
-          r();
-        };
-      });
-      if (despertado || paused) return;
-    }
   }
 
   async function process() {
     if (processing || paused) return;
     processing = true;
 
-    try {
-      while (queue.length > 0) {
-        if (paused) return;
+    while (queue.length > 0) {
+      if (paused) { processing = false; return; }
 
-        // B1.4: con el tope diario del warm-up alcanzado, las tareas
-        // normales esperan; si hay una tarea de prioridad en la cola,
-        // se adelanta y pasa (nunca se queda 60s detrás del bloqueo).
-        // B2.2: lo mismo para las tareas que no gastan cuota (reacciones,
-        // borrados, ediciones): no tiene sentido congelarlas 60s por un
-        // tope que ni siquiera consumen.
-        if (throttler && throttler.canSend()) avisoTopeDado = false;
-        if (ritmo && ritmo.evaluar("", {}).ok) avisoRitmoDado = null;
-
-        // Quién puede salir ahora. Pasan siempre las de prioridad y las que no
-        // gastan cuota (reacciones, borrados, ediciones): si no, con la cola
-        // frenada el bot no podría ni quitar un mensaje.
-        const puedePasar = (t) => {
-          delete t.esperaDescanso;
-          delete t.esperaRitmo;
-          const o = t.opts || {};
-          if (o.isPriority || o.countsForQuota === false) return true;
-          // Descanso diario: los envíos normales duermen; lo urgente y las
-          // respuestas ya pasaron por el atajo de arriba.
-          if (sesion?.activo && sesion.descanso.enDescanso() && !o.esRespuesta) {
-            t.esperaDescanso = true;
-            return false;
-          }
-          // Timelock: solo frena a los contactos nuevos. Un mensaje a un chat ya
-          // abierto no tiene por qué esperar 24 h por un bloqueo de prospección.
-          if (enTimelock() && o.isNewContact && !o.isPriority) {
-            t.esperaTimelock = true;
-            return false;
-          }
-          if (throttler && !throttler.canSend()) return false;
-          if (!hayFicha()) {
-            t.esperaLimite = true;
-            return false;
-          }
-          if (ritmo) {
-            // Sin `ahora`: el ritmo tiene su propio reloj (inyectable en las
-            // pruebas). Pasarle Date.now() aquí rompía la calidez del chat.
-            const d = ritmo.evaluar(o.destino || "");
-            if (!d.ok) {
-              t.esperaRitmo = d;
-              return false;
-            }
-          }
-          return true;
-        };
-
-        const idx = queue.findIndex(puedePasar);
-        if (idx === -1) {
-          if (queue[0]?.esperaDescanso) {
-            // En descanso se revisa cada minuto: no hay nada que calcular.
-            await esperarTurno(60000);
-          } else if (enTimelock() && queue.some((t) => t.esperaTimelock)) {
-            await esperarTurno(Math.max(500, Math.min(30000, timelockHasta - Date.now())));
-          } else if (!hayFicha()) {
-            await esperarTurno(msHastaFicha());
-          } else if (throttler && !throttler.canSend()) {
-            avisarTopeDiario(throttler);
-            await esperarTurno(60000);
-          } else {
-            // El ritmo frena: se duerme lo que falta (el propio ritmo lo calcula)
-            // en vez de 60 s a ciegas, y con un mínimo para no girar en vacío.
-            const espera = queue[0]?.esperaRitmo || { motivo: null, esperarMs: 1000 };
-            if (avisoRitmoDado !== espera.motivo) {
-              avisoRitmoDado = espera.motivo;
-              if (typeof opts.avisarRitmo === "function") opts.avisarRitmo(espera.motivo);
-            }
-            await esperarTurno(Math.max(50, Math.min(60000, espera.esperarMs || 1000)));
-          }
+      // B1.4: con el tope diario del warm-up alcanzado, las tareas
+      // normales esperan; si hay una tarea de prioridad en la cola,
+      // se adelanta y pasa (nunca se queda 60s detrás del bloqueo).
+      // B2.2: lo mismo para las tareas que no gastan cuota (reacciones,
+      // borrados, ediciones): no tiene sentido congelarlas 60s por un
+      // tope que ni siquiera consumen.
+      let task;
+      if (throttler && throttler.canSend()) avisoTopeDado = false;
+      if (throttler && !throttler.canSend()) {
+        const pIdx = queue.findIndex(t => t.opts && (t.opts.isPriority || t.opts.countsForQuota === false));
+        if (pIdx === -1) {
+          avisarTopeDiario(throttler);
+          await new Promise(r => setTimeout(r, 60000));
           continue;
         }
-        const task = queue.splice(idx, 1)[0];
+        task = queue.splice(pIdx, 1)[0];
+      } else {
+        task = queue.shift();
+      }
 
-        const delay = throttler ? throttler.calcDelay({
-          isPriority: task.opts.isPriority || false,
-          messageLength: task.opts.messageLength || 0,
-          isNewContact: task.opts.isNewContact || false,
-        }) : 500;
+      const delay = throttler ? throttler.calcDelay({
+        isPriority: task.opts.isPriority || false,
+        messageLength: task.opts.messageLength || 0,
+        isNewContact: task.opts.isNewContact || false,
+      }) : 500;
 
-        // Calma tras reconectar: el pico de envíos justo después de volver es lo
-        // que más rápido dispara los límites. Arranca al 10 % del ritmo y vuelve
-        // al 100 % en un minuto.
-        const calma = sesion?.activo ? sesion.calma.factorDeEspera() : 1;
-        const esperaEnvio = Math.round(delay * calma);
-        if (esperaEnvio > 0) await new Promise(r => setTimeout(r, esperaEnvio));
-        if (paused) {
-          queue.unshift(task);
-          return;
+      await new Promise(r => setTimeout(r, delay));
+
+      const gastaCuota = task.opts.countsForQuota !== false;
+
+      try {
+        const result = await withTimeout(task.fn(), timeoutMs, "envío");
+        if (throttler && gastaCuota) throttler.recordSent();
+        if (health) health.recordSend();
+        task.resolve(result);
+      } catch (err) {
+        if (health) health.recordSendFail(err);
+
+        // ── Un envío sin respuesta NO se reintenta a ciegas ──────────
+        // Antes, un timeout (120 s sin que Baileys conteste) caía en el
+        // reintento de abajo y se mandaba OTRA VEZ el mismo mensaje. Pero
+        // el que se colgó puede haber llegado perfectamente: la promesa
+        // huérfana sigue viva en segundo plano. Resultado: el contacto ve
+        // el mensaje dos veces, y el doble mensaje es de las cosas que más
+        // se reportan como spam — justo lo que este bot evita.
+        //
+        // Reintentar sirve cuando el fallo es SEGURO (el socket dijo que
+        // no). Cuando es una incógnita, se anota y se sigue: perder uno
+        // es mejor que duplicarlo. El estado queda en el registro y en
+        // `.health`, nunca en silencio.
+        if (err && err.code === CODIGO_INCIERTO) {
+          inciertos += 1;
+          ultimoIncierto = Date.now();
+          if (throttler && gastaCuota) throttler.recordSent(); // se envió trabajo real
+          log.warn(
+            "Envío sin respuesta tras " + timeoutMs + "ms: NO lo repito para no duplicarlo. " +
+              "Puede haber llegado o no; revisa el chat. (" + inciertos + " en esta sesión)",
+          );
+          task.reject(err);
+          continue;
         }
 
-        const gastaCuota = task.opts.countsForQuota !== false;
-        if (gastaCuota && !task.opts.isPriority) gastarFicha();
-
-        try {
-          const result = await withTimeout(task.fn(), timeoutMs, "envío");
-          if (throttler && gastaCuota) throttler.recordSent();
-          if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-          if (health) health.recordSend();
-          avisarEnvio();
-          task.resolve(result);
-        } catch (err) {
-          if (health) health.recordSendFail(err);
-
-          if (err && err.code === CODIGO_INCIERTO) {
-            inciertos += 1;
-            ultimoIncierto = Date.now();
-            if (throttler && gastaCuota) throttler.recordSent(); // se envió trabajo real
-            if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-            log.warn(
-              "Envío sin respuesta tras " + timeoutMs + "ms: NO lo repito para no duplicarlo. " +
-                "Puede haber llegado o no; revisa el chat. (" + inciertos + " en esta sesión)",
-            );
-            colaMuerta += 1;
-            if (alFallar) { try { alFallar(task, err); } catch {} }
+        // ── Se cayó la conexión: el mensaje ESPERA, no se pierde ────
+        // El fallo que se veía en el móvil: llega un comando, justo ahí se
+        // cae la conexión (código 428 en datos móviles es de todos los
+        // días), el envío revienta con «Connection Closed», se reintenta a
+        // los 2-3 s —la conexión sigue caída—, vuelve a reventar y la
+        // respuesta se TIRA. Quien escribió el comando no recibe nada y el
+        // bot parece muerto aunque esté reconectando.
+        //
+        // Aquí ese reintento ciego se cambia por espera: el mensaje se
+        // queda en la cola (que está pausada por el mismo motivo) y sale
+        // en cuanto la conexión vuelve.
+        //
+        // ¿Y no se duplica? No: «Connection Closed» lo lanza Baileys al
+        // escribir sobre un websocket ya cerrado — el fotograma NO llegó a
+        // salir. Es el caso contrario del envío sin respuesta (ese sí es
+        // una incógnita y no se reintenta nunca).
+        if (esFalloDeConexion(err)) {
+          log.warn("Conexión caída: el mensaje queda en cola y sale al reconectar");
+          const volvio = await esperarReanudacion(esperaReconexionMs);
+          if (!volvio) {
+            log.warn("No volvió la conexión en " + Math.round(esperaReconexionMs / 60000) + " min: ese mensaje se pierde");
             task.reject(err);
             continue;
           }
+          try {
+            const result3 = await withTimeout(task.fn(), timeoutMs, "envío tras reconectar");
+            if (throttler && gastaCuota) throttler.recordSent();
+            if (health) health.recordSend();
+            task.resolve(result3);
+          } catch (err3) {
+            if (health) health.recordSendFail(err3);
+            task.reject(err3);
+          }
+          continue;
+        }
 
-          if (esTimelock(err)) {
-            anotarTimelock(err && err.timeEnforcementEnds);
-            if (alFallar) { try { alFallar(task, err); } catch {} }
-            task.reject(Object.assign(
-              new Error("WhatsApp restringe escribir a contactos nuevos (463): no se reintenta"),
-              { code: CODIGO_TIMELOCK, hasta: timelockHasta },
-            ));
-            continue;
+        log.error("Send failed: " + (err.message || err), err);
+        try {
+          // Reintento que RESPETA el throttler (nunca 3s fijos a tope de
+          // velocidad: esto es un bot anti-ban). Mínimo 2s.
+          const retryDelay = throttler
+            ? Math.max(2000, throttler.calcDelay({ messageLength: task.opts.messageLength || 0 }))
+            : 3000;
+          await new Promise(r => setTimeout(r, retryDelay));
+          const result2 = await withTimeout(task.fn(), timeoutMs, "reintento");
+          if (throttler && gastaCuota) throttler.recordSent();
+          task.resolve(result2);
+          if (health) health.recordSend();
+        } catch (err2) {
+          // El reintento también puede quedarse sin respuesta. Ahí se
+          // acaba: una incógnita no se persigue con un tercer envío.
+          if (err2 && err2.code === CODIGO_INCIERTO) {
+            inciertos += 1;
+            ultimoIncierto = Date.now();
+            log.warn("El reintento también quedó sin respuesta; no hay un tercer envío.");
+          } else if (health) {
+            health.recordSendFail(err2);
           }
-
-          if (esFalloDeConexion(err)) {
-            log.warn("Conexión caída: el mensaje queda en cola y sale al reconectar");
-            const volvio = await esperarReanudacion(esperaReconexionMs);
-            if (!volvio) {
-              log.warn("No volvió la conexión en " + Math.round(esperaReconexionMs / 60000) + " min: ese mensaje se pierde");
-              if (alFallar) { try { alFallar(task, err); } catch {} }
-              task.reject(err);
-              continue;
-            }
-            try {
-              const result3 = await withTimeout(task.fn(), timeoutMs, "envío tras reconectar");
-              if (throttler && gastaCuota) throttler.recordSent();
-              if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-              if (health) health.recordSend();
-              avisarEnvio();
-              task.resolve(result3);
-            } catch (err3) {
-              if (health) health.recordSendFail(err3);
-              task.reject(err3);
-            }
-            continue;
-          }
-
-          log.error("Send failed: " + (err.message || err), err);
-          let ultimoError = err;
-          let resuelto = false;
-          for (let intento = 1; intento <= reintentos && !resuelto; intento += 1) {
-            // Si el que frena es el techo por minuto, se espera su ficha antes
-            // de dormir el backoff: dormir dos veces no hace más humano.
-            while (!hayFicha()) await esperarTurno(msHastaFicha());
-            await new Promise(r => setTimeout(r, esperaDeReintento(intento, task.opts.messageLength)));
-            if (gastaCuota && !task.opts.isPriority) gastarFicha();
-            try {
-              const resultado = await withTimeout(task.fn(), timeoutMs, "reintento " + intento);
-              if (throttler && gastaCuota) throttler.recordSent();
-              if (ritmo && gastaCuota) ritmo.anotarSalida(task.opts.destino || "");
-              if (health) health.recordSend();
-              avisarEnvio();
-              task.resolve(resultado);
-              resuelto = true;
-            } catch (errRe) {
-              ultimoError = errRe;
-              if (errRe && errRe.code === CODIGO_INCIERTO) {
-                inciertos += 1;
-                ultimoIncierto = Date.now();
-                log.warn("El reintento " + intento + " quedó sin respuesta; no se insiste más para no duplicar.");
-                break;
-              }
-              if (health) health.recordSendFail(errRe);
-              // Un fallo por conexión no se reintenta aquí: eso lo lleva la rama
-              // de conexión, que espera a que vuelva en vez de insistir.
-              if (esFalloDeConexion(errRe)) break;
-            }
-          }
-          if (!resuelto) {
-            // Fallo definitivo: también va a la cola de muertos.
-            if (alFallar) { try { alFallar(task, ultimoError); } catch {} }
-            task.reject(ultimoError);
-          }
+          task.reject(err2);
         }
       }
-    } finally {
-      processing = false;
     }
+    processing = false;
   }
 
   /**
@@ -513,15 +260,7 @@ export function createSendQueue(throttler, health, opts = {}) {
    * pisarse: el watchdog por riesgo y la conexión por estar caída.
    * @param {string} [motivo]
    */
-  function pause(motivo = "manual") {
-    motivosDePausa.add(motivo);
-    paused = true;
-    if (despertar) {
-      const d = despertar;
-      despertar = null;
-      d();
-    }
-  }
+  function pause(motivo = "manual") { motivosDePausa.add(motivo); paused = true; }
 
   /**
    * Quita un motivo de pausa. La cola solo vuelve a andar cuando no queda
@@ -531,14 +270,7 @@ export function createSendQueue(throttler, health, opts = {}) {
   function resume(motivo = "manual") {
     motivosDePausa.delete(motivo);
     paused = motivosDePausa.size > 0;
-    if (!paused) {
-      if (despertarReanudacion) {
-        const d = despertarReanudacion;
-        despertarReanudacion = null;
-        d();
-      }
-      if (!processing) process();
-    }
+    if (!paused && !processing) process();
   }
 
   /** Por qué está parada la cola ahora mismo (vacío si anda). */
@@ -550,11 +282,7 @@ export function createSendQueue(throttler, health, opts = {}) {
 
   /** Cuántos envíos quedaron en el aire y cuándo fue el último. */
   function getStats() {
-    return {
-      length: queue.length, paused, motivos: [...motivosDePausa], inciertos, ultimoIncierto,
-      rechazadas, timelocks, colaMuerta, maxCola,
-      timelockActivo: enTimelock(), timelockHasta: timelockHasta || null,
-    };
+    return { length: queue.length, paused, motivos: [...motivosDePausa], inciertos, ultimoIncierto };
   }
 
   return {
