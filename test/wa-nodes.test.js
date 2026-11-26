@@ -164,3 +164,39 @@ test("el formato de la tarjeta se elige con BOTONES_FORMATO", async () => {
   assert.match(src, /nodosInteractivosAsync/, "el nodo biz lo pregunta a la librería");
   assert.doesNotMatch(src, /const buildBizNode/, "ya no se arma a mano en el envío");
 });
+
+// ─── El doble <biz>, que fue el bug más caro de todo el proyecto ─────
+//
+// Si el mensaje sale con DOS nodos `<biz>` el servidor lo rechaza y el
+// usuario ve "no llega nada" sin error. La librería nueva inyecta su
+// propio `<biz>` salvo que ya venga uno en `additionalNodes`. Esta prueba
+// replica la decisión exacta de `relayMessage` para que nadie la rompa
+// sin darse cuenta.
+
+test("el envío produce un solo <biz>: el nuestro, nunca dos", async () => {
+  const lib = await import("baileys");
+  assert.equal(typeof lib.getBizBinaryNode, "function",
+    "la librería tiene que exponer getBizBinaryNode para esta prueba");
+
+  const contenido = {
+    interactiveMessage: {
+      body: { text: "elige" },
+      nativeFlowMessage: { buttons: [{ name: "single_select", buttonParamsJson: "{}" }] },
+    },
+  };
+
+  // 1) Con nuestros nodos puestos, la librería NO añade otro.
+  const nuestros = await nodosInteractivosAsync(GRUPO, { contenido });
+  const yaHayBiz = nuestros.some((n) => n.tag === "biz");
+  assert.ok(yaHayBiz, "el envío siempre aporta su propio biz");
+  const laLibreriaAñadiria = !yaHayBiz && lib.shouldIncludeBizBinaryNode(contenido);
+  assert.equal(laLibreriaAñadiria, false, "no puede añadirse un segundo biz");
+
+  // 2) Y el nuestro lleva el flujo correcto aunque la librería se
+  //    equivoque: para `single_select` su constructor devuelve `mixed`.
+  const suyo = lib.getBizBinaryNode(contenido);
+  const suFlujo = suyo?.content?.find?.((n) => n.tag === "interactive")
+    ?.content?.find?.((n) => n.tag === "native_flow")?.attrs?.name;
+  assert.equal(suFlujo, "mixed", "la librería no sabe nombrar una lista");
+  assert.equal(flujoDe(nuestros[0]), "menu_options", "el nuestro sí la nombra");
+});
