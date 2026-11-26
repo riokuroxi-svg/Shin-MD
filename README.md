@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 666 pruebas" width="100%">
+<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 667 pruebas" width="100%">
 
 <br>
 
-<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="666/666 pruebas"></a>
+<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="667/667 pruebas"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/comandos.svg" height="50" alt="216 comandos"></a>
 <a href="#licencia-y-marca"><img src="docs/assets/perfil/insignias/licencia.svg" height="50" alt="Licencia AGPL-3.0-only"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/node.svg" height="50" alt="Node 22.5 o superior"></a>
@@ -23,7 +23,7 @@ y reduce el riesgo de bloqueo.**
 
 </div>
 
-<img src="docs/assets/perfil/cifras.svg" alt="666/666 pruebas en 76 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
+<img src="docs/assets/perfil/cifras.svg" alt="667/667 pruebas en 76 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
 
 <img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
 
@@ -154,7 +154,7 @@ reemplaza a tener el número en un teléfono que no uses para nada más.
   para el dueño real: antes, un desconocido que insistía con un comando que no
   podía usar conseguía una respuesta del bot por cada mensaje suyo.
 
-La suite lo cubre: las **666/666 pruebas** (76 archivos) que vigilan esto,
+La suite lo cubre: las **667/667 pruebas** (76 archivos) que vigilan esto,
 incluidas las regresiones de cada fallo. Si un commit rompe alguna, GitHub lo
 marca.
 
@@ -386,7 +386,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 666 pruebas
+npm test               # las 667 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot
