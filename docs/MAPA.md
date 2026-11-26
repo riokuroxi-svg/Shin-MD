@@ -1,4 +1,4 @@
-# Mapa de Shin-MD 3.7.9
+# Mapa de Shin-MD 3.8.0
 
 > Generado con `npm run mapa`. No se edita a mano: los números y las listas
 > salen del repositorio, así que si algo se mueve, se vuelve a lanzar.
@@ -31,7 +31,7 @@ para y dice la orden exacta que hay que escribir.
 
 | Carpeta | Archivos | Para qué |
 | --- | --- | --- |
-| `assets/` | 7 | Imágenes y sonidos que el bot envía (menús, avatares, portadas). |
+| `assets/` | 10 | Imágenes y sonidos que el bot envía (menús, avatares, portadas). |
 | `bin/` | — | Temporales de herramientas externas (`yt-dlp` y compañía). Vacía en el repositorio. |
 | `boot/` | 1 | El arranque: licencia, banner, vinculación y carga de servicios. Un solo archivo, en orden. |
 | `cmds/` | 219 | Los comandos de WhatsApp, uno por archivo. Se cargan en caliente: aquí no hay `import` que los una. |
@@ -41,12 +41,12 @@ para y dice la orden exacta que hay que escribir.
 | `media/` | — | Temporales de descargas y conversiones. Se vacían solos. |
 | `scripts/` | 19 | Herramientas de mantenimiento (arranque, publicación, pruebas, auditorías). No las usa el bot al correr. |
 | `Sessions/` | — | Las credenciales de WhatsApp. Nunca se comparte ni se sube. |
-| `src/` | 88 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
-| `test/` | 54 | Las pruebas. Una por tema; cada archivo corre solo. |
+| `src/` | 90 | El código del bot, por capas. Debajo va el desglose de cada subcarpeta. |
+| `test/` | 56 | Las pruebas. Una por tema; cada archivo corre solo. |
 | `tools/` | 12 | Utilidades de desarrollo: generadores de imágenes, vistas previas, este mapa. |
 | `src/commands/` | 6 | El motor de comandos: cargador, router, contexto de mensaje y permisos. |
 | `src/core/` | 5 | El conector: socket de WhatsApp, motor de estados, sesión y caché de metadatos. |
-| `src/lib/` | 58 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
+| `src/lib/` | 60 | Utilidades sin estado: formato, JID, tiempo, APIs de respaldo, vinculación, idioma visual. |
 | `src/network/` | 2 | Cola de salida y salud de la red (reintentos, cortes, presión). |
 | `src/services/` | 10 | Servicios con estado: base de datos del bot, economía, descargas, registro, vigía, consola. |
 | `src/storage/` | 5 | Dónde se guarda todo: SQLite, migraciones, caché y memoria de identidades. |
@@ -57,7 +57,7 @@ número a propósito: se llenan al correr el bot y al pasar las pruebas, así qu
 contarlas haría que este mapa dijera una cosa en una máquina con el bot arrancado
 y otra en un clon recién bajado. Su contenido no forma parte del proyecto.
 
-Son **219 archivos de comando**, **58 utilidades** en `src/lib`, **10 servicios** y **53 archivos de prueba**.
+Son **219 archivos de comando**, **60 utilidades** en `src/lib`, **10 servicios** y **55 archivos de prueba**.
 
 ## El viaje de un mensaje
 

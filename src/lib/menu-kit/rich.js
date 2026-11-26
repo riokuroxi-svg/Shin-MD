@@ -83,17 +83,72 @@ export function latex(formula) {
  * Arma el contenido listo para `generateWAMessageFromContent`.
  * @param {Array} submessages
  */
-export function armarRich(submessages) {
+export function armarRich(submessages, { sello = null } = {}) {
+  // `forwardOrigin: 4` es META_AI (enum del proto): el teléfono muestra la
+  // tarjeta como respuesta de asistente. `sello` añade el nombre del canal
+  // del bot sobre la burbuja, como hacen los bots con más diseño.
+  const contextInfo = {
+    isForwarded: true,
+    forwardingScore: 1,
+    forwardOrigin: 4,
+    ...(sello
+      ? {
+          forwardedNewsletterMessageInfo: {
+            newsletterJid: sello.jid,
+            newsletterName: sello.nombre || "Shin-MD",
+            serverMessageId: -1,
+            contentType: 1,
+          },
+        }
+      : {}),
+  };
   return {
     botForwardedMessage: {
       message: {
         richResponseMessage: {
           messageType: TITULO_TABLA,
           submessages: submessages || [],
-          contextInfo: { isForwarded: true, forwardingScore: 1, forwardOrigin: 4 },
+          contextInfo,
         },
       },
     },
+  };
+}
+
+/* ── Tarjeta de producto (la que usan los bots de tienda) ─────────── */
+
+/**
+ * Arma una tarjeta de producto: imagen, nombre, precio y descripción.
+ * El teléfono la pinta como ficha de catálogo. No hace falta cuenta
+ * Business.
+ *
+ * OJO (comprobado en `WAProto.proto`): `ProductMessage` NO tiene campo
+ * de botones — sus campos son product, businessOwnerJid, catalog, body,
+ * footer y contextInfo. Cualquier `buttons` dentro del producto se
+ * pierde al codificar. Los botones van en un mensaje interactivo aparte.
+ *
+ * @param {object} p
+ * @param {string} p.titulo
+ * @param {string} [p.descripcion]
+ * @param {number} [p.precio]        en unidades (se guarda ×1000)
+ * @param {string} [p.moneda]        "MXN" por defecto
+ * @param {string} [p.idProducto]
+ * @param {string} [p.url]
+ * @param {object} [p.imagen]        {url} o Buffer
+ */
+export function armarProducto(p = {}) {
+  return {
+    product: {
+      productId: p.idProducto || "SHIN-" + Date.now(),
+      title: p.titulo || "Producto",
+      description: p.descripcion || "",
+      currencyCode: p.moneda || "MXN",
+      priceAmount1000: Math.round((p.precio || 0) * 1000),
+      retailerId: p.idProducto || "shin-md",
+      url: p.url || "https://github.com/riokuroxi-svg/Shin-MD",
+      productImage: p.imagen || undefined,
+    },
+    caption: p.descripcion || "",
   };
 }
 
@@ -125,14 +180,14 @@ export function comoTexto(submessages) {
  * @param {{cita?:object}} [op]
  * @returns {Promise<boolean>}
  */
-export async function enviarRich(sock, jid, submessages, { cita = null } = {}) {
+export async function enviarRich(sock, jid, submessages, { cita = null, sello = null } = {}) {
   // Los canales no pintan este formato: texto directo.
   if (typeof jid === "string" && jid.endsWith("@newsletter")) {
     return !!(await sock.sendMessage(jid, { text: comoTexto(submessages) }));
   }
 
   try {
-    const contenido = armarRich(submessages);
+    const contenido = armarRich(submessages, { sello });
     const armado = generateWAMessageFromContent(jid, contenido, {
       userJid: sock.user?.id,
       quoted: cita || undefined,
@@ -160,4 +215,4 @@ export function armarBytes(submessages, jid = "5210000000000@s.whatsapp.net") {
   return { bytes, decodificado: proto.Message.decode(bytes) };
 }
 
-export default { enviarRich, armarRich, armarBytes, comoTexto, texto, tabla, codigo, latex, SUB };
+export default { enviarRich, armarRich, armarProducto, armarBytes, comoTexto, texto, tabla, codigo, latex, SUB };

@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 451 pruebas" width="100%">
+<img src="docs/assets/pastel/hero.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 213 comandos, 752 nombres y 454 pruebas en 55 archivos" width="100%">
 
 <br>
 
-<img src="docs/assets/pastel/insignia-pruebas.svg" alt="451/451 pruebas" height="52">
+<img src="docs/assets/pastel/insignia-pruebas.svg" alt="460/460 pruebas" height="52">
 <img src="docs/assets/pastel/insignia-comandos.svg" alt="213 comandos" height="52">
 <img src="docs/assets/pastel/insignia-node.svg" alt="Node 22.5 o superior" height="52">
 <img src="docs/assets/pastel/insignia-baileys.svg" alt="Baileys 7" height="52">
@@ -168,6 +168,19 @@ archivo y su prueba:
 | **Nota de voz** | el menú puede acompañarse de un audio grabado, citado sobre la tarjeta | `mandarNotaDeVoz()` | `test/warmup-quota.test.js` |
 | **Tarjeta enriquecida** | texto + tablas + bloques de código con colores + fórmulas, todo en una burbuja | `src/lib/menu-kit/rich.js` | `test/rich.test.js` |
 | **«Pensando…»** | el aviso aparece, la presencia queda en «escribiendo…», y al llegar la respuesta el aviso desaparece | `src/lib/menu-kit/presencia.js` | `test/presencia.test.js` |
+| **Progreso nativo** | la tarjeta del asistente con sus pasos («buscando…», «resumiendo…»), del propio protocolo | `src/lib/menu-kit/progreso.js` | `test/progreso.test.js` |
+| **Ficha de producto** | imagen, nombre y precio como una tarjeta de catálogo | `armarProducto()` en `rich.js` | `test/album-producto.test.js` |
+| **Álbum** | varias fotos y vídeos en una sola burbuja | `src/lib/menu-kit/album.js` | `test/album-producto.test.js` |
+| **Sello del canal** | el nombre de tu canal sobre la burbuja, como en los bots con más diseño | `sello` en `enviarRich()` | `test/album-producto.test.js` |
+
+### Tres caras para el menú
+
+El mismo menú, tres temas. Se elige con `MENU_TEMA` y los dibuja
+`tools/arte_marca.py` (formas y curvas, nada de imágenes generadas):
+
+<img src="assets/brand/menu-neon.png" alt="Tema neón" width="100%">
+<img src="assets/brand/menu-pastel.png" alt="Tema pastel" width="100%">
+<img src="assets/brand/menu-noche-ciudad.png" alt="Tema noche ciudad" width="100%">
 
 ### La tarjeta enriquecida (texto, tablas y código)
 
@@ -222,7 +235,7 @@ Con estas tres piezas el efecto funciona en cualquier cliente.
 —la versión de Play Store está abandonada y rompe los paquetes— y pega esto:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.8.0/shin.sh | sh
 ```
 
 Una línea, y el bot queda arrancado. Ese archivo descarga el instalador de
@@ -274,9 +287,9 @@ huella cubre también el arranque:
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.7.9 --go
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.8.0/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.8.0/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.8.0 --go
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -286,7 +299,7 @@ sin él, el instalador se queda en «instalado» y se arranca luego con `shin`.
 ¿Solo quieres saber si el archivo es el bueno, sin instalar nada?
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.8.0/shin.sh | sh -s -- --dry-run
 ```
 
 </details>
@@ -352,7 +365,7 @@ hacia fuera y solo habla con `127.0.0.1`.
 **Servidor o VPS.** El mismo comando, sin preparar nada antes:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.8.0/shin.sh | sh
 ```
 
 Si falta Node o git, el instalador lo resuelve: con el gestor de paquetes del
@@ -449,7 +462,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 433 pruebas
+npm test               # las 454 pruebas (55 archivos)
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot
