@@ -77,7 +77,11 @@ export function getChannelContext(options = {}) {
   const ch = getChannelInfo();
   const mentionedJid = options.mentionedJid || [];
   const canalId = options.channelJid || ch.id || (globalThis.channelJid?.resolved ? globalThis.channelJid.id : "");
-  const canalName = options.channelName || ch.name || (globalThis.channelJid?.resolved ? globalThis.channelJid.name : globalThis.links?.channelName || "Shin-MD Official Channel");
+  const canalName = options.channelName
+    || (process.env.CHANNEL_SHOW_NAME || "").trim()
+    || globalThis.links?.channelName
+    || ch.name
+    || "Roxi-svg";
 
   const contextInfo = {
     mentionedJid,
@@ -89,7 +93,9 @@ export function getChannelContext(options = {}) {
     contextInfo.forwardedNewsletterMessageInfo = {
       newsletterJid: canalId,
       newsletterName: canalName,
-      serverMessageId: options.serverMessageId !== undefined ? options.serverMessageId : 0,
+      // Nunca 0: el servidor lo acepta pero el cliente del teléfono
+      // descarta el mensaje. Si no viene uno válido, se usa 1.
+      serverMessageId: Number(options.serverMessageId) > 0 ? Number(options.serverMessageId) : 1,
     };
   }
 

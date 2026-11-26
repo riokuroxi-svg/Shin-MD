@@ -28,9 +28,11 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { generateWAMessageFromContent, proto, prepareWAMessageMedia } from "baileys";
+import { datosDelVideo } from "#lib/mp4-info";
 import log from "#logger";
 
 const CACHE_FILE = path.join(process.cwd(), "data", "media-cache.json");
@@ -101,6 +103,62 @@ function claveValida(k) {
  * `prepareWAMessageMedia` devuelve y lo que el cliente necesita para
  * pintar el bucle sin volver a subir nada.
  */
+/**
+ * Miniatura JPEG del primer fotograma útil del vídeo.
+ *
+ * WhatsApp usa la miniatura como carátula del reproductor. Sin ella
+ * el cliente no tiene qué pintar mientras descarga y, si además faltan
+ * las dimensiones, termina mostrando la tarjeta como un archivo.
+ *
+ * Se genera con ffmpeg si está en el PATH (Termux lo trae) y queda
+ * cacheada en disco. Si no hay ffmpeg no pasa nada: la tarjeta sale
+ * igual, sólo que sin carátula.
+ *
+ * @param {string} filePath
+ * @returns {Buffer|null}
+ */
+function miniaturaDeVideo(filePath) {
+  if (!filePath) return null;
+  const destino = path.join(
+    process.cwd(), "data", "media-cache",
+    path.basename(filePath, path.extname(filePath)) + "-thumb.jpg",
+  );
+  try {
+    if (fs.existsSync(destino)) {
+      const guardada = fs.readFileSync(destino);
+      if (guardada.length > 200) return guardada;
+    }
+  } catch { /* sigue abajo */ }
+
+  // Si no hay ffmpeg, se usa la carátula que viene con el bot (misma
+  // ruta relativa al video: menu.mp4 → menu-thumb.jpg).
+  const delRepo = path.join(
+    path.dirname(filePath),
+    path.basename(filePath, path.extname(filePath)) + "-thumb.jpg",
+  );
+
+  try {
+    fs.mkdirSync(path.dirname(destino), { recursive: true });
+    execFileSync(
+      "ffmpeg",
+      ["-y", "-ss", "1", "-i", filePath, "-vframes", "1", "-vf", "scale=320:-2", "-q:v", "6", destino],
+      { stdio: "ignore", timeout: 20000 },
+    );
+    const mini = fs.readFileSync(destino);
+    if (mini.length > 200) return mini;
+  } catch { /* sin ffmpeg en el PATH */ }
+
+  // Plan B: la carátula incluida en el repositorio.
+  try {
+    if (delRepo !== destino && fs.existsSync(delRepo)) {
+      const mini = fs.readFileSync(delRepo);
+      if (mini.length > 200) return mini;
+    }
+  } catch { /* nada */ }
+
+  return null; // sin carátula la tarjeta funciona igual
+}
+
 async function videoCacheado(sock, filePath) {
   if (!filePath) return null;
   let buf;
@@ -123,8 +181,20 @@ async function videoCacheado(sock, filePath) {
     return enDisco;
   }
 
+  // Baileys NO calcula width/height sin librería de imagen, y nunca
+  // calcula `seconds` para vídeo. Sin esos tres campos el teléfono no
+  // pinta el reproductor: enseña la tarjeta como archivo descargable
+  // («649 KB» con una flecha). Se leen del propio MP4.
+  const datos = datosDelVideo(buf) || {};
+  const miniatura = miniaturaDeVideo(filePath);
   const preparado = await prepareWAMessageMedia(
-    { video: buf, gifPlayback: true },
+    {
+      video: buf,
+      gifPlayback: true,
+      ...(datos.seconds ? { seconds: datos.seconds } : {}),
+      ...(datos.width && datos.height ? { width: datos.width, height: datos.height } : {}),
+      ...(miniatura ? { jpegThumbnail: miniatura } : {}),
+    },
     { upload: sock.waUploadToServer },
   );
   const videoMessage = preparado?.videoMessage;

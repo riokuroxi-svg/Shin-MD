@@ -10,13 +10,15 @@ import { botJid } from "#serialize";
 // Usa sock.newsletterMetadata("invite", code) que devuelve el @newsletter JID correcto.
 const DEFAULT_CHANNEL_CODE = "0029VbDVFpSGJP89hfZUe522";
 const DEFAULT_CHANNEL_LINK = "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522";
-const DEFAULT_CHANNEL_NAME = "Shin-MD Official Channel";
+const DEFAULT_CHANNEL_NAME = "Roxi-svg";
 
 let triedOnce = false;
 
 export async function resolveChannel(sock, db, force = false) {
   let channelCode = globalThis.links?.channelCode || DEFAULT_CHANNEL_CODE;
   const channelName = globalThis.links?.channelName || DEFAULT_CHANNEL_NAME;
+  // Nombre visible de la etiqueta de reenvío (configurable por entorno).
+  const showName = (process.env.CHANNEL_SHOW_NAME || "").trim();
 
   if (typeof channelCode === "string" && /whatsapp\.com\/channel\/([0-9A-Za-z]{22,24})/i.test(channelCode)) {
     const match = channelCode.match(/whatsapp\.com\/channel\/([0-9A-Za-z]{22,24})/i);
@@ -34,7 +36,11 @@ export async function resolveChannel(sock, db, force = false) {
       if (st?.newsletter_id && String(st.newsletter_id).endsWith('@newsletter')) {
         globalThis.channelJid = {
           id: st.newsletter_id,
-          name: st.nameid || channelName,
+          // El nombre que se enseña en la etiqueta «Reenviado» es el del
+          // canal. Si el dueño fijó uno propio (CHANNEL_NAME / .setname),
+          // manda ese: si no, la etiqueta saldría con el nombre real del
+          // canal y no con el del bot.
+          name: showName || st.nameid || channelName,
           resolved: true
         };
         return globalThis.channelJid;
@@ -49,7 +55,7 @@ export async function resolveChannel(sock, db, force = false) {
     if (typeof sock.newsletterMetadata === "function") {
       const info = await sock.newsletterMetadata('invite', channelCode);
       if (info?.id) {
-        const name = info.thread_metadata?.name?.text || channelName;
+        const name = showName || info.thread_metadata?.name?.text || channelName;
         globalThis.channelJid = { id: info.id, name, resolved: true };
         // Guardar en DB para futuros arranques
         if (botId && db) {

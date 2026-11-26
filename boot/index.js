@@ -493,7 +493,7 @@ async function main() {
   globalThis.links = {
     channel: process.env.CHANNEL_LINK || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522",
     channelCode: process.env.CHANNEL_CODE || "0029VbDVFpSGJP89hfZUe522",
-    channelName: process.env.CHANNEL_NAME || "Shin-MD Official Channel",
+    channelName: process.env.CHANNEL_NAME || "Roxi-svg",
     instagram: process.env.INSTAGRAM_LINK || "https://www.instagram.com/__ikg.05",
     github: "https://github.com/riokuroxi-svg/Shin-MD",
     support: process.env.SUPPORT_LINK || "",
