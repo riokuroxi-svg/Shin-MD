@@ -16,9 +16,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const BANNER_PATHS = [
   process.env.MENU_IMAGE,
-  path.resolve(__dirname, "../../media/banners/banner-day.jpg"),
-  path.resolve(__dirname, "../../media/banners/banner-night.jpg"),
   path.resolve(__dirname, "../../assets/menus/default-1.jpg"),
+  path.resolve(__dirname, "../../assets/menus/default-2.jpg"),
+  path.resolve(__dirname, "../../assets/menus/default-3.jpg"),
 ].filter(Boolean);
 
 let _bannerCache = null;

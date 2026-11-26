@@ -114,7 +114,10 @@ export function collectCategories(commands, { exclude = ["menu"] } = {}) {
  * nada, de MENU_IMAGE. Devuelve null sin quejarse: el menú siempre puede
  * caer a texto.
  */
-export function getRandomBanner({ useHourly = true } = {}) {
+export function getRandomBanner({ useHourly = false } = {}) {
+  // El menú ya NO usa los banners por hora (media/banners): su estética la
+  // forman el video de la cabecera y los pósters de assets/menus. Quien
+  // quiera el banner por hora lo pide explícitamente con `useHourly: true`.
   if (useHourly) {
     try {
       const porHora = pickBanner();

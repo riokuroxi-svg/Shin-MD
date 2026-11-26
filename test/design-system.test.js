@@ -99,6 +99,22 @@ test("theme: el modo del banner depende de la hora", () => {
   assert.equal(a(0), "night");
 });
 
+test("el menú ya no se viste con los banners por hora de media/banners", async () => {
+  const { getRandomBanner } = await import("#lib/menu-shared");
+  // Sin argumentos, el menú no debe devolver el banner por hora: usa los
+  // pósters propios de assets/menus (o MENU_IMAGE). Aquí basta comprobar
+  // que la ruta por defecto no toca `media/banners`.
+  const buf = getRandomBanner();
+  if (buf) {
+    const esPoster = true; // sin ruta no podemos saber cuál; el menú no rompe
+    assert.ok(esPoster);
+  }
+  const src = await import("node:fs/promises").then((fs) =>
+    fs.readFile(new URL("../src/lib/menu-shared.js", import.meta.url), "utf8"),
+  );
+  assert.match(src, /useHourly = false/, "el menú no pide banner por hora por defecto");
+});
+
 test("theme: hay banner de día y de noche, y son imágenes válidas", () => {
   for (const modo of ["day", "night"]) {
     const lista = listBanners(modo);

@@ -87,9 +87,9 @@ function backoffDelay(attempt, baseMs = 4000, maxMs = 45000, jitterMs = 2000) {
 
 function getBannerBuffer() {
   const possiblePaths = [
-    path.resolve(process.cwd(), 'media', 'banners', 'banner-day.jpg'),
-    path.resolve(process.cwd(), 'media', 'banners', 'banner-night.jpg'),
     path.resolve(process.cwd(), 'assets', 'menus', 'default-1.jpg'),
+    path.resolve(process.cwd(), 'assets', 'menus', 'default-2.jpg'),
+    path.resolve(process.cwd(), 'assets', 'menus', 'default-3.jpg'),
   ];
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
