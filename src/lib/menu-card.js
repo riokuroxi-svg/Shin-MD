@@ -5,27 +5,26 @@
  * Parte de Shin-MD. Mantener este header es obligatorio por AGPL.
  */
 // ═══════════════════════════════════════════════════════════════════
-//  menu-card.js — El menú de una sola tarjeta, portado 1:1 del
-//  envoltorio que los clientes de WhatsApp sí pintan (viewOnce + interactive).
+//  menu-card.js — El menú de una sola tarjeta con botones nativos.
 //
-//  LO QUE SE COPIÓ AL PIE DE LA LETRA (y por qué)
-//  ─────────────────────────────────────────────
-//  1. relayMessage SIN `additionalNodes`. La librería arma el sobre
-//     binario sola. Añadir un `biz` a mano junto a `viewOnceMessage`
-//     hacía que el servidor aceptara el mensaje y el teléfono lo
-//     tirara sin pintar nada: el "bot no responde".
-//  2. contextInfo con forwardingScore 99 + isForwarded + canal con
-//     serverMessageId 1 (no 0: cero es inválido y el cliente
-//     descarta la tarjeta).
-//  3. Header construido con proto...create() (no fromObject) y con el
-//     media SPREADEADO dentro del header.
-//  4. Mismo orden de campos: header → body → footer → nativeFlowMessage.
+//  LAS CUATRO REGLAS QUE HACEN QUE EL TELÉFONO LO PINTE
+//  ────────────────────────────────────────────────────
+//  1. NADA de `viewOnceMessage`. Envolver la tarjeta en viewOnce hace
+//     que el servidor la acepte y los clientes nuevos la descarten
+//     (es lo primero que se quitó en las librerías que sí funcionan).
+//     Va el InteractiveMessage suelto con messageContextInfo.
+//  2. NADA de `title`/`subtitle` vacíos en el header. Un header con
+//     title:"" y subtitle:"" se codifica igual, el servidor lo acusa,
+//     llegan los recibos de WhatsApp Web… y el teléfono principal
+//     nunca lo pinta. Si no hay título, el campo se OMITE.
+//  3. `hasMediaAttachment` sólo cuando de verdad hay media dentro.
+//  4. contextInfo con forwardingScore 99 + isForwarded y canal con
+//     serverMessageId 1 (0 es inválido).
 //
-//  LO ÚNICO QUE NO SE COPIA (y por qué)
-//  ────────────────────────────────────
+//  LO QUE SE CONSERVA DEL DISEÑO ANTERIOR
+//  ─────────────────────────────────────
 //  El video se sube UNA vez y se guarda en data/media-cache.json.
-//  Subirlo en cada envío costaba 10-18 s por redes móviles; ese era
-//  el otro motivo de que pareciera que el bot estaba muerto.
+//  Subirlo en cada envío costaba 10-18 s por redes móviles.
 // ═══════════════════════════════════════════════════════════════════
 
 import fs from "node:fs";
@@ -176,33 +175,36 @@ export async function sendMenuCard(sock, jid, op = {}) {
   };
 
   try {
+    // Header SIN title/subtitle cuando están vacíos: un header con
+    // cadenas vacías hace que el teléfono descarte la tarjeta aunque
+    // el servidor la acuse. Sólo se incluye si hay algo que mostrar.
+    const header = proto.Message.InteractiveMessage.Header.create({
+      ...(op.title ? { title: String(op.title) } : {}),
+      ...(op.subtitle ? { subtitle: String(op.subtitle) } : {}),
+      hasMediaAttachment: !!videoMessage,
+      ...(videoMessage ? { videoMessage } : {}),
+    });
+
+    // SIN viewOnceMessage: el envoltorio viewOnce es justo lo que
+    // impide que los clientes actuales pinten la tarjeta. Va suelto.
     const msg = generateWAMessageFromContent(
       jid,
       {
-        viewOnceMessage: {
-          message: {
-            messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
-            interactiveMessage: proto.Message.InteractiveMessage.create({
-              contextInfo: ctx,
-              body: proto.Message.InteractiveMessage.Body.create({ text: body }),
-              footer: proto.Message.InteractiveMessage.Footer.create({ text: footer }),
-              header: proto.Message.InteractiveMessage.Header.create({
-                title: "",
-                subtitle: "",
-                hasMediaAttachment: !!videoMessage,
-                ...(videoMessage ? { videoMessage } : {}),
-              }),
-              nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
-                buttons: [
-                  {
-                    name: "single_select",
-                    buttonParamsJson: JSON.stringify(selector),
-                  },
-                ],
-              }),
-            }),
-          },
-        },
+        messageContextInfo: { deviceListMetadata: {}, deviceListMetadataVersion: 2 },
+        interactiveMessage: proto.Message.InteractiveMessage.create({
+          contextInfo: ctx,
+          body: proto.Message.InteractiveMessage.Body.create({ text: body }),
+          footer: proto.Message.InteractiveMessage.Footer.create({ text: footer }),
+          header,
+          nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.create({
+            buttons: [
+              {
+                name: "single_select",
+                buttonParamsJson: JSON.stringify(selector),
+              },
+            ],
+          }),
+        }),
       },
       { quoted: op.quoted && op.quoted.message ? op.quoted : undefined },
     );

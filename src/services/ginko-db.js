@@ -101,13 +101,24 @@ function init(d) {
   d.exec("CREATE TABLE IF NOT EXISTS g_users (id TEXT PRIMARY KEY, name TEXT DEFAULT '', exp INTEGER DEFAULT 0, level INTEGER DEFAULT 0, usedcommands INTEGER DEFAULT 0, pasatiempo TEXT DEFAULT '', description TEXT DEFAULT '', marry TEXT DEFAULT '', genre TEXT DEFAULT '', birth TEXT DEFAULT '', metadatos TEXT, metadatos2 TEXT, Subs INTEGER DEFAULT 0)");
   d.exec("CREATE TABLE IF NOT EXISTS g_chats (id TEXT PRIMARY KEY, isBanned INTEGER DEFAULT 0, welcome INTEGER DEFAULT 0, goodbye INTEGER DEFAULT 0, sWelcome TEXT DEFAULT '', sGoodbye TEXT DEFAULT '', nsfw INTEGER DEFAULT 0, alerts INTEGER DEFAULT 1, gacha INTEGER DEFAULT 1, economy INTEGER DEFAULT 1, adminonly INTEGER DEFAULT 0, primaryBot TEXT, antilinks INTEGER DEFAULT 1, antistatus INTEGER DEFAULT 0, rolls TEXT DEFAULT '{}')");
   d.exec("CREATE TABLE IF NOT EXISTS g_chat_users (chat_id TEXT, user_id TEXT, coins INTEGER DEFAULT 0, bank INTEGER DEFAULT 0, lastCmd INTEGER DEFAULT 0, usedTime TEXT, afk INTEGER DEFAULT -1, afkReason TEXT DEFAULT '', health INTEGER DEFAULT 100, stamina INTEGER DEFAULT 100, magic INTEGER DEFAULT 100, characters TEXT DEFAULT '[]', stats TEXT DEFAULT '{}', PRIMARY KEY (chat_id, user_id))");
-  d.exec("CREATE TABLE IF NOT EXISTS g_settings (id TEXT PRIMARY KEY, self INTEGER DEFAULT 0, prefix TEXT DEFAULT '[]', commandsejecut INTEGER DEFAULT 0, newsletter_id TEXT DEFAULT '', nameid TEXT DEFAULT '', type TEXT DEFAULT 'Owner', link TEXT DEFAULT '', banner TEXT DEFAULT '', icon TEXT DEFAULT '', currency TEXT DEFAULT 'Yenes', namebot TEXT DEFAULT 'Shin', botname TEXT DEFAULT 'Shin-MD', owner TEXT DEFAULT '', menu_variant INTEGER DEFAULT 1, instagram TEXT DEFAULT 'https://www.instagram.com/__ikg.05')");
+  d.exec("CREATE TABLE IF NOT EXISTS g_settings (id TEXT PRIMARY KEY, self INTEGER DEFAULT 0, prefix TEXT DEFAULT '[]', commandsejecut INTEGER DEFAULT 0, newsletter_id TEXT DEFAULT '', nameid TEXT DEFAULT '', type TEXT DEFAULT 'Owner', link TEXT DEFAULT '', banner TEXT DEFAULT '', icon TEXT DEFAULT '', currency TEXT DEFAULT 'Yenes', namebot TEXT DEFAULT 'Shin', botname TEXT DEFAULT 'Shin-MD', owner TEXT DEFAULT '', menu_variant INTEGER DEFAULT 5, instagram TEXT DEFAULT 'https://www.instagram.com/__ikg.05')");
   d.exec("CREATE TABLE IF NOT EXISTS g_characters (id TEXT PRIMARY KEY, data TEXT)");
   d.exec("CREATE TABLE IF NOT EXISTS g_sticker_packs (id TEXT PRIMARY KEY, packs TEXT DEFAULT '[]')");
 
   ejecutarSqlOpcional(d, "ALTER TABLE g_users ADD COLUMN Subs INTEGER DEFAULT 0");
   ejecutarSqlOpcional(d, "ALTER TABLE g_chats ADD COLUMN autotr TEXT DEFAULT ''");
-  ejecutarSqlOpcional(d, "ALTER TABLE g_settings ADD COLUMN menu_variant INTEGER DEFAULT 1");
+  ejecutarSqlOpcional(d, "ALTER TABLE g_settings ADD COLUMN menu_variant INTEGER DEFAULT 5");
+  // Las instalaciones que ya tenían la columna se quedaron con el 1 de antes.
+  // Ese 1 apunta a la variante vieja de botones sueltos, que los clientes
+  // actuales ya no pintan: el menú caía siempre al plan B de texto.
+  // Se suben a la 5 (tarjeta única) una sola vez; quien haya elegido otra
+  // variante a mano después de esta migración la conserva.
+  try {
+    if (!d.__menuVariantMigrado) {
+      d.exec("UPDATE g_settings SET menu_variant = 5 WHERE menu_variant IS NULL OR menu_variant = 1");
+      d.__menuVariantMigrado = true;
+    }
+  } catch { /* sin tabla todavía: la crea el CREATE de arriba */ }
   ejecutarSqlOpcional(d, "ALTER TABLE g_settings ADD COLUMN instagram TEXT DEFAULT 'https://www.instagram.com/__ikg.05'");
 
   for (const [tabla, columnas] of Object.entries(EXTRAS)) {

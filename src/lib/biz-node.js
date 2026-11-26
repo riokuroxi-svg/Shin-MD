@@ -173,4 +173,18 @@ export function tipoDeBoton(message) {
   return null;
 }
 
+/**
+ * En chats privados (1:1) los mensajes interactivos necesitan además
+ * `<bot biz_bot='1'/>` para que el cliente los pinte. En grupos no se
+ * pone: ahí es donde el servidor lo rechaza.
+ * @param {string} jid destino
+ * @returns {object[]}
+ */
+export function nodoBot(jid) {
+  const j = String(jid || "");
+  const esPrivado = j.endsWith("@s.whatsapp.net") || j.endsWith("@lid");
+  if (!esPrivado) return [];
+  return [{ tag: "bot", attrs: { biz_bot: "1" } }];
+}
+
 export default nodoBiz;

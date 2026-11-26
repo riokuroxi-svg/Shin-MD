@@ -20,7 +20,7 @@ import * as lid from "../lib/lid.js";
 import { panelCodigo } from "../services/consola.js";
 import { esLid as esJidLid } from "../lib/jid.js";
 import { resolveChannel } from "../lib/channel.js";
-import { nodoBiz, tipoDeBoton } from "../lib/biz-node.js";
+import { nodoBiz, nodoBot, tipoDeBoton } from "../lib/biz-node.js";
 import { analizarCortes, podarCortes } from "../lib/cortes.js";
 import db from "../services/ginko-db.js";
 import pino from "pino";
@@ -381,7 +381,14 @@ export function connectSocket(engine, opts) {
           const yaTrae = Array.isArray(o?.additionalNodes)
             && o.additionalNodes.some((n) => n?.tag === "biz" || n?.tag === "bot");
           if (!yaTrae) {
-            opciones = { ...(o || {}), additionalNodes: [...(o?.additionalNodes || []), ...nodoBiz(tipo)] };
+            opciones = {
+              ...(o || {}),
+              additionalNodes: [
+                ...(o?.additionalNodes || []),
+                ...nodoBiz(tipo),
+                ...nodoBot(j), // en 1:1 el cliente pide además <bot biz_bot='1'/>
+              ],
+            };
           }
         }
       } catch { /* si falla, sale como antes: mejor eso que perder el envío */ }
