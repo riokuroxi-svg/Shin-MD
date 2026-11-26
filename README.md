@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 660 pruebas" width="100%">
+<img src="docs/assets/perfil/portada.svg" alt="Shin-MD — bot de WhatsApp con anti-ban propio, 216 comandos y 666 pruebas" width="100%">
 
 <br>
 
-<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="660/660 pruebas"></a>
+<a href="https://github.com/riokuroxi-svg/Shin-MD"><img src="docs/assets/perfil/insignias/pruebas.svg" height="50" alt="666/666 pruebas"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/comandos.svg" height="50" alt="216 comandos"></a>
 <a href="#licencia-y-marca"><img src="docs/assets/perfil/insignias/licencia.svg" height="50" alt="Licencia AGPL-3.0-only"></a>
 <a href="#instalación"><img src="docs/assets/perfil/insignias/node.svg" height="50" alt="Node 22.5 o superior"></a>
@@ -23,7 +23,7 @@ y reduce el riesgo de bloqueo.**
 
 </div>
 
-<img src="docs/assets/perfil/cifras.svg" alt="660/660 pruebas en 76 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
+<img src="docs/assets/perfil/cifras.svg" alt="666/666 pruebas en 76 archivos, 216 comandos en 18 categorías, 759 nombres con 543 alias, versión 3.7.9" width="100%">
 
 <img src="docs/assets/perfil/divisor.svg" alt="" width="100%">
 
@@ -154,7 +154,7 @@ reemplaza a tener el número en un teléfono que no uses para nada más.
   para el dueño real: antes, un desconocido que insistía con un comando que no
   podía usar conseguía una respuesta del bot por cada mensaje suyo.
 
-La suite lo cubre: las **660/660 pruebas** (76 archivos) que vigilan esto,
+La suite lo cubre: las **666/666 pruebas** (76 archivos) que vigilan esto,
 incluidas las regresiones de cada fallo. Si un commit rompe alguna, GitHub lo
 marca.
 
@@ -232,7 +232,7 @@ hoja inferior y álbum— y el que salga mal es el culpable.
 —la versión de Play Store está abandonada y rompe los paquetes— y pega esto:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.10/shin.sh | sh
 ```
 
 Una línea, y el bot queda arrancado. Ese archivo descarga el instalador de
@@ -284,9 +284,9 @@ huella cubre también el arranque:
 
 ```bash
 pkg update -y && pkg install -y curl
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/install.sh -o install.sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/SHA256SUMS -o SHA256SUMS
-sha256sum -c SHA256SUMS && bash install.sh --version v3.7.9 --go
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.10/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.10/SHA256SUMS -o SHA256SUMS
+sha256sum -c SHA256SUMS && bash install.sh --version v3.7.10 --go
 ```
 
 La cuarta línea solo ejecuta si la huella coincide: instala una versión
@@ -296,7 +296,7 @@ sin él, el instalador se queda en «instalado» y se arranca luego con `shin`.
 ¿Solo quieres saber si el archivo es el bueno, sin instalar nada?
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.10/shin.sh | sh -s -- --dry-run
 ```
 
 </details>
@@ -351,7 +351,7 @@ hay una terminal de verdad. Ver [`docs/VPS.md`](docs/VPS.md).
 **Servidor o VPS.** El mismo comando, sin preparar nada antes:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.9/shin.sh | sh
+curl -fsSL https://raw.githubusercontent.com/riokuroxi-svg/Shin-MD/v3.7.10/shin.sh | sh
 ```
 
 Si falta Node o git, el instalador lo resuelve: con el gestor de paquetes del
@@ -386,7 +386,7 @@ Los comandos que se usan de verdad, tal cual:
 
 ```bash
 npm start              # arranca el bot y dibuja el panel
-npm test               # las 660 pruebas
+npm test               # las 666 pruebas
 npm run lint           # 0 errores, o no entra
 npm run typecheck      # tipos con JSDoc
 npm run docs:web       # regenera docs/web/index.html desde el propio bot
