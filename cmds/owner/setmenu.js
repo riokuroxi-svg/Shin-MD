@@ -34,6 +34,12 @@ const VARIANTS = {
     desc: "Ficha técnica compacta con acceso directo a categorías y monitor de latencia",
     emoji: "📊",
   },
+  v5: {
+    id: 5,
+    name: "TARJETA ÚNICA (estilo FURINA)",
+    desc: "Un solo mensaje: video en bucle + lista desplegable, con el video subido una sola vez — la que viene por defecto",
+    emoji: "🃏",
+  },
 };
 
 export default {
@@ -54,7 +60,7 @@ export default {
     if (!target) {
       let actual = 1;
       try {
-        actual = Number(db.getSettings(botId)?.menu_variant || 3);
+        actual = Number(db.getSettings(botId)?.menu_variant || 5);
       } catch {}
       let list = `🎨 *CONFIGURACIÓN DE ESTILO DE MENÚ*\n\n`;
       list += `Actual: *V${actual}* · Uso: \`${ctx.usedPrefix}setmenu <variante>\`\n\n`;

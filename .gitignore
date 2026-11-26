@@ -56,3 +56,6 @@ data/.shin-clave
 # Python
 __pycache__/
 *.pyc
+
+# Caché de medios subidos (se regenera sola)
+data/media-cache.json

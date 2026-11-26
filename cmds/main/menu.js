@@ -29,6 +29,8 @@ import {
   listMenuPosters,
 } from "#lib/menu-shared";
 import { sendInteractive, sendVoiceNote, singleSelect, quickReply, ctaUrl, ctaCopy } from "#interactive";
+import { sendMenuCard } from "#lib/menu-card";
+import { getVideoPath } from "#lib/menu-shared";
 import db from "../../src/services/ginko-db.js";
 
 /**
@@ -66,7 +68,12 @@ export default {
     const greeting = getTimeGreeting();
     const version = localVersion();
     const prefix = ctx.usedPrefix || ".";
-    const weather = await getWeatherSummary();
+    // El clima es un extra, no el menú: si tarda, se usa un valor neutro.
+    // Antes getWeatherSummary() podía colgar la respuesta hasta 6 s.
+    const weather = await Promise.race([
+      getWeatherSummary().catch(() => null),
+      new Promise((r) => setTimeout(() => r(null), 1200)),
+    ]).then((w) => w || "—");
     const channelUrl = globalThis.links?.channel || "https://whatsapp.com/channel/0029VbDVFpSGJP89hfZUe522";
 
     const { cats, seenNames } = collectCategories(commands, { exclude: ["menu"] });
@@ -115,7 +122,9 @@ export default {
     // Recuperar variante de menú configurada usando JID normalizado del bot.
     // Por defecto se usa la 3 (tarjeta con video en bucle): la variante 1 con
     // botones sueltos ya no se ve en los clientes nuevos.
-    const VARIANTE_POR_DEFECTO = 3;
+    // 5 = tarjeta única (viewOnce + video + single_select), el formato que
+    // se ve completo en Android. Es la que va por defecto.
+    const VARIANTE_POR_DEFECTO = 5;
     let menuVariant = VARIANTE_POR_DEFECTO;
     try {
       const botId = botJid(sock) || "default";
@@ -209,8 +218,51 @@ export default {
     };
 
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
-    const banner = getRandomBanner();
-    const videoAsset = getVideoAsset();
+    // OJO: ni el banner ni el video se cargan aquí. Antes getVideoAsset()
+    // leía 3 MB de disco en CADA .menu para nada (la variante 5 ni lo usa
+    // en memoria: usa la ruta con caché). Eso era parte del "no responde".
+    // Cada variante pide lo suyo justo antes de enviarlo (carga perezosa).
+
+    // Variante 5 (por defecto): tarjeta única estilo FURINA.
+    // Un solo mensaje: header de video en bucle + body + single_select.
+    // El video se sube una vez y queda cacheado: si ya está en caché,
+    // el mensaje sale al instante (antes tardaba 10-18 s por la subida).
+    if (menuVariant === 5) {
+      // La variante 5 responde con el selector completo, pero cacheado por
+      // usuario: no se rearma ni se vuelve a subir el video en cada .menu.
+      const claveV5 = __claveMenu + ":v5";
+      const enCache = __cache.get(claveV5);
+      if (enCache && Date.now() - enCache.ts < 60000) return enCache.valor;
+      const videoPath = getVideoPath();
+      const cardBody =
+        `${greeting}\n\n*${pushName}*\n` +
+        `╭┈┈ *SHIN-MD v${version}* ┈┈╮\n` +
+        `│ ◈ Uptime: *${uptimeFormatted}*\n` +
+        `│ ◈ Comandos: *${seenNames.size}* en *${cats.size}* categorías\n` +
+        `│ ◈ Rango: *${userRole}*\n` +
+        `╰┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈╯\n\n` +
+        `_Elige una categoría en el botón de abajo._\n` +
+        `📢 *Canal:* ${channelUrl}`;
+
+      const enviado = await sendMenuCard(sock, ctx.chatId, {
+        body: cardBody,
+        footer: "Shin-MD • Bot de WhatsApp Profesional",
+        title: `✨ SHIN-MD ${version}`,
+        videoPath,
+        selector: { title: "📂 Explorar Categorías", sections: menuSections },
+        contextInfo: getChannelContext({ mentionedJid: [ctx.senderId] }),
+        quoted: ctx.full,
+      });
+      if (enviado) {
+        try {
+          if (__cache.size > 400) __cache.clear();
+          __cache.set(claveV5, { valor: null, ts: Date.now(), esTarjeta: true });
+        } catch { /* la caché nunca debe tumbar el menú */ }
+        void mandarNotaDeVoz(sock, ctx);
+        return null;
+      }
+      // si la tarjeta falló, seguimos abajo con la variante 3
+    }
 
     // Variante 4: Compact Dashboard
     if (menuVariant === 4) {
@@ -237,8 +289,9 @@ export default {
       return null;
     }
 
-    // Variante 3: Video Animado GifPlayback
-    if (menuVariant === 3 && videoAsset) {
+    // Variante 3: Video Animado GifPlayback (buffer leído solo al usarse)
+    const videoParaV3 = menuVariant === 3 ? getVideoAsset() : null;
+    if (menuVariant === 3 && videoParaV3) {
       const interactiveBody = headerText +
         `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
         `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
@@ -251,7 +304,7 @@ export default {
         title: "✨ SHIN-MD " + version,
         body: interactiveBody,
         footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
-        video: videoAsset,
+        video: videoParaV3,
         gifPlayback: true,
         buttons: menuButtons,
         hoja: menuHoja,
@@ -270,10 +323,11 @@ export default {
         fullCategoriesList +
         `\n📢 *Canal Oficial:* ${channelUrl}\n_Shin-MD v${version} · Desarrollado por riokuroxi-svg_`;
 
-      if (banner) {
+      const bannerV2 = getRandomBanner();
+      if (bannerV2) {
         await sock.sendMessage(
           ctx.chatId,
-          { image: banner, caption: finalContent, contextInfo: channelCtx },
+          { image: bannerV2, caption: finalContent, contextInfo: channelCtx },
           { quoted: ctx.full }
         );
         void mandarNotaDeVoz(sock, ctx);
@@ -302,7 +356,7 @@ export default {
       title: "✨ SHIN-MD " + version,
       body: interactiveBody,
       footer: "Shin-MD • Bot de WhatsApp Profesional\ngithub.com/riokuroxi-svg/Shin-MD",
-      image: banner,
+      image: getRandomBanner(),
       buttons: menuButtons,
       hoja: menuHoja,
       quoted: ctx.full,

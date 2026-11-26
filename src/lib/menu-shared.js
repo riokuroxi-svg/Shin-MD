@@ -161,6 +161,20 @@ export function getRandomMenuImage() {
   }
 }
 
+/** Ruta del video del menú (para el enviador con caché), o null. */
+export function getVideoPath() {
+  const candidatos = [
+    process.env.MENU_VIDEO_PATH,
+    path.join(ROOT_DIR, "assets/video/menu.mp4"),
+  ].filter(Boolean);
+  for (const p of candidatos) {
+    try {
+      if (typeof p === "string" && fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
 export function getVideoAsset() {
   const videoPaths = [
     process.env.MENU_VIDEO_PATH,

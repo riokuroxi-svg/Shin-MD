@@ -59,6 +59,27 @@ export const EXENTOS_POR_PAQUETE = {
     /^node_modules\/libsignal\//,
     /^node_modules\/audio-decode\//,
   ],
+  // Tablas de entidades HTML: están llenas de \uNNNN por diseño (es el
+  // propósito del paquete, decodificar entidades), no por ofuscación.
+  // prettier/eslint empaquetan sus plugins con escapes y bloques base64.
+  // Estos avisos salían en CADA arranque y solo hacían ruido.
+  "ofuscacion-hex": [
+    /^node_modules\/entities\//,
+    /^node_modules\/(?:htmlparser2|parse5)\/.*entities\//,
+    /^node_modules\/prettier\//,
+    /^node_modules\/eslint\//,
+  ],
+  "blob-base64": [
+    /^node_modules\/entities\//,
+    /^node_modules\/(?:htmlparser2|parse5)\/.*entities\//,
+    /^node_modules\/prettier\//,
+  ],
+  "anti-depuracion": [
+    // @types/node y eslint hablan de --inspect en su documentación/CLI;
+    // no están vigilando si los depuras.
+    /^node_modules\/@types\//,
+    /^node_modules\/eslint\//,
+  ],
 };
 
 /** Extensiones de texto que se inspeccionan (el binario no se lee). */
