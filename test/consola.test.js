@@ -30,7 +30,7 @@ const EQUIPO = {
   memoria: { usadoMB: 2206, totalMB: 3810 },
 };
 
-const { componerPantalla, limpiarSalida, ajustar, recortar } = await import(CONSOLA);
+const { componerPantalla, limpiarSalida, ajustar, recortar, espaciarCodigo } = await import(CONSOLA);
 
 test("la caja del panel mide lo mismo en todas sus líneas, a cualquier ancho", () => {
   for (const ancho of [40, 46, 64, 80, 100]) {
@@ -224,4 +224,52 @@ test("el dibujo que no cabe se avisa en vez de romper el panel", () => {
   assert.doesNotMatch(texto, /▄▄▄▄▄ █▄█▄/, "no debe quedar el dibujo partido");
   assert.match(texto, /antes del dibujo/);
   assert.match(texto, /después del dibujo/);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  El código de vinculación se perdía de vista. El bot lo pedía bien,
+//  pero se dibujaba DENTRO del registro de log (17 líneas). El ruido
+//  del arranque (Router listo, Engine, Web server, Catálogo…) lo
+//  empujaba fuera de pantalla justo cuando había que teclearlo.
+//
+//  La regla: con código pendiente, la caja queda FIJA arriba y el
+//  registro sigue por debajo. Nunca se lo lleva el desplazamiento.
+// ═══════════════════════════════════════════════════════════════════
+
+test("el código de vinculación queda fijo y no se lo lleva el registro", () => {
+  const { lineas } = componerPantalla({
+    estado: "activo",
+    version: "3.8.1",
+    alto: 30,
+    ancho: 80,
+    codigoVinculacion: { numero: "380970546112", codigo: "K9J8FGYD" },
+    // Ruido de sobra: si el código estuviera en el registro, se perdería.
+    registro: Array.from({ length: 60 }, (_, i) => `linea de ruido ${i}`),
+  });
+  const texto = lineas.join("\n");
+  assert.match(texto, /K\s9\sJ\s8/, "el código tiene que verse espaciado");
+  assert.match(texto, /F\sG\sY\sD/);
+  assert.match(texto, /380970546112/, "y el número de la cuenta");
+});
+
+test("sin código pendiente no se dibuja la caja (no ocupa sitio de balde)", () => {
+  const { lineas } = componerPantalla({
+    estado: "activo", version: "3.8.1", alto: 24, ancho: 80, registro: ["hola"],
+  });
+  assert.doesNotMatch(lineas.join("\n"), /tu código/);
+});
+
+test("el pie pide teclear el código en vez de hablar de reiniciar", () => {
+  const conCodigo = componerPantalla({
+    estado: "activo", version: "3.8.1", alto: 30, ancho: 80,
+    codigoVinculacion: { numero: "380970546112", codigo: "K9J8FGYD" }, registro: [],
+  });
+  assert.match(conCodigo.pie, /teclea el código/);
+  const sinCodigo = componerPantalla({ estado: "activo", version: "3.8.1", alto: 24, ancho: 80, registro: [] });
+  assert.match(sinCodigo.pie, /Ctrl\+C/);
+});
+
+test("espaciarCodigo parte el código en dos grupos de cuatro", () => {
+  assert.equal(espaciarCodigo("K9J8FGYD").replace(/\s/g, ""), "K9J8-FGYD");
+  assert.equal(espaciarCodigo("AB12-CD34").replace(/\s/g, ""), "AB12-CD34");
 });

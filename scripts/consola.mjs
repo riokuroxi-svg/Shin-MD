@@ -56,6 +56,20 @@ const NEGRITA = "\x1b[1m";
 const RESET = "\x1b[0m";
 
 const MARCA = "SHIN-MD";
+
+/**
+ * Espacia el código para que se lea de un vistazo en letra pequeña:
+ * `AB12CD34` → `A B 1 2 - C D 3 4`. Dos grupos de cuatro, como los
+ * muestra WhatsApp.
+ *
+ * @param {string} codigo
+ * @returns {string}
+ */
+export function espaciarCodigo(codigo) {
+  const limpio = String(codigo || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (limpio.length !== 8) return limpio;
+  return [...limpio.slice(0, 4)].join(" ") + "  -  " + [...limpio.slice(4)].join(" ");
+}
 const HISTORIAL = 400;          // líneas de log que se guardan en memoria
 const TICK_MS = 1000;           // cada cuánto se repinta la cabecera
 const PINTAR_MIN_MS = 120;      // no repintar más seguido que esto
@@ -333,14 +347,32 @@ export function componerPantalla({
   registro = [],
   ancho = 72,
   alto = 24,
+  codigoVinculacion = null,
 } = {}) {
   const cabecera = enmarcar(
     construirCabecera({ estado, reinicios, pid, salud, equipo, ancho: ancho - 4, url }),
     ancho,
     `${MARCA} ${version}`,
   );
-  const pie = `${GRIS}Ctrl+C parar · r reiniciar${RESET}`;
-  const hueco = Math.max(1, alto - cabecera.length - 1);
+  // El código de vinculación va en una caja FIJA, siempre arriba del
+  // registro. Antes se dibujaba dentro del registro y el propio registro
+  // lo empujaba fuera de pantalla justo cuando había que teclearlo: el
+  // código se pedía bien, pero se iba hacia arriba entre el ruido.
+  const cajaCodigo = codigoVinculacion
+    ? [
+        "",
+        `${AMBAR}╭─ tu código ──────────────────────────────────────────╮${RESET}`,
+        `${AMBAR}│${RESET}  ${NEGRITA}${VERDE}${espaciarCodigo(codigoVinculacion.codigo)}${RESET}`,
+        `${AMBAR}│${RESET}  ${GRIS}cuenta ${codigoVinculacion.numero} · caduca en ~60 s${RESET}`,
+        `${AMBAR}╰──────────────────────────────────────────────────────╯${RESET}`,
+        "",
+      ]
+    : [];
+
+  const pie = codigoVinculacion
+    ? `${VERDE}◈ teclea el código de arriba en WhatsApp › Dispositivos vinculados${RESET} · ${GRIS}Ctrl+C parar${RESET}`
+    : `${GRIS}Ctrl+C parar · r reiniciar${RESET}`;
+  const hueco = Math.max(1, alto - cabecera.length - cajaCodigo.length - 1);
 
   const envueltas = [];
   let avisadoElQr = false;
@@ -358,7 +390,7 @@ export function componerPantalla({
 
   // El registro se pega debajo de la caja y se rellena por abajo: así no
   // queda un hueco raro entre el panel y lo que va diciendo el bot.
-  const lineas = [...cabecera, ...cola];
+  const lineas = [...cabecera, ...cajaCodigo, ...cola];
   while (lineas.length < alto - 1) lineas.push("");
 
   return { lineas, pie };
@@ -496,6 +528,10 @@ async function principal() {
   // El supervisor lo informa en el gancho `cayo`; aquí se lee para
   // decidir si hay que pedir el número otra vez.
   let caidaPorSesion = false;
+  // El código de vinculación que hay que teclear, si lo hay. Se pinta en
+  // una caja fija del panel y no se mueve aunque el registro siga
+  // escribiendo: es lo único que hay que leer en ese momento.
+  let codigoVinculacion = null;
   // Verdadero mientras hay una pregunta abierta en la terminal. Lo lee
   // `pintar()` para no borrar lo que la persona está escribiendo.
   let repreguntando = false;
@@ -546,7 +582,20 @@ async function principal() {
         anotar(`se cayó ${caidas} veces en ${VENTANA_MS / 1000}s; dejo de intentarlo`);
         pintar();
       },
-      salida: (texto) => tragar(texto),
+      salida: (texto) => {
+        // El bot publica `SHIN_PAIRING::<numero>::<codigo>` cuando pide el
+        // código. Se saca del flujo antes de que llegue al registro, para
+        // que no se lo lleve el desplazamiento de líneas.
+        const conMarca = String(texto);
+        const re = /SHIN_PAIRING::([^:\s]+)::([A-Za-z0-9]{4}-?[A-Za-z0-9]{4})/g;
+        let m;
+        while ((m = re.exec(conMarca)) !== null) {
+          codigoVinculacion = { numero: m[1], codigo: m[2] };
+          pintar(true);
+        }
+        const sinMarca = conMarca.replace(re, "");
+        if (sinMarca.trim() || !conMarca.includes("SHIN_PAIRING::")) tragar(sinMarca);
+      },
     },
   });
 
@@ -671,6 +720,7 @@ async function principal() {
       registro: lineas,
       ancho,
       alto,
+      codigoVinculacion,
     });
 
     // Redibujo completo: home, cada línea con borrado hasta el final, y

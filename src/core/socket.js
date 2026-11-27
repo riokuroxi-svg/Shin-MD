@@ -573,9 +573,20 @@ export function connectSocket(engine, opts) {
             if (process.env.SHIN_PAIRING_DEBUG === "1") log.info("Pairing: solicitando código de vinculación…");
             const pair = await s.requestPairingCode(phone);
             const code = formatearCodigoDeVinculacion(pair);
-            // El código se dibuja aparte del registro: es lo único que la
-            // persona tiene que mirar, y entre líneas de log se perdía.
-            console.log(panelCodigo({ numero: phone, codigo: code }));
+            // El código va en una línea con MARCA, no dibujado en el
+            // registro. El registro se desplaza y el código acababa fuera
+            // de pantalla justo cuando había que teclearlo. El panel lo
+            // intercepta y lo deja fijo en su propia fila.
+            //
+            //   SHIN_PAIRING::<numero>::<codigo>
+            //
+            // Sin panel (node index.js a secas) nadie intercepta la marca y
+            // se ve la tarjeta dibujada como siempre.
+            if (process.env.SHIN_VIGILADO === "1") {
+              console.log("SHIN_PAIRING::" + phone + "::" + code);
+            } else {
+              console.log(panelCodigo({ numero: phone, codigo: code }));
+            }
           }
         } catch (e) { log.error("Pairing: " + (e.message || e)); }
       }, pairingDelayMs);
