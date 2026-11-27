@@ -461,6 +461,11 @@ export function connectSocket(engine, opts) {
           log.warn("Desvinculado (" + code + ") — limpiando sesión");
           health.recordError(new Error("logged_out"));
           clearSession();
+          // Avisar al panel de que esto NO es una caída cualquiera: la
+          // sesión ya no sirve y hay que volver a vincular. Sin este
+          // aviso, el supervisor relanzaba el bot con el mismo número,
+          // este volvía a salir con 401 y el bucle no se rompía nunca.
+          try { if (process.send) process.send("sesion-perdida"); } catch {}
           process.exit(1);
         }
 

@@ -113,3 +113,29 @@ test("menú: sin botones no hay interactiveMessage (se usa el texto)", () => {
   const payload = armarPayload({ cuerpo: "solo texto", botones: [] });
   assert.equal(payload.interactiveMessage.nativeFlowMessage.buttons.length, 0);
 });
+
+test("menú: la cabecera acepta portada dibujada (imagen) y viaja en el proto", () => {
+  // `enviarMenu` pone vídeo si lo hay y, si no, la portada de MENU_TEMA.
+  // Aquí se comprueba que esa cabecera de imagen cabe en el interactive y
+  // pasa por el codificador sin perder el adjunto.
+  const payload = armarPayload({ cuerpo: "menú con portada", botones: [{ text: "Ping", id: "ping" }] });
+  payload.interactiveMessage.header = proto.Message.InteractiveMessage.Header.fromObject({
+    title: "",
+    subtitle: "",
+    hasMediaAttachment: true,
+    imageMessage: {
+      mimetype: "image/png",
+      caption: "",
+      fileLength: 26559,
+      jpegThumbnail: Buffer.alloc(64),
+    },
+  });
+
+  const dec = viaje(payload);
+  const h = dec.interactiveMessage.header;
+  assert.equal(h.hasMediaAttachment, true);
+  assert.equal(h.imageMessage.mimetype, "image/png");
+  assert.equal(Number(h.imageMessage.fileLength), 26559);
+  // Y los botones siguen ahí: la cabecera no se los come.
+  assert.equal(dec.interactiveMessage.nativeFlowMessage.buttons[0].name, "quick_reply");
+});

@@ -76,9 +76,16 @@ export const sesionUtilizable = (sessionDir) => estadoSesion(sessionDir).registr
  * terminal de verdad detrás: ahí sí se puede preguntar, y callarse sería
  * dejar al usuario con un bot que no arranca sin decir por qué.
  *
+ * OJO: si nos lanza el panel (`SHIN_VIGILADO=1`), la respuesta es NO
+ * aunque haya `/dev/tty`. El panel es el dueño del teclado: si el hijo
+ * también leyera de la misma terminal, los dos se comerían las teclas a
+ * medias y ni la pregunta ni el Ctrl+C llegarían a ningún sitio. Ese fue
+ * exactamente el fallo de la 3.8.0 en Termux.
+ *
  * @returns {boolean}
  */
 export function hayTerminalDetras() {
+  if (process.env.SHIN_VIGILADO === "1") return false;
   if (process.stdin.isTTY) return true;
   if (process.platform === "win32") return false;
   try {
@@ -121,6 +128,8 @@ export function planDeVinculacion({ args = {}, env = {}, sesion, hayTerminal }) 
  */
 export function leerDeTerminal() {
   if (process.stdin.isTTY) return "";
+  // Bajo el panel no se lee: el dueño del teclado es él.
+  if (process.env.SHIN_VIGILADO === "1") return "";
   let fd;
   try {
     fd = fs.openSync("/dev/tty", "r");
@@ -130,6 +139,15 @@ export function leerDeTerminal() {
       const n = fs.readSync(fd, buf, 0, 1, null);
       if (!n) break;
       const c = buf.toString("utf8");
+      // Ctrl+C (0x03) o Ctrl+D (0x04): se deja de leer en vez de quedarse
+      // mudo tragando teclas para siempre. Antes solo se salía con Enter,
+      // así que un Ctrl+C aquí no hacía NADA y parecía que el terminal
+      // estaba colgado.
+      if (c === "\u0003") {
+        try { process.kill(process.pid, "SIGINT"); } catch {}
+        return "";
+      }
+      if (c === "\u0004") return "";
       if (c === "\n" || c === "\r") break;
       trozos.push(c);
     }

@@ -201,6 +201,32 @@ export function tarjetaOferta() {
   };
 }
 
+/**
+ * La portada del menú según el tema elegido.
+ *   MENU_TEMA=neon | pastel | noche  (por defecto: pastel de día,
+ *   noche de noche). Si el archivo no está, devuelve null y el menú
+ *   sigue con el vídeo o con texto: nunca se rompe por un asset.
+ *
+ * @param {Date} [fecha]
+ * @returns {{buffer:Buffer, path:string}|null}
+ */
+export function portadaDelMenu(fecha = new Date()) {
+  const pedido = String(process.env.MENU_TEMA || "").trim().toLowerCase();
+  const porHora = fecha.getHours() >= 6 && fecha.getHours() < 19 ? "pastel" : "noche";
+  const tema = pedido || porHora;
+  const archivo =
+    tema === "neon" ? "menu-neon.png"
+    : tema === "noche" || tema === "noche-ciudad" ? "menu-noche-ciudad.png"
+    : "menu-pastel.png";
+  const p = path.join(DIR_MARCA, archivo);
+  if (!esArchivo(p)) return null;
+  try {
+    return { buffer: fs.readFileSync(p), path: p, tema };
+  } catch {
+    return null;
+  }
+}
+
 /** Las imágenes de marca disponibles (para cabeceras de categorías). */
 export function arteDeCategoria() {
   try {
@@ -220,4 +246,5 @@ export default {
   audioDelMenu,
   tarjetaOferta,
   arteDeCategoria,
+  portadaDelMenu,
 };

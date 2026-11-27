@@ -35,6 +35,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { hayTerminalDetras, leerDeTerminal } from "../src/lib/vinculacion.js";
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(AQUI, "..");
@@ -227,4 +228,34 @@ test("ni el arranque ni la consola pueden dibujar un QR", () => {
     }
   }
   assert.deepEqual(conQr, [], `hay ${conQr.length} forma(s) de volver a dibujar un QR`);
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  El fallo de la 3.8.0 en Termux: el panel lanzaba el bot con la
+//  entrada cerrada, pero el bot abría /dev/tty por su cuenta y se
+//  quedaba leyendo la MISMA terminal que el panel. Resultado: lo que
+//  escribías se lo comía el hijo y ni la pregunta ni Ctrl+C funcionaban.
+//
+//  La regla: si nos lanza el panel (`SHIN_VIGILADO=1`), el teclado es
+//  del panel y el hijo no lo toca.
+// ═══════════════════════════════════════════════════════════════════
+
+test("bajo el panel, el bot NO abre /dev/tty (el teclado es del panel)", () => {
+  const antes = process.env.SHIN_VIGILADO;
+  try {
+    process.env.SHIN_VIGILADO = "1";
+    assert.equal(hayTerminalDetras(), false,
+      "el hijo vigilado no puede creerse dueño de la terminal");
+    assert.equal(leerDeTerminal(), "",
+      "y no puede leer de ella: se comería las teclas del panel");
+  } finally {
+    if (antes === undefined) delete process.env.SHIN_VIGILADO;
+    else process.env.SHIN_VIGILADO = antes;
+  }
+});
+
+test("el supervisor marca al hijo como vigilado (SHIN_VIGILADO)", () => {
+  const texto = fs.readFileSync(path.join(RAIZ, "scripts", "supervisor.mjs"), "utf8");
+  assert.match(texto, /SHIN_VIGILADO:\s*"1"/,
+    "sin esa marca, el hijo vuelve a pelear por la terminal");
 });

@@ -48,8 +48,13 @@ const espera = (ms) => new Promise((listo) => setTimeout(listo, ms));
  * @param {boolean} [o.capturar] Leer la salida del hijo en vez de dejarla
  *        ir directa a la terminal. Obligatorio en la consola: si se
  *        captura sin leer, el bot se bloquea al llenarse el tubo.
+ * @param {() => string[]|Promise<string[]>} [o.argumentosVivos] Argumentos
+ *        para el PRÓXIMO arranque. Se llama antes de cada intento, así el
+ *        panel puede cambiar el número tras una desvinculación sin
+ *        reiniciar nada. Puede tardar: si va a esperar a que alguien
+ *        escriba el número, el supervisor NO relanza mientras tanto.
  */
-export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {}, capturar = false } = {}) {
+export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {}, capturar = false, argumentosVivos = null } = {}) {
   const entrada = path.join(raiz, "index.js");
 
   let hijo = null;
@@ -78,7 +83,21 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
     // Capturando, se lee aquí para pintarlo dentro del panel; si nadie
     // leyera el tubo, el bot se quedaría clavado al llenarse.
     const flujo = capturar ? "pipe" : "inherit";
-    hijo = spawn(process.execPath, [entrada, ...argumentos], {
+    // Los argumentos se preguntan en CADA arranque: si el panel consiguió
+    // un número nuevo tras perder la sesión, este es el momento de usarlo.
+    let argsAhora = argumentos;
+    if (typeof argumentosVivos === "function") {
+      try {
+        // Puede tardar (esperando a que se escriba el número): aquí se
+        // aguanta. Antes no se esperaba y el bot se relanzaba cada segundo
+        // con el número viejo mientras la persona aún estaba escribiendo.
+        const vivos = await argumentosVivos();
+        if (Array.isArray(vivos)) argsAhora = vivos;
+      } catch {
+        /* se usa lo que había */
+      }
+    }
+    hijo = spawn(process.execPath, [entrada, ...argsAhora], {
       cwd: raiz,
       stdio: [capturar ? "ignore" : "inherit", flujo, flujo, "ipc"],
       env: { ...process.env, ...env, SHIN_VIGILADO: "1" },
@@ -93,6 +112,14 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
       // con el siguiente arranque.
       hijo.on("exit", () => avisar("salida", "\n"));
     }
+
+    // El bot avisa por IPC cuando WhatsApp lo desvincula (`sesion-perdida`).
+    // Esa salida NO es una caída normal: reintentar con la misma sesión es
+    // inútil, hay que volver a vincular.
+    let sesionPerdida = false;
+    hijo.on("message", (mensaje) => {
+      if (mensaje === "sesion-perdida") sesionPerdida = true;
+    });
 
     const pid = hijo.pid;
     avisar("arrancado", { pid });
@@ -139,7 +166,7 @@ export function crearSupervisor({ raiz, argumentos = [], env = {}, ganchos = {},
 
     const esperaMs = Math.min(1000 * 2 ** (caidas.length - 1), ESPERA_MAX_MS);
     estado = "esperando";
-    avisar("cayo", { code, signal, esperaMs, intento: caidas.length });
+    avisar("cayo", { code, signal, esperaMs, intento: caidas.length, sesionPerdida });
     await espera(esperaMs);
     return "reiniciar";
   }

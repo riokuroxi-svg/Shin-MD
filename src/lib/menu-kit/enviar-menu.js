@@ -34,6 +34,7 @@ import {
   datosDelVideo,
   videoDelMenu,
   miniaturaDelMenu,
+  portadaDelMenu,
   audioDelMenu,
   tarjetaOferta,
 } from "./menu-media.js";
@@ -187,6 +188,27 @@ async function prepararVideo(sock) {
   }
 }
 
+/**
+ * Prepara la portada dibujada como cabecera fija.
+ * Solo se usa cuando no hay vídeo: el vídeo manda (es el efecto «foto que
+ * se mueve»); la portada es el respaldo cuando `MENU_TEMA` está puesto o
+ * los assets de vídeo no existen.
+ */
+async function prepararPortada(sock) {
+  const portada = portadaDelMenu();
+  if (!portada) return null;
+  try {
+    const media = await prepareWAMessageMedia(
+      { image: portada.buffer, mimetype: "image/png" },
+      { upload: sock.waUploadToServer },
+    );
+    return media?.imageMessage || null;
+  } catch (err) {
+    log.warn("menu: no se pudo preparar la portada (" + (err.message || err) + ")");
+    return null;
+  }
+}
+
 /* ── La tarjeta del menú ──────────────────────────────────────────── */
 
 /**
@@ -251,6 +273,7 @@ export async function enviarMenu(sock, jid, op = {}) {
   try {
     // Cabecera animada (gifPlayback). Es lo que da el efecto «foto que se mueve».
     const videoMessage = await prepararVideo(sock);
+    const imageMessage = videoMessage ? null : await prepararPortada(sock);
     const oferta = tarjetaOferta();
 
     const interactivo = {
@@ -266,8 +289,9 @@ export async function enviarMenu(sock, jid, op = {}) {
         header: proto.Message.InteractiveMessage.Header.fromObject({
           title: "",
           subtitle: "",
-          hasMediaAttachment: !!videoMessage,
+          hasMediaAttachment: !!(videoMessage || imageMessage),
           ...(videoMessage ? { videoMessage } : {}),
+          ...(imageMessage ? { imageMessage } : {}),
         }),
         nativeFlowMessage: proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
           buttons: armados.map((b) => ({ name: b.name, buttonParamsJson: b.buttonParamsJson })),

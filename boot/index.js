@@ -176,7 +176,10 @@ if (args.qrDeprecado) {
  */
 function preguntarNumero() {
   const porTty = !process.stdin.isTTY && hayTerminalDetras();
-  console.log(ui.panelVinculacion().join("\n"));
+  // Bajo el panel no se dibuja nada: el panel ya enseñó su pregunta y es
+  // el único que escribe en pantalla. Antes se imprimía también aquí y el
+  // texto acababa partido entre el panel y la salida capturada.
+  if (process.env.SHIN_VIGILADO !== "1") console.log(ui.panelVinculacion().join("\n"));
   const respuesta = porTty ? leerDeTerminal() : readlineSync.question(ui.preguntaNumero());
   if (porTty) console.log(ui.preguntaNumero() + respuesta);
   return normalizePhone(respuesta);

@@ -246,13 +246,104 @@ def portada():
     print("%7.1f KB  media/covers/%s" % (os.path.getsize(ruta) / 1024, os.path.basename(ruta)))
 
 
+
+def _marco(d, x, y, w, h, r, relleno, borde, grosor=3):
+    """Rectángulo redondeado con borde (PIL no lo hace en un paso)."""
+    d.rounded_rectangle([x, y, x + w, y + h], radius=r, fill=relleno, outline=borde, width=grosor)
+
+
+def _pildora(d, x, y, w, h, relleno, borde=None, grosor=2):
+    d.rounded_rectangle([x, y, x + w, y + h], radius=h / 2, fill=relleno,
+                        outline=borde or relleno, width=grosor)
+    return x + w
+
+
+def portada_menu(nombre, tema):
+    """880×440: la tarjeta del menú tal como se ve en el chat."""
+    W, H = 880, 440
+    im = Image.new("RGB", (W, H), tema["fondo"])
+    _degradado(im, tema["gradiente"])
+    d = ImageDraw.Draw(im)
+
+    # cabecera de vídeo (simula el gifPlayback)
+    vx, vy, vw, vh = 28, 24, 260, 260
+    _marco(d, vx, vy, vw, vh, 22, tema["video"], tema["borde"], 3)
+    for i in range(0, 260, 14):  # líneas de "scanline" del vídeo
+        d.line([(vx + 8, vy + 8 + i), (vx + 8 + 200, vy + 8 + i)], fill=tema["linea"], width=2)
+    d.ellipse([vx + 92, vy + 86, vx + 168, vy + 162], fill=tema["acento"])
+    f_k = ImageFont.truetype(CJK, 46)
+    _texto_centrado(d, (vx + 92, vy + 80, vx + 168, vy + 160), "魂", f_k, tema["video"])
+    d.ellipse([vx + 20, vy + 216, vx + 44, vy + 240], fill=tema["verde"])
+    _texto_centrado(d, (vx + 50, vy + 208, vx + 200, vy + 246), "EN VIVO", ImageFont.truetype(MONO, 15), tema["verde"])
+
+    # burbuja de texto
+    bx = 312
+    f_t = ImageFont.truetype(SANS, 30)
+    f_s = ImageFont.truetype(MONO, 15)
+    d.text((bx, 32), "SHIN-MD", font=f_t, fill=tema["titulo"])
+    d.text((bx, 72), "v3.8.0  ·  Baileys 7", font=f_s, fill=tema["sub"])
+
+    # cajas de información (bordes redondeados + líneas)
+    yy = 108
+    for etiqueta, valor in [("COMANDOS", "213"), ("NOMBRES", "752"), ("PRUEBAS", "456")]:
+        d.rounded_rectangle([bx, yy, bx + 250, yy + 26], radius=8, fill=tema["caja"])
+        d.text((bx + 10, yy + 5), etiqueta, font=f_s, fill=tema["sub"])
+        d.text((bx + 190, yy + 3), valor, font=ImageFont.truetype(MONO, 18), fill=tema["acento"])
+        yy += 32
+
+    # botones (3 a la vista + la hoja)
+    by = 288
+    for i, txt in enumerate(["Categorías", "Ver Todo", "Ping"]):
+        ancho = 118 if i else 150
+        _pildora(d, bx, by, ancho, 40, tema["boton"], tema["acento"], 2)
+        _texto_centrado(d, (bx, by, bx + ancho, by + 40), txt, ImageFont.truetype(SANS, 15), tema["acento"])
+        bx += ancho + 12
+    _pildora(d, 312, by + 52, 262, 36, tema["boton"], tema["acento"], 2)
+    _texto_centrado(d, (312, by + 52, 574, by + 88), "Ver más opciones  ▾", ImageFont.truetype(SANS, 14), tema["acento"])
+
+    # tarjeta de oferta
+    ox, oy = 600, 292
+    _marco(d, ox, oy, 250, 96, 16, tema["oferta"], tema["acento"], 2)
+    d.text((ox + 14, oy + 12), "OFERTA POR TIEMPO LIMITADO", font=ImageFont.truetype(MONO, 11), fill=tema["acento"])
+    d.text((ox + 14, oy + 38), "Dashboard · SHIN-MD", font=ImageFont.truetype(SANS, 17), fill=tema["titulo"])
+    _pildora(d, ox + 14, oy + 64, 96, 24, tema["acento"])
+    _texto_centrado(d, (ox + 14, oy + 64, ox + 110, oy + 88), "Copiar", ImageFont.truetype(SANS, 12), tema["oferta"])
+
+    ruta = os.path.join(SALIDA, nombre)
+    im.save(ruta, optimize=True)
+    print("%7.1f KB  %s" % (os.path.getsize(ruta) / 1024, nombre))
+
+
+def portadas_menu():
+    """Los tres temas del menú. Todos con las mismas piezas: sin caras."""
+    portada_menu("menu-neon.png", dict(
+        gradiente=["#1A0B2E", "#2D1250", "#12071F"], fondo="#1A0B2E",
+        video="#0D0618", linea="#3D1F66", borde="#B45CFF", acento="#E9A8FF",
+        titulo="#FFFFFF", sub="#B79AD6", caja="#241040", boton="#2E1452",
+        oferta="#231038", verde="#5FE3B0",
+    ))
+    portada_menu("menu-pastel.png", dict(
+        gradiente=[PAL["crema1"], PAL["crema2"], "#EDE4F8"], fondo=PAL["crema1"],
+        video="#F3ECFB", linea="#E0D3F2", borde=PAL["lila_claro"], acento=PAL["lila_fuerte"],
+        titulo=PAL["tinta"], sub="#9C90B4", caja="#FDFBFF", boton="#FFFFFF",
+        oferta="#FDFBFF", verde=PAL["verde"],
+    ))
+    portada_menu("menu-noche-ciudad.png", dict(
+        gradiente=["#071A2B", "#0F3049", "#04101C"], fondo="#071A2B",
+        video="#030C16", linea="#123A55", borde="#39C4E8", acento="#7FE3FF",
+        titulo="#EAF8FF", sub="#8FB8CC", caja="#0C2940", boton="#103C58",
+        oferta="#0B2438", verde="#4FE3A8",
+    ))
+
+
 def main():
     os.makedirs(SALIDA, exist_ok=True)
     os.makedirs(BANNERS, exist_ok=True)
     os.makedirs(PORTADAS, exist_ok=True)
-    print("marca, banners y portada dibujados a mano (0 imágenes de IA)\n")
+    print("marca, banners, portada y menús dibujados a mano (0 imágenes de IA)\n")
     marca()
     portada()
+    portadas_menu()
     banner("banner-day.png", [PAL["crema1"], PAL["crema2"], "#EDE4F8"],
            PAL["tinta"], "bot de WhatsApp · anti-ban propio",
            PAL["lila_fuerte"], PAL["verde"], "#DCEEE8", "dia")

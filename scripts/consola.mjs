@@ -40,7 +40,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { crearSupervisor, VENTANA_MS } from "./supervisor.mjs";
 import { parseArgs } from "../src/lib/cli-args.js";
-import { estadoSesion, planDeVinculacion } from "../src/lib/vinculacion.js";
+import { estadoSesion, planDeVinculacion, leerDeTerminal } from "../src/lib/vinculacion.js";
 import * as ui from "../src/services/consola.js";
 import { datosAndroid, bateria, disco, memoriaSistema, ipLocal, hace, gb } from "./datos-equipo.mjs";
 
@@ -434,14 +434,25 @@ async function resolverVinculacion(tty) {
   return [...ARGS, "--code", limpio];
 }
 
-/** Una línea de la terminal, sin romper el modo normal ni dejar residuos. */
-function preguntarLinea(pregunta) {
+/**
+ * Una línea de la terminal, sin romper el modo normal ni dejar residuos.
+ * Con `limiteMs`, si nadie escribe se cierra sola y se sigue con lo que
+ * hubiera: mejor un bot con el número viejo que un panel congelado.
+ */
+function preguntarLinea(pregunta, { limiteMs = 0 } = {}) {
   return new Promise((listo) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-    rl.question(pregunta, (respuesta) => {
-      rl.close();
-      listo(respuesta);
-    });
+    let temporizador = null;
+    const terminar = (respuesta) => {
+      if (temporizador) clearTimeout(temporizador);
+      try { rl.close(); } catch {}
+      listo(respuesta || "");
+    };
+    if (limiteMs > 0) {
+      temporizador = setTimeout(() => terminar(""), limiteMs);
+      temporizador.unref?.();
+    }
+    rl.question(pregunta, terminar);
   });
 }
 
@@ -463,6 +474,17 @@ async function principal() {
   // terminal, y el número se le pasa al bot ya resuelto. Antes no se
   // hacía: el bot arrancaba a ciegas y acababa enseñando un QR.
   const vinculacion = await resolverVinculacion(tty);
+  // El número con el que se resolvió, para poder reutilizarlo si el bot
+  // pierde la sesión a mitad de camino (WhatsApp desvincula desde el
+  // teléfono) sin obligar a escribir la orden entera otra vez.
+  let numeroResuelto = (() => {
+    try {
+      const p = parseArgs(vinculacion || []);
+      return p.phone || "";
+    } catch {
+      return "";
+    }
+  })();
   if (vinculacion === null) {
     // Todavía no hay panel, ni supervisor, ni temporizadores: se sale sin
     // más y con código 1 para que un servicio sepa que no arrancó.
@@ -470,10 +492,21 @@ async function principal() {
     return;
   }
 
+  // Se enciende cuando el bot se cae porque WhatsApp lo desvinculó.
+  // El supervisor lo informa en el gancho `cayo`; aquí se lee para
+  // decidir si hay que pedir el número otra vez.
+  let caidaPorSesion = false;
+  // Verdadero mientras hay una pregunta abierta en la terminal. Lo lee
+  // `pintar()` para no borrar lo que la persona está escribiendo.
+  let repreguntando = false;
+
   const supervisor = crearSupervisor({
     raiz: RAIZ,
     argumentos: vinculacion,
     capturar: tty,
+    // Cuando el bot muere por sesión perdida, el número puede cambiar:
+    // el supervisor lo vuelve a leer antes de cada arranque.
+    argumentosVivos: () => argumentosDelHijo(),
     ganchos: {
       arrancado: ({ pid }) => {
         estado.pid = pid;
@@ -493,13 +526,20 @@ async function principal() {
         estado.nombre = "arrancando";
         pintar();
       },
-      cayo: ({ code, signal, esperaMs }) => {
+      cayo: ({ code, signal, esperaMs, sesionPerdida }) => {
+        caidaPorSesion = Boolean(sesionPerdida);
         estado.nombre = "esperando";
         estado.salud = null;
         estado.pid = 0;
         const como = signal ? `señal ${signal}` : `código ${code}`;
         anotar(`se cayó (${como}); vuelvo en ${(esperaMs / 1000).toFixed(1)}s`);
         pintar();
+        // `sesionPerdida` lo pone el supervisor cuando el bot avisa de que
+        // WhatsApp lo desvinculó (401/403/411). En ese caso la sesión ya
+        // está borrada y reintentar con el mismo número es inútil: hay que
+        // pedir el número OTRA VEZ. Antes se preguntaba una sola vez, antes
+        // de arrancar, y por eso el panel se quedaba esperando para siempre.
+        if (caidaPorSesion) repreguntar({ tras: "desvinculado" });
       },
       rendido: ({ caidas }) => {
         estado.nombre = "rendido";
@@ -509,6 +549,65 @@ async function principal() {
       salida: (texto) => tragar(texto),
     },
   });
+
+  // Los argumentos con los que hay que arrancar al bot AHORA.
+  // Si el panel consiguió un número nuevo tras una desvinculación, se usa
+  // ese; si no, los de siempre. Todo esto lo llama el supervisor.
+  async function argumentosDelHijo() {
+    // Si hay una pregunta abierta, se espera a que conteste: así el bot no
+    // arranca con el número viejo mientras se está escribiendo el nuevo.
+    if (preguntaEnCurso) {
+      try { await preguntaEnCurso; } catch {}
+    }
+    const base = ARGS.filter((a) => a !== "--code").filter((_, i, todos) => {
+      // quita también el número que venga detrás de un --code
+      return !(i > 0 && todos[i - 1] === "--code");
+    });
+    return numeroResuelto ? [...base, "--code", numeroResuelto] : vinculacion;
+  }
+
+  // ── Volver a preguntar el número sin salirse del programa ──────
+  // Se usa cuando WhatsApp desvincula la sesión a mitad de camino.
+  // Devuelve una promesa que se resuelve cuando ya hay número (o cuando
+  // se rinde). El supervisor la espera antes de relanzar: así no arranca
+  // el bot con el número viejo mientras la persona todavía escribe.
+  let preguntaEnCurso = null;
+  function repreguntar({ tras = "" } = {}) {
+    if (preguntaEnCurso) return preguntaEnCurso;
+    preguntaEnCurso = (async () => {
+    repreguntando = true;
+    try {
+      // Se sale del panel unas líneas para que la pregunta se lea entera
+      // y el cursor vuelva a estar donde se escribe.
+      salirPantalla();
+      console.log("");
+      console.log(ui.estado("aviso", tras === "desvinculado"
+        ? "WhatsApp desvinculó esta sesión desde el teléfono."
+        : "hace falta vincular otra vez."));
+      console.log("  " + ui.COLOR.tenue("si el bot sigue en el teléfono, bórralo de Dispositivos vinculados"));
+      console.log("");
+      console.log(ui.panelVinculacion().join("\n"));
+      // Con límite: si el teclado no responde (pantalla bloqueada, script
+      // sin entrada), no puede dejar el panel esperando para siempre.
+      const numero = (await preguntarLinea(ui.preguntaNumero(), { limiteMs: 120_000 })).trim();
+      const limpio = parseArgs(["--code", numero]).phone;
+      if (!limpio) {
+        console.log(ui.estado("error", "ese número no tiene dígitos usables; sigo con el anterior."));
+      } else {
+        numeroResuelto = limpio;
+        console.log(ui.estado("ok", `vinculando con el número ${limpio}.`));
+      }
+    } catch {
+      // Si no hay teclado (systemd, nohup) se sigue con lo que había.
+    } finally {
+      repreguntando = false;
+      preguntaEnCurso = null;
+      entrarPantalla();
+      pintar(true);
+    }
+    })();
+    return preguntaEnCurso;
+  }
 
   // ── el flujo de texto del bot ─────────────────────────────────
   function anotar(texto) {
@@ -550,6 +649,9 @@ async function principal() {
 
   function pintar(forzar = false) {
     if (!tty || pintando) return;
+    // Con una pregunta abierta, el repintado borraría lo que se está
+    // escribiendo (el marco empieza con \x1b[2J). Se espera.
+    if (repreguntando) return;
     const ahora = Date.now();
     if (!forzar && ahora - ultimoPintado < PINTAR_MIN_MS) return;
     pintando = true;
@@ -597,29 +699,45 @@ async function principal() {
     return `http://127.0.0.1:${puerto}`;
   }
 
+  // Un ÚNICO listener de teclado para toda la vida del panel. Antes se
+  // añadía uno nuevo cada vez que se entraba a la pantalla, y al volver de
+  // una repregunta se quedaban dos oyendo la misma tecla: la primera
+  // pulsación tras la repregunta acababa en el que no tocaba y la consola
+  // se quedaba en modo raw, sin volver a leer el número.
+  let oyendoTeclado = false;
+  function alTeclear(buf) {
+    const t = buf.toString();
+    if (t === "\u0003" || t === "q") return salir();
+    if (t === "r") {
+      if (supervisor.reiniciar()) anotar("reinicio pedido desde la consola");
+      pintar(true);
+    }
+  }
+
   function entrarPantalla() {
     if (!tty) return;
     process.stdout.write("\x1b[?1049h\x1b[?25l\x1b[H\x1b[2J");
-    if (process.stdin.isTTY) {
+    if (process.stdin.isTTY && !oyendoTeclado) {
+      oyendoTeclado = true;
       try {
         process.stdin.setRawMode(true);
       } catch {
         /* sin teclado no pasa nada: se para con Ctrl+C */
       }
       process.stdin.resume();
-      process.stdin.on("data", (buf) => {
-        const t = buf.toString();
-        if (t === "\u0003" || t === "q") return salir();
-        if (t === "r") {
-          if (supervisor.reiniciar()) anotar("reinicio pedido desde la consola");
-          pintar(true);
-        }
-      });
+      process.stdin.on("data", alTeclear);
     }
   }
 
   function salirPantalla() {
     if (!tty) return;
+    // Se suelta el teclado: sin esto, el modo raw se queda puesto y la
+    // línea que se lee después no recibe el eco ni el Enter.
+    if (oyendoTeclado) {
+      oyendoTeclado = false;
+      try { process.stdin.off("data", alTeclear); } catch {}
+      try { process.stdin.pause(); } catch {}
+    }
     try {
       process.stdin.setRawMode(false);
     } catch {
