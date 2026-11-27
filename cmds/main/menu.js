@@ -24,6 +24,7 @@ import {
   getVerifiedQuoted,
 } from "../../src/lib/contextBuilder.js";
 import { resolveChannel } from "../../src/lib/channel.js";
+import log from "#logger";
 import { enviarMenu } from "#menu-kit";
 import { mandarMenuPrincipal, mandarMenuCategoria } from "#menu-kit/menu-lista";
 import { enviarEvento } from "#menu-kit/evento";
@@ -281,31 +282,44 @@ export default {
     // código distintas, es el mismo envío con distinto contenido.
     // Se puede apagar con MENU_MODO=clasico o MENU_BOTONES=off.
     {
-      const enviado = await enviarMenu(sock, ctx.chatId, {
-        cuerpo: headerText +
-          `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
-          `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
-          `│ 🅖 Grupos • 🅛 Límite\n` +
-          `╰─────────────────────────⬣\n\n` +
-          `_Elige una categoría en el botón de abajo._\n\n` +
-          `📢 *Canal:* ${channelUrl}`,
-        pie: `Shin-MD v${version} • 反魂`,
-        selector: { title: "📂 Explorar Categorías", sections: menuSections },
-        // WhatsApp dibuja TRES botones y el resto se va a la hoja inferior
-        // («Ver más opciones»). Los dos últimos son los que pidió el dueño
-        // en la 3.9.0: perfil y estado del bot, que es lo que uno busca
-        // cuando el bot «va lento» o quiere su propia ficha.
-        botones: [
-          { text: "📜 Ver todos los comandos", id: `${prefix}allmenu` },
-          { text: "🏓 Ping", id: `${prefix}ping` },
-          { text: "📢 Canal Oficial", url: channelUrl },
-          { text: "👤 Mi perfil", id: `${prefix}perfil` },
-          { text: "📊 Estado del bot", id: `${prefix}status` },
-        ],
-        cita: ctx.full,
-        prefijo: prefix,
-        notaDeVoz: true,
-      });
+      let enviado = null;
+      try {
+        enviado = await enviarMenu(sock, ctx.chatId, {
+          cuerpo: headerText +
+            `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
+            `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
+            `│ 🅖 Grupos • 🅛 Límite\n` +
+            `╰─────────────────────────⬣\n\n` +
+            `_Elige una categoría en el botón de abajo._\n\n` +
+            `📢 *Canal:* ${channelUrl}`,
+          pie: `Shin-MD v${version} • 反魂`,
+          selector: { title: "📂 Explorar Categorías", sections: menuSections },
+          // WhatsApp dibuja TRES botones y el resto se va a la hoja inferior
+          // («Ver más opciones»). Los dos últimos son los que pidió el dueño
+          // en la 3.9.0: perfil y estado del bot, que es lo que uno busca
+          // cuando el bot «va lento» o quiere su propia ficha.
+          botones: [
+            { text: "📜 Ver todos los comandos", id: `${prefix}allmenu` },
+            { text: "🏓 Ping", id: `${prefix}ping` },
+            { text: "📢 Canal Oficial", url: channelUrl },
+            { text: "👤 Mi perfil", id: `${prefix}perfil` },
+            { text: "📊 Estado del bot", id: `${prefix}status` },
+          ],
+          cita: ctx.full,
+          prefijo: prefix,
+          notaDeVoz: true,
+        });
+      } catch (err) {
+        // Antes, un fallo del kit se quedaba en un log y el handler
+        // devolvía null SIN MANDAR NADA: el .menu se quedaba en visto y
+        // el teléfono no recibía ni el menú ni el aviso. Ahora se avisa
+        // en el propio chat y se sigue al texto de abajo.
+        log.warn("menu: la tarjeta no salió (" + (err.message || err) + ")");
+        await sock.sendMessage(ctx.chatId, {
+          text: "⚠️ No pude dibujar la tarjeta del menú, te lo mando en texto.",
+        }, { quoted: ctx.full }).catch(() => {});
+        enviado = null;
+      }
       if (enviado) return null;
       // si el kit devolvió null (sin botones), sigue el texto de abajo
     }

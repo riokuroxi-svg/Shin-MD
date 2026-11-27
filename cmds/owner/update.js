@@ -48,7 +48,11 @@ const ARCHIVO_VUELTA = path.join(RAIZ, "Sessions", ".update-vuelta");
  */
 function correr(orden, cwd = RAIZ) {
   return new Promise((listo) => {
-    exec(orden, { cwd, timeout: 120_000 }, (error, stdout, stderr) => {
+    // GIT_TERMINAL_PROMPT=0 evita que git se quede esperando usuario y
+    // contraseña en una terminal que no existe: en Termux, sin esto, el
+    // `.update` se colgaba un minuto y luego «no hacía nada».
+    const entorno = { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "echo" };
+    exec(orden, { cwd, timeout: 120_000, env: entorno }, (error, stdout, stderr) => {
       listo({ ok: !error, salida: String(stdout || "").trim(), error: String(stderr || "").trim() });
     });
   });
@@ -192,7 +196,10 @@ export default {
     }
 
     const rama = await correr("git rev-parse --abbrev-ref HEAD");
-    const traer = await correr(`git pull --ff-only origin ${rama.salida || "main"}`);
+    const ramaReal = rama.salida || "main";
+    // `git pull` a secas falla en una instalación recién clonada sin
+    // upstream configurado. Se pide explícito el remoto y la rama.
+    const traer = await correr(`git pull --ff-only origin ${ramaReal}`);
     if (!traer.ok && !traer.salida.includes("Already up to date")) {
       return responder(
         "❌ *No pude actualizar*\n\n" +
