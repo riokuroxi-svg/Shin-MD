@@ -172,12 +172,20 @@ test("--code con número lo normaliza; sin número lo deja para preguntar", () =
   assert.equal(parseArgs(["--code"]).code, true);
 });
 
-test("--qr sigue aceptándose, pero hace lo mismo que --code y avisa", () => {
+test("--qr activa el modo QR (no el código) desde la 3.9.0", () => {
   const args = parseArgs(["--qr"]);
-  assert.equal(args.code, true);
-  assert.equal(args.qrDeprecado, true);
-  // Un guion viejo no se rompe: se comporta como el flujo nuevo.
+  assert.equal(args.qr, true);
+  assert.equal(args.code, false);
+  // Los guiones que combinan opciones siguen funcionando.
   assert.equal(parseArgs(["--qr", "--menu"]).menu, true);
+});
+
+test("el panel de elección enseña las dos vías y no depende de la terminal", () => {
+  const lineas = ui.panelEleccion().join("\n");
+  assert.match(lineas, /1/, "falta la opción 1 (código)");
+  assert.match(lineas, /2/, "falta la opción 2 (QR)");
+  assert.match(lineas, /c[oó]digo/i);
+  assert.match(lineas, /QR/);
 });
 
 test("nada de la consola depende de que haya terminal", () => {

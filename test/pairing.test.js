@@ -160,16 +160,16 @@ test("si WhatsApp no devuelve código, no se inventa nada", async () => {
   assert.equal(formatearCodigoDeVinculacion(null), null, "sin código no hay nada que formatear");
 });
 
-test("--qr ya no existe: pide el código igual que --code", async () => {
-  // Se sigue aceptando para no romper guiones viejos, pero hace lo mismo:
-  // el QR no cabe en la pantalla de un móvil y partido no se puede escanear.
+test("--qr es su propio modo desde la 3.9.0: no pide código ni número", async () => {
+  // La 3.9.0 devuelve el QR como opción de primera (la tecla 2 del
+  // arranque). --qr ya NO es un alias de --code: activa el modo QR y el
+  // socket dibuja el cuadro en vez de pedir un código de 8 letras.
   const args = parseArgs(["--qr"]);
-  assert.equal(args.code, true, "--qr tiene que activar el código");
-  assert.equal(args.qrDeprecado, true, "y marcar que se usó una opción vieja");
+  assert.equal(args.qr, true, "--qr tiene que activar el modo QR");
+  assert.equal(args.code, false, "y NO debe activar el código");
 
   const registro = await arrancarConPairing({ numero: "5215512345678", respuesta: "QRQR1234" });
-  assert.equal(registro.llamadas.length, 1, "el código sí se pide");
-  assert.equal(registro.llamadas[0], "5215512345678");
+  assert.equal(registro.llamadas.length, 1, "el código pedido con --code sigue funcionando");
 });
 
 test("normalizePhone respeta las reglas de México y Argentina", () => {

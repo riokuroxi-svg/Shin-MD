@@ -92,7 +92,7 @@ export async function enviarMenu(sock, jid, op = {}) {
       mediaMessage = (await prepareWAMessageMedia(
         {
           video: buf,
-          gifPlayback: true,
+          gifPlayback: String(process.env.MENU_GIF || "").toLowerCase() === "on",
           mimetype: "video/mp4",
           // Sin estos tres, el teléfono pinta la tarjeta como ARCHIVO.
           ...(datos.seconds ? { seconds: datos.seconds } : {}),

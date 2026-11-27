@@ -133,6 +133,11 @@ function esArchivo(p) {
 export function videoDelMenu() {
   const candidatos = [
     process.env.MENU_VIDEO_PATH,
+    // Panorámicos primero: el vídeo 1:1 se recorta en el chat y se ve
+    // como un cuadrado. Si no están los wide, cae a los cuadrados viejos
+    // (y entonces se avisa en el log: assets viejos no rompen el menú).
+    path.join(DIR_VIDEO, "menu-1-wide.mp4"),
+    path.join(DIR_VIDEO, "menu-2-wide.mp4"),
     path.join(DIR_VIDEO, "menu-1.mp4"),
     path.join(DIR_VIDEO, "menu-2.mp4"),
   ].filter(Boolean);

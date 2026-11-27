@@ -57,9 +57,11 @@ export function parseArgs(argv) {
   const r = { qr: false, qrDeprecado: false, code: false, menu: false, phone: "" };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--qr") {
+      // Desde la 3.9.0 el QR es una vía de primera, no un alias del
+      // código. `qrDeprecado` solo sirve ya para avisar a quien venía
+      // con la idea vieja de que --qr hacía otra cosa.
       r.qr = true;
       r.qrDeprecado = true;
-      r.code = true;
     }
     if (argv[i] === "--menu") r.menu = true;
     if (argv[i] === "--code") {

@@ -361,12 +361,26 @@ export function connectSocket(engine, opts) {
     s.ev.on("connection.update", async (upd) => {
       const { qr, connection, lastDisconnect, isNewLogin } = upd;
 
-      // Sin QR, a propósito: en un móvil no cabe y partido no se puede
-      // escanear. Si el conector manda uno es porque nadie pidió el
-      // código todavía; se ignora y se dice qué hacer, una sola vez.
-      if (qr != null && !state.creds.registered && !pairingNumber && !avisoSinNumero) {
+      // ── modo QR (elegido en el arranque) ──────────────────────
+      // El cuadro se dibuja en la terminal con `qrcode`, que ya viaja en
+      // las dependencias. Se redibuja cada vez que WhatsApp manda uno
+      // nuevo (caducan): así quien tarda en abrir la cámara no se queda
+      // mirando un cuadro muerto.
+      if (qr != null && !state.creds.registered && pairingMethod === "qr") {
+        try {
+          const { toString } = await import("qrcode");
+          const cuadro = await toString(qr, { type: "terminal", small: true });
+          console.log("");
+          console.log(cuadro);
+          console.log("  Escanéalo desde WhatsApp › Dispositivos vinculados › Vincular un dispositivo");
+          console.log("");
+        } catch (e) {
+          log.error("QR: " + (e.message || e));
+        }
+      } else if (qr != null && !state.creds.registered && !pairingNumber && !avisoSinNumero) {
+        // Sin QR elegido y sin número: no se pinta nada, se dice qué hacer.
         avisoSinNumero = true;
-        log.warn("WhatsApp pide vincular, pero no sé con qué número: reinicia con --code o define PAIRING_NUMBER.");
+        log.warn("WhatsApp pide vincular, pero no sé con qué número: reinicia con --code o define PAIRING_NUMBER, o arranca y elige 2 para QR.");
       }
 
       if (connection === "open") {

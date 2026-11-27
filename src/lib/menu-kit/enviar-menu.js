@@ -172,7 +172,11 @@ async function prepararVideo(sock) {
     const media = await prepareWAMessageMedia(
       {
         video: video.buffer,
-        gifPlayback: true,
+        // gifPlayback:true hace que WhatsApp lo trate como GIF: se repite
+        // solo, pero antes de arrancar pinta un recuadro con la palabra
+        // «GIF» que afea la cabecera. Por defecto va como vídeo normal
+        // (miniatura + play). Para el bucle: MENU_GIF=on.
+        gifPlayback: String(process.env.MENU_GIF || "").toLowerCase() === "on",
         mimetype: "video/mp4",
         // Sin estos tres, el teléfono pinta la tarjeta como archivo.
         ...(datos.seconds ? { seconds: datos.seconds } : {}),

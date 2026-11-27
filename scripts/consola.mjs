@@ -446,7 +446,35 @@ async function resolverVinculacion(tty) {
     return null;
   }
 
-  if (plan.accion !== "preguntar") return ARGS;
+  // ── QR pedido a propósito (--qr) ───────────────────────────────
+  if (plan.accion === "qr") return [...ARGS, "--qr"];
+
+  // ── nada decidido y hay terminal: preguntar cómo entrar ────────
+  if (plan.accion === "elegir") {
+    console.log("");
+    console.log(ui.panelEleccion().join("\n"));
+
+    // Dos vueltas como mucho: un dedazo no puede dejar a nadie fuera.
+    let elegido = "";
+    for (let intento = 0; intento < 2 && !elegido; intento++) {
+      const respuesta = (await preguntarLinea(ui.preguntaEleccion())).trim();
+      const tecla = respuesta || "1";
+      if (tecla === "1" || tecla === "c" || tecla === "código" || tecla === "codigo") elegido = "codigo";
+      else if (tecla === "2" || tecla === "q" || tecla === "qr") elegido = "qr";
+      else console.log(ui.estado("error", `«${tecla}» no es 1 ni 2.`));
+    }
+
+    if (elegido === "qr") {
+      console.log("");
+      console.log(ui.panelQR().join("\n"));
+      // --qr viaja hasta el bot: el socket dibuja el cuadro, no pide número.
+      return [...ARGS, "--qr"];
+    }
+    if (!elegido) return null;
+    // Sigue al camino del código: panel + número.
+  }
+
+  if (plan.accion !== "elegir" && plan.accion !== "preguntar") return ARGS;
 
   // Panel primero y pregunta después: se explica qué va a pasar antes de
   // pedir nada, que es justo lo que faltaba cuando el bot se iba directo

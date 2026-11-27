@@ -109,7 +109,9 @@ test("con sesión buena y sin órdenes, no se pregunta nada", () => {
 
 test("--menu fuerza la vinculación aunque la sesión sirva", () => {
   const p = planDeVinculacion({ args: { menu: true }, sesion: registrada, hayTerminal: true });
-  assert.equal(p.accion, "preguntar");
+  // Con sesión buena pero forzada, se vuelve a preguntar CÓMO entrar:
+  // el código y el QR son las dos formas, y --menu no elige por ti.
+  assert.equal(p.accion, "elegir");
 });
 
 test("un número en la orden manda sobre todo: no se pregunta", () => {
@@ -134,9 +136,35 @@ test("PAIRING_NUMBER del .env se normaliza y tampoco se pregunta", () => {
   assert.equal(p.numero, "5215512345678");
 });
 
-test("sin número pero con terminal, se pregunta", () => {
+test("sin número pero con terminal, se pregunta cómo entrar (1 código / 2 QR)", () => {
   const p = planDeVinculacion({ args: {}, sesion: ninguna, hayTerminal: true });
+  assert.equal(p.accion, "elegir");
+});
+
+test("con --code se salta la elección y va directo al número", () => {
+  const p = planDeVinculacion({ args: { code: true }, sesion: ninguna, hayTerminal: true });
   assert.equal(p.accion, "preguntar");
+});
+
+test("con --qr se elige el QR sin preguntar número ni modo", () => {
+  const p = planDeVinculacion({ args: { qr: true }, sesion: ninguna, hayTerminal: true });
+  assert.equal(p.accion, "qr");
+  assert.equal(p.numero, "");
+});
+
+test("--qr con sesión buena sí fuerza la revinculación", () => {
+  const p = planDeVinculacion({ args: { qr: true }, sesion: registrada, hayTerminal: true });
+  assert.equal(p.accion, "qr");
+});
+
+test("--qr manda sobre un número del entorno", () => {
+  const p = planDeVinculacion({
+    args: { qr: true },
+    env: { PAIRING_NUMBER: "5215512345678" },
+    sesion: ninguna,
+    hayTerminal: true,
+  });
+  assert.equal(p.accion, "qr");
 });
 
 test("sin número y sin terminal, se para: no se arranca a ciegas", () => {
@@ -214,20 +242,29 @@ test("con el número en el entorno, la consola sí arranca el bot", () => {
 
 // ─────────────────────── el QR no existe ───────────────────────
 
-test("ni el arranque ni la consola pueden dibujar un QR", () => {
-  const conQr = [];
-  for (const archivo of ["boot/index.js", path.join("scripts", "consola.mjs"), path.join("src", "core", "socket.js")]) {
-    const texto = fs.readFileSync(path.join(RAIZ, archivo), "utf8");
-    // Se busca la impresión, no la palabra: los comentarios sí hablan del
-    // QR (explican por qué no está), y esos se quedan.
-    for (const linea of texto.split("\n")) {
-      if (/^\s*(\/\/|\*)/.test(linea)) continue;
-      if (/qrcode-terminal|qrcode\.generate|printQRInTerminal:\s*true/.test(linea)) {
-        conQr.push(`${archivo}: ${linea.trim()}`);
-      }
-    }
-  }
-  assert.deepEqual(conQr, [], `hay ${conQr.length} forma(s) de volver a dibujar un QR`);
+// ═══════════════════════════════════════════════════════════════════
+//  La 3.9.0 devuelve el QR. Ya no es cierto que el bot no pueda
+//  dibujarlo: lo que hay que vigilar ahora es que SOLO lo dibuje
+//  cuando se pidió (modo qr), y que el cuadro salga en la terminal
+//  con la librería `qrcode` (no con `qrcode-terminal`, que no está).
+// ═══════════════════════════════════════════════════════════════════
+
+test("el QR se dibuja solo cuando se pidió el modo qr", () => {
+  const socket = fs.readFileSync(path.join(RAIZ, "src", "core", "socket.js"), "utf8");
+  const lineaDelQr = socket.split("\n").find((l) => l.includes('await import("qrcode")'));
+  assert.ok(lineaDelQr, "el socket ya no sabe dibujar el QR");
+
+  // La condición que lo rodea tiene que exigir pairingMethod === "qr".
+  const antes = socket.slice(0, socket.indexOf('await import("qrcode")'));
+  const ultimoIf = antes.lastIndexOf("if (");
+  const condicion = antes.slice(ultimoIf, antes.indexOf("{", ultimoIf));
+  assert.match(condicion, /pairingMethod === "qr"/, "el QR se dibujaría sin que nadie lo pidiera");
+});
+
+test("qrcode es una dependencia declarada (la del cuadro en terminal)", () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(RAIZ, "package.json"), "utf8"));
+  assert.ok(pkg.dependencies.qrcode, "falta qrcode en package.json");
+  assert.ok(!pkg.dependencies["qrcode-terminal"], "no hace falta qrcode-terminal");
 });
 
 // ═══════════════════════════════════════════════════════════════════

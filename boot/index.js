@@ -158,13 +158,13 @@ const args = parseArgs(process.argv.slice(2));
 const sessionDir = process.env.SESSION_DIR || "./Sessions/Owner";
 const sesion = estadoSesion(sessionDir);
 
-// ── Vinculación: siempre por código, nunca por QR ───────────────────
-// El QR se retiró porque en un móvil no cabe en la pantalla y, partido,
-// no hay quien lo escanee. `--qr` se sigue aceptando para no romper los
-// guiones que ya existan, pero hace lo mismo que `--code`.
-if (args.qrDeprecado) {
-  log.warn("El QR ya no se usa: la vinculación es siempre por código.");
-  console.log(ui.estado("info", "te pediré el número y WhatsApp te dará un código de 8 caracteres."));
+// ── Vinculación: código o QR, lo elige quien instala ────────────────
+// La 3.9.0 devuelve el QR como opción de primera. En Termux cabe en la
+// pantalla y con la cámara de otro teléfono se escanea sin problema;
+// el código sigue siendo el camino cuando se instala en un servidor.
+const modoVinculacion = args.qr ? "qr" : "code";
+if (args.qrDeprecado && args.qr) {
+  console.log(ui.estado("info", "modo QR: el cuadro se dibuja aquí y lo escaneas desde el teléfono."));
 }
 
 /**
@@ -218,6 +218,18 @@ switch (plan.accion) {
   case "usar":
     phoneNumber = plan.numero;
     console.log(ui.estado("ok", `vinculando con el número ${phoneNumber}.`));
+    break;
+  case "elegir":
+    // La consola (scripts/consola.mjs) ya preguntó 1 o 2 y tradujo la
+    // respuesta a --code/--qr. Si se llega aquí es porque el bot se
+    // arrancó a mano sin ninguno de los dos: se explica y se para.
+    explicarSinTerminal(plan.motivo);
+    process.exit(1);
+    break;
+  case "qr":
+    // Sin número: el socket pide el cuadro a WhatsApp y lo dibuja.
+    phoneNumber = "";
+    console.log(ui.estado("ok", "modo QR: el cuadro sale en pantalla."));
     break;
   case "preguntar":
     phoneNumber = preguntarNumero();
@@ -410,11 +422,15 @@ async function main() {
   instalarAPIs();
   const router = createRouter(engine, { onCommand: logCommand, onMessage: logIncomingMessage });
   await router.init();
+  // El comando `.update` recarga los comandos en caliente sin reiniciar
+  // cuando no hay supervisor detrás (un `node index.js` a pelo). Sin esta
+  // referencia tendría que matar el proceso y no lo levantaría nadie.
+  globalThis.__shinRouter = router;
 
   const sockModule = connectSocket(engine, {
     sessionDir,
-    // Siempre por código: el QR se retiró de la consola.
-    pairingMethod: "code",
+    // "code" o "qr", según lo elegido en el arranque (ver arriba).
+    pairingMethod: modoVinculacion,
     pairingNumber: phoneNumber,
     onMessage: (s, m) => router.handle(s, m),
     onReady: async s => {

@@ -192,6 +192,76 @@ export function panelVinculacion({ ancho = ANCHO } = {}) {
 }
 
 /**
+ * El panel de elección: cómo vincular, cuando todavía no hay sesión.
+ *
+ * Sale ANTES de dibujar el panel completo. La razón es sencilla: el
+ * panel de arriba está pensado para alguien que ya tiene el bot
+ * funcionando; a quien acaba de instalar no le sirve de nada ver la
+ * batería y los latidos mientras no sepa cómo entrar. Primero se elige
+ * cómo vincular; el panel llega después, ya logueado.
+ *
+ * @param {object} [opciones]
+ * @param {number} [opciones.ancho]
+ * @returns {string[]}
+ */
+export function panelEleccion({ ancho = ANCHO } = {}) {
+  return caja({
+    titulo: COLOR.sakuraFuerte("primera vez"),
+    ancho,
+    color: COLOR.sakura,
+    lineas: [
+      "",
+      COLOR.papel("Tu WhatsApp todavía no está vinculado."),
+      COLOR.tenue("Elige cómo quieres entrar:"),
+      "",
+      COLOR.sakura("  1  ") + COLOR.papel("Código") + COLOR.tenue("  ·  WhatsApp te da 8 letras"),
+      COLOR.tenue("     Ajustes › Dispositivos vinculados › Vincular con número"),
+      "",
+      COLOR.sakura("  2  ") + COLOR.papel("QR") + COLOR.tenue("  ·  escaneas un cuadro con la cámara"),
+      COLOR.tenue("     Ajustes › Dispositivos vinculados › Vincular un dispositivo"),
+      "",
+    ],
+  });
+}
+
+/**
+ * Pide la elección. `1` o `2`, nada más; cualquier otra tecla se dice
+ * y se vuelve a preguntar (no se cierra la terminal por un dedazo).
+ *
+ * @returns {string}
+ */
+export function preguntaEleccion() {
+  return (
+    "  " + COLOR.sakura("❯ ") + COLOR.papel("Elige 1 o 2 ") + COLOR.tenue("(1): ")
+  );
+}
+
+/**
+ * El panel del QR: aviso de que abajo va a salir un cuadro que se
+ * escanea con la cámara del teléfono.
+ *
+ * @param {object} [opciones]
+ * @param {number} [opciones.ancho]
+ * @returns {string[]}
+ */
+export function panelQR({ ancho = ANCHO } = {}) {
+  return caja({
+    titulo: COLOR.sakuraFuerte("escanea el cuadro"),
+    ancho,
+    color: COLOR.sakura,
+    lineas: [
+      "",
+      COLOR.papel("Ajustes › Dispositivos vinculados ›"),
+      COLOR.papel("Vincular un dispositivo"),
+      "",
+      COLOR.tenue("Apunta la cámara al cuadro de abajo."),
+      COLOR.tenue("Se refresca solo cada pocos segundos."),
+      "",
+    ],
+  });
+}
+
+/**
  * Pide el número. Devuelve el texto de la pregunta, ya con el formato.
  *
  * @param {object} [opciones]

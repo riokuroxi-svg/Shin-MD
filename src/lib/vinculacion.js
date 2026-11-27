@@ -17,12 +17,14 @@
 //  deja la instalación recién hecha sin forma de vincularse.
 //
 //  LA REGLA, AHORA
-//    · Quien tiene la terminal pregunta. Si hay terminal, se pregunta el
-//      número; si no, se para antes de arrancar y se dice la orden exacta.
+//    · Quien tiene la terminal pregunta. Primero CÓMO entrar (1 código,
+//      2 QR) y, si elige código, el número. Si no hay terminal, se para
+//      antes de arrancar y se dice la orden exacta.
 //    · Un número puesto a mano (--code 52…, PAIRING_NUMBER) nunca se
-//      pregunta dos veces.
+//      pregunta dos veces; --qr tampoco (modo QR directo).
 //    · Si ya hay una sesión buena, no se pregunta nada.
-//    · El QR no es una salida de emergencia: no existe.
+//    · El QR volvió en la 3.9.0 como opción de primera: en Termux cabe
+//      y con la cámara de otro teléfono se escanea sin problema.
 //
 //  La decisión vive aquí, en una función pura, para poder probarla sin
 //  arrancar el bot ni abrir una terminal de verdad.
@@ -105,19 +107,33 @@ export function hayTerminalDetras() {
  * @param {Record<string, string|undefined>} [opciones.env]               el entorno (PAIRING_NUMBER)
  * @param {{hay: boolean, registrada: boolean, motivo: string}} opciones.sesion
  * @param {boolean} opciones.hayTerminal                                  si se puede preguntar
- * @returns {{accion: "nada"|"usar"|"preguntar"|"salir", numero: string, motivo: string}}
+ * @returns {{accion: "nada"|"qr"|"usar"|"preguntar"|"elegir"|"salir", numero: string, motivo: string}}
  */
 export function planDeVinculacion({ args = {}, env = {}, sesion, hayTerminal }) {
   const escrito = args.phone || normalizePhone((env.PAIRING_NUMBER || "").trim());
-  const forzada = Boolean(args.code || args.menu);
+  const forzada = Boolean(args.code || args.menu || args.qr);
 
   if (sesion.registrada && !forzada) {
     return { accion: "nada", numero: "", motivo: "sesión registrada" };
   }
+  // QR pedido a propósito: no necesita número ni pregunta nada más.
+  if (args.qr) return { accion: "qr", numero: "", motivo: "qr pedido" };
   // Un número escrito a mano manda siempre: ni se pregunta ni se adivina.
   if (escrito) return { accion: "usar", numero: escrito, motivo: "número indicado" };
-  if (hayTerminal) return { accion: "preguntar", numero: "", motivo: sesion.motivo };
+  // Terminal por delante y nada decidido: 1 = código, 2 = QR.
+  if (hayTerminal) return { accion: elegirOSinNumero(args), numero: "", motivo: sesion.motivo };
   return { accion: "salir", numero: "", motivo: sesion.motivo };
+}
+
+/**
+ * Con terminal y sin número: si se pidió `--code` a secas, se pregunta el
+ * número; si no se pidió nada, se pregunta primero 1 o 2.
+ *
+ * @param {{code?: boolean}} args
+ * @returns {"preguntar"|"elegir"}
+ */
+function elegirOSinNumero(args) {
+  return args.code ? "preguntar" : "elegir";
 }
 
 /**

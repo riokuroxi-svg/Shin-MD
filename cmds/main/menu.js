@@ -25,6 +25,8 @@ import {
 } from "../../src/lib/contextBuilder.js";
 import { resolveChannel } from "../../src/lib/channel.js";
 import { enviarMenu } from "#menu-kit";
+import { mandarMenuPrincipal, mandarMenuCategoria } from "#menu-kit/menu-lista";
+import { enviarEvento } from "#menu-kit/evento";
 import db from "../../src/services/ginko-db.js";
 import { pickBanner } from "#lib/theme";
 
@@ -132,6 +134,21 @@ export default {
         return `❌ La categoría *${sub}* no existe o está vacía.\n\n💡 *Categorías disponibles:*\n> ${catOrder.filter(c => cats.has(c)).join(", ")}`;
       }
 
+      // Con MENU_MODO=lista (o MENU_LISTA=on), el submenú sale como
+      // lista desplegable con 👍: cada fila es el comando ya escrito.
+      const modoLista = String(process.env.MENU_MODO || "").toLowerCase() === "lista"
+        || String(process.env.MENU_LISTA || "").toLowerCase() === "on";
+      if (modoLista) {
+        const enviado = await mandarMenuCategoria(sock, ctx.chatId, {
+          categoria: { id: matchedCat, titulo: CAT_LABELS[matchedCat] || matchedCat, emoji: CATEGORY_EMOJIS[matchedCat] || "📁" },
+          comandos: list.map(c => ({ nombre: c.name, descripcion: c.description || "" })),
+          texto: `${greeting}\n\n*${CAT_LABELS[matchedCat] || matchedCat}* · ${list.length} comandos`,
+          pie: `Shin-MD v${version} · 反魂`,
+          prefijo: prefix,
+        }, { cita: ctx.full });
+        if (enviado) return null;
+      }
+
       const emoji = CATEGORY_EMOJIS[matchedCat] || "📁";
       const catTitle = CAT_LABELS[matchedCat] || matchedCat.toUpperCase();
       const lines = list.map(c => `\`${prefix}${c.name}\`${getCommandBadges(c)} — ${c.description || "Sin descripción"}`);
@@ -217,6 +234,47 @@ export default {
     const channelCtx = getChannelContext({ mentionedJid: [ctx.senderId] });
     const banner = getMenuBanner();
 
+    // ── Tarjeta de evento (MENU_EVENTO=on) ────────────────────────
+    // Va antes del menú y sale pequeña, cerrada, con la firma dentro:
+    //   Buenas Noches 🌙
+    //   Finaliza hoy a la(s) 2:57 p.m.
+    //   Creado por Roxi-svg
+    // Apagada por defecto: son dos mensajes por cada `.menu`.
+    if (String(process.env.MENU_EVENTO || "").toLowerCase() === "on") {
+      const fin = new Date();
+      fin.setHours(23, 59, 0, 0);
+      await enviarEvento(sock, ctx.chatId, {
+        nombre: `${greeting}`,
+        descripcion: `Finaliza hoy a la(s) ${fin.toLocaleTimeString("es-MX", { hour: "numeric", minute: "2-digit", hour12: true })}`,
+        fin,
+      }, { cita: ctx.full }).catch(() => {});
+    }
+
+    // ── MENÚ CON 👍 (menú de toda la vida) ────────────────────────
+    // Con MENU_MODO=lista el menú principal sale como lista desplegable:
+    // una fila por categoría, el 👍 delante y el comando escrito al lado.
+    // Es el formato de las capturas, el que no dispara avisos de
+    // «actualiza WhatsApp» y el que funciona en cualquier cliente.
+    if (String(process.env.MENU_MODO || "").toLowerCase() === "lista"
+      || String(process.env.MENU_LISTA || "").toLowerCase() === "on") {
+      const enviado = await mandarMenuPrincipal(sock, ctx.chatId, {
+        categorias: catOrder
+          .filter((c) => cats.has(c))
+          .map((c) => ({ id: c, titulo: CAT_LABELS[c] || c, comandos: cats.get(c).length, emoji: CATEGORY_EMOJIS[c] || "📁" })),
+        texto: headerText +
+          `╭──〔 📌 *GUÍA RÁPIDA* 〕──⬣\n` +
+          `│ 🅞 Dueño • 🅟 Premium • 🅐 Admin\n` +
+          `│ 🅖 Grupos • 🅛 Límite\n` +
+          `╰─────────────────────────⬣\n\n` +
+          `_Toca el botón y elige una categoría._\n\n` +
+          `📢 *Canal:* ${channelUrl}`,
+        pie: `Shin-MD v${version} • 反魂`,
+        prefijo: prefix,
+      }, { cita: ctx.full });
+      if (enviado) return null;
+      // Si el cliente no aceptó la lista, sigue con el menú de botones.
+    }
+
     // ── MENÚ ÚNICO (menu-kit) ─────────────────────────────────────
     // Una sola burbuja: vídeo en bucle + texto + botones + oferta.
     // Reemplaza las variantes 1/2/3/4: el «estilo» ya no son ramas de
@@ -233,10 +291,16 @@ export default {
           `📢 *Canal:* ${channelUrl}`,
         pie: `Shin-MD v${version} • 反魂`,
         selector: { title: "📂 Explorar Categorías", sections: menuSections },
+        // WhatsApp dibuja TRES botones y el resto se va a la hoja inferior
+        // («Ver más opciones»). Los dos últimos son los que pidió el dueño
+        // en la 3.9.0: perfil y estado del bot, que es lo que uno busca
+        // cuando el bot «va lento» o quiere su propia ficha.
         botones: [
           { text: "📜 Ver todos los comandos", id: `${prefix}allmenu` },
           { text: "🏓 Ping", id: `${prefix}ping` },
           { text: "📢 Canal Oficial", url: channelUrl },
+          { text: "👤 Mi perfil", id: `${prefix}perfil` },
+          { text: "📊 Estado del bot", id: `${prefix}status` },
         ],
         cita: ctx.full,
         prefijo: prefix,
