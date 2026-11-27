@@ -48,7 +48,7 @@
 # ═══════════════════════════════════════════════════════════════════
 set -eu
 
-readonly VERSION="${SHIN_VERSION:-v3.9.0}"
+readonly VERSION="${SHIN_VERSION:-v3.9.1}"
 REPO="${SHIN_REPO:-riokuroxi-svg/Shin-MD}"
 
 # ─────────────────────────── salida ───────────────────────────
